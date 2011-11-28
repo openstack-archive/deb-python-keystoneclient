@@ -1,0 +1,5 @@
+python-keystoneclient (0~dev20111128-1) unstable; urgency=low
+
+  * Initial release (Closes: #650018)
+
+ -- Julien Danjou <acid@debian.org>  Mon, 28 Nov 2011 16:35:09 +0100

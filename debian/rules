@@ -1,0 +1,12 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+%:
+	dh $@ --with python2
+
+override_dh_clean:
+	dh_clean
+	rm -rf $(CURDIR)/python_keystoneclient.egg-info
+
+override_dh_install:
+	dh_install
+	rm -rf $(CURDIR)/debian/python-keystoneclient/usr/bin

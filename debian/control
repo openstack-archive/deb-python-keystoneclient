@@ -1,0 +1,17 @@
+Source: python-keystoneclient
+Section: python
+Priority: extra
+Maintainer: Julien Danjou <acid@debian.org>
+Build-Depends: debhelper (>= 8.0.0), python
+Standards-Version: 3.9.2
+Homepage: https://github.com/4P/python-keystoneclient
+Vcs-Git: git://git.debian.org/openstack/python-keystoneclient.git
+Vcs-Browser: http://git.debian.org/?p=openstack/python-keystoneclient.git;a=summary
+
+Package: python-keystoneclient
+Architecture: all
+Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends}
+Description: client library for the OpenStack Keystone API
+ This is a client for the OpenStack Keystone API. Installing this package
+ gets you a shell command, that you can use to interact with Keystone's API.
+
