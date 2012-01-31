@@ -1,3 +1,9 @@
+python-keystoneclient (2012.1~e3-1) unstable; urgency=low
+
+  * New upstream release
+
+ -- Ghe Rivero <ghe.rivero@stackops.com>  Tue, 31 Jan 2012 09:05:07 +0100
+
 python-keystoneclient (0~dev20111128-1) unstable; urgency=low
 
   * Initial release (Closes: #650018)
