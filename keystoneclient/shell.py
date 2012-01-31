@@ -26,6 +26,7 @@ import sys
 from keystoneclient import exceptions as exc
 from keystoneclient import utils
 from keystoneclient.v2_0 import shell as shell_v2_0
+from keystoneclient.generic import shell as shell_generic
 
 
 def env(e):
@@ -55,27 +56,31 @@ class OpenStackIdentityShell(object):
             action='store_true',
             help=argparse.SUPPRESS)
 
-        parser.add_argument('--username',
-            default=env('KEYSTONE_USERNAME'),
-            help='Defaults to env[KEYSTONE_USERNAME].')
+        parser.add_argument('--os-username',
+            default=env('OS_USERNAME'),
+            help='Defaults to env[OS_USERNAME].')
 
-        parser.add_argument('--apikey',
-            default=env('KEYSTONE_API_KEY'),
-            help='Defaults to env[KEYSTONE_API_KEY].')
+        parser.add_argument('--os-password',
+            default=env('OS_PASSWORD'),
+            help='Defaults to env[OS_PASSWORD].')
 
-        parser.add_argument('--projectid',
-            default=env('KEYSTONE_PROJECT_ID'),
-            help='Defaults to env[KEYSTONE_PROJECT_ID].')
+        parser.add_argument('--os-tenant_name',
+            default=env('OS_TENANT_NAME'),
+            help='Defaults to env[OS_TENANT_NAME].')
 
-        parser.add_argument('--url',
-            default=env('KEYSTONE_URL'),
-            help='Defaults to env[KEYSTONE_URL].')
+        parser.add_argument('--os-tenant_id',
+            default=env('OS_TENANT_ID'),
+            help='Defaults to env[OS_TENANT_ID].')
 
-        parser.add_argument('--region_name',
+        parser.add_argument('--os-auth-url',
+            default=env('OS_AUTH_URL'),
+            help='Defaults to env[OS_AUTH_URL].')
+
+        parser.add_argument('--os-region_name',
             default=env('KEYSTONE_REGION_NAME'),
             help='Defaults to env[KEYSTONE_REGION_NAME].')
 
-        parser.add_argument('--version',
+        parser.add_argument('--os-version',
             default=env('KEYSTONE_VERSION'),
             help='Accepts 1.0 or 1.1, defaults to env[KEYSTONE_VERSION].')
 
@@ -95,6 +100,7 @@ class OpenStackIdentityShell(object):
             actions_module = shell_v2_0
 
         self._find_actions(subparsers, actions_module)
+        self._find_actions(subparsers, shell_generic)
         self._find_actions(subparsers, self)
 
         return parser
@@ -129,7 +135,7 @@ class OpenStackIdentityShell(object):
         (options, args) = parser.parse_known_args(argv)
 
         # build available subcommands based on version
-        subcommand_parser = self.get_subcommand_parser(options.version)
+        subcommand_parser = self.get_subcommand_parser(options.os_version)
         self.parser = subcommand_parser
 
         # Parse args again and call whatever callback was selected
@@ -144,40 +150,36 @@ class OpenStackIdentityShell(object):
             self.do_help(args)
             return 0
 
-        user, apikey, projectid, url, region_name = \
-                args.username, args.apikey, args.projectid, args.url, \
-                args.region_name
-
         #FIXME(usrleon): Here should be restrict for project id same as
         # for username or apikey but for compatibility it is not.
 
-        if not user:
-            raise exc.CommandError("You must provide a username, either"
-                                   "via --username or via "
-                                   "env[KEYSTONE_USERNAME]")
-        if not apikey:
-            raise exc.CommandError("You must provide an API key, either"
-                                   "via --apikey or via"
-                                   "env[KEYSTONE_API_KEY]")
-        if options.version and options.version != '1.0':
-            if not projectid:
-                raise exc.CommandError("You must provide an projectid, either"
-                                       "via --projectid or via"
-                                       "env[KEYSTONE_PROJECT_ID")
+        if not utils.isunauthenticated(args.func):
+            if not args.os_username:
+                raise exc.CommandError("You must provide a username:"
+                                       "via --username or env[OS_USERNAME]")
+            if not args.os_password:
+                raise exc.CommandError("You must provide a password, either"
+                                       "via --password or env[OS_PASSWORD]")
 
-            if not url:
+            if not args.os_auth_url:
                 raise exc.CommandError("You must provide a auth url, either"
-                                       "via --url or via"
-                                       "env[KEYSTONE_URL")
+                                       "via --os-auth_url or via"
+                                        "env[OS_AUTH_URL]")
 
-        self.cs = self.get_api_class(options.version)(user,
-                                                      apikey,
-                                                      projectid,
-                                                      url,
-                                                      region_name=region_name)
+        if utils.isunauthenticated(args.func):
+            self.cs = shell_generic.CLIENT_CLASS(endpoint=args.os_auth_url)
+        else:
+            self.cs = self.get_api_class(options.version)(
+                username=args.os_username,
+                tenant_name=args.os_tenant_name,
+                tenant_id=args.os_tenant_id,
+                password=args.os_password,
+                auth_url=args.os_auth_url,
+                region_name=args.os_region_name)
 
         try:
-            self.cs.authenticate()
+            if not utils.isunauthenticated(args.func):
+                self.cs.authenticate()
         except exc.Unauthorized:
             raise exc.CommandError("Invalid OpenStack Keystone credentials.")
         except exc.AuthorizationFailure:
@@ -194,7 +196,7 @@ class OpenStackIdentityShell(object):
             return shell_v2_0.CLIENT_CLASS
 
     @utils.arg('command', metavar='<subcommand>', nargs='?',
-                    help='Display help for <subcommand>')
+                          help='Display help for <subcommand>')
     def do_help(self, args):
         """
         Display help about this program or one of its subcommands.
