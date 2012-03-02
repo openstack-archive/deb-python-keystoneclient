@@ -6,9 +6,11 @@ This is a client for the OpenStack Keystone API. There's a Python API (the
 Keystone 2.0 API is still a moving target, so this module will remain in
 "Beta" status until the API is finalized and fully implemented.
 
-Development takes place on GitHub__. Bug reports and patches may be filed there.
+Development takes place via the usual OpenStack processes as outlined in
+the `OpenStack wiki`_.  The master repository is on GitHub__.
 
-__ https://github.com/4P/python-keystoneclient
+__ http://wiki.openstack.org/HowToContribute
+__ http://github.com/openstack/python-keystoneclient
 
 This code a fork of `Rackspace's python-novaclient`__ which is in turn a fork of
 `Jacobian's python-cloudservers`__. The python-keystoneclient is licensed under
@@ -36,57 +38,101 @@ By way of a quick-start::
 Command-line API
 ----------------
 
-.. attention:: COMING SOON
-
-    The CLI is not yet implemented, but will follow the pattern laid
-    out below.
-
 Installing this package gets you a shell command, ``keystone``, that you
-can use to interact with Keystone's API.
+can use to interact with Keystone's Identity API.
 
-You'll need to provide your OpenStack username and API key. You can do this
-with the ``--username``, ``--apikey`` and  ``--projectid`` params, but it's
+You'll need to provide your OpenStack tenant, username and password. You can do this
+with the ``tenant_name``, ``--username`` and ``--password`` params, but it's
 easier to just set them as environment variables::
 
     export OS_TENANT_NAME=project
     export OS_USERNAME=user
     export OS_PASSWORD=pass
 
-You will also need to define the authentication url with ``--url`` and the
-version of the API with ``--version``.  Or set them as an environment
+You will also need to define the authentication url with ``--auth_url`` and the
+version of the API with ``--identity_api_version``.  Or set them as an environment
 variables as well::
 
     export OS_AUTH_URL=http://example.com:5000/v2.0
-    export KEYSTONE_ADMIN_URL=http://example.com:35357/v2.0
+    export OS_IDENTITY_API_VERSION=2.0
+
+Alternatively, to authenticate to Keystone without a username/password,
+such as when there are no users in the database yet, use the service
+token and endpoint arguemnts.  The service token is set in keystone.conf as
+``admin_token``; set it with ``service_token``.  Note: keep the service token
+secret as it allows total access to Keystone's database.  The admin endpoint is set
+with ``--endpoint`` or ``SERVICE_ENDPOINT``::
+
+    export SERVICE_TOKEN=thequickbrownfox-jumpsover-thelazydog
+    export SERVICE_ENDPOINT=http://example.com:35357/v2.0
 
 Since Keystone can return multiple regions in the Service Catalog, you
 can specify the one you want with ``--region_name`` (or
-``export KEYSTONE_REGION_NAME``). It defaults to the first in the list returned.
+``export OS_REGION_NAME``). It defaults to the first in the list returned.
 
 You'll find complete documentation on the shell by running
 ``keystone help``::
 
-    usage: keystone [--username user] [--password password] 
-                    [--tenant_name tenant] [--auth_url URL]
-                   <subcommand> ...
+    usage: keystone [--username USERNAME] [--password PASSWORD]
+                    [--tenant_name TENANT_NAME] [--tenant_id TENANT_ID]
+                    [--auth_url AUTH_URL] [--region_name REGION_NAME]
+                    [--identity_api_version IDENTITY_API_VERSION] [--token TOKEN]
+                    [--endpoint ENDPOINT]
+                    <subcommand> ...
 
-    Command-line interface to the OpenStack Keystone API.
+    Command-line interface to the OpenStack Identity API.
 
     Positional arguments:
       <subcommand>
-        add-fixed-ip        Add a new fixed IP address to a servers network.
-
+        catalog             List service catalog, possibly filtered by service.
+        ec2-credentials-create
+                            Create EC2-compatibile credentials for user per tenant
+        ec2-credentials-delete
+                            Delete EC2-compatibile credentials
+        ec2-credentials-list
+                            List EC2-compatibile credentials for a user
+        endpoint-get        Find endpoint filtered by a specific attribute or
+                            service type
+        role-create         Create new role
+        role-delete         Delete role
+        role-get            Display role details
+        role-list           List all available roles
+        service-create      Add service to Service Catalog
+        service-delete      Delete service from Service Catalog
+        service-get         Display service from Service Catalog
+        service-list        List all services in Service Catalog
+        tenant-create       Create new tenant
+        tenant-delete       Delete tenant
+        tenant-get          Display tenant details
+        tenant-list         List all tenants
+        tenant-update       Update tenant name, description, enabled status
+        token-get           Display the current user token
+        user-create         Create new user
+        user-delete         Delete user
+        user-list           List users
+        user-password-update
+                            Update user password
+        user-role-add       Add role to user
+        user-role-remove    Remove role from user
+        user-update         Update user's name, email, and enabled status
+        discover            Discover Keystone servers and show authentication
+                            protocols and
+        help                Display help about this program or one of its
+                            subcommands.
 
     Optional arguments:
-      --username USER            Defaults to env[OS_USERNAME].
-      --password PASSWORD        Defaults to env[OS_PASSWORD].
-      --tenant_name TENANT_NAME  Defaults to env[OS_TENANT_NAME].
-      --tenant_id TENANT_ID      Defaults to env[OS_TENANT_ID].
-      --url AUTH_URL             Defaults to env[OS_AUTH_URL] or
-      --version VERSION          Defaults to env[KEYSTONE_VERSION] or 2.0.
-      --region_name NAME         The region name in the Keystone Service 
-                                 Catalog to use after authentication. 
-                                 Defaults to env[KEYSTONE_REGION_NAME] or the
-                                 first item in the list returned.
+      --username USERNAME   Defaults to env[OS_USERNAME]
+      --password PASSWORD   Defaults to env[OS_PASSWORD]
+      --tenant_name TENANT_NAME
+                            Defaults to env[OS_TENANT_NAME]
+      --tenant_id TENANT_ID
+                            Defaults to env[OS_TENANT_ID]
+      --auth_url AUTH_URL   Defaults to env[OS_AUTH_URL]
+      --region_name REGION_NAME
+                            Defaults to env[OS_REGION_NAME]
+      --identity_api_version IDENTITY_API_VERSION
+                            Defaults to env[OS_IDENTITY_API_VERSION] or 2.0
+      --token TOKEN         Defaults to env[SERVICE_TOKEN]
+      --endpoint ENDPOINT   Defaults to env[SERVICE_ENDPOINT]
 
-    See "keystone help COMMAND" for help on a specific command.
+See "keystone help COMMAND" for help on a specific command.

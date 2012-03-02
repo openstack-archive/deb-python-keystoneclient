@@ -14,6 +14,8 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+import urllib
+
 from keystoneclient import base
 
 
@@ -24,6 +26,9 @@ class User(base.Resource):
     def delete(self):
         return self.manager.delete(self)
 
+    def list_roles(self, tenant=None):
+        return self.manager.list_roles(self.id, base.getid(tenant))
+
 
 class UserManager(base.ManagerWithFind):
     resource_class = User
@@ -31,15 +36,18 @@ class UserManager(base.ManagerWithFind):
     def get(self, user):
         return self._get("/users/%s" % base.getid(user), "user")
 
-    def update_email(self, user, email):
+    def update(self, user, **kwargs):
         """
-        Update email
-        """
-        # FIXME(ja): why do we have to send id in params and url?
-        params = {"user": {"id": base.getid(user),
-                           "email": email}}
+        Update user data.
 
-        return self._update("/users/%s" % base.getid(user), params, "user")
+        Supported arguments include ``name``, ``email``, and ``enabled``.
+        """
+        # FIXME(gabriel): "tenantId" seems to be accepted by the API but
+        #                 fails to actually update the default tenant.
+        params = {"user": kwargs}
+        params['user']['id'] = base.getid(user)
+        url = "/users/%s" % base.getid(user)
+        return self._update(url, params, "user")
 
     def update_enabled(self, user, enabled):
         """
@@ -48,7 +56,8 @@ class UserManager(base.ManagerWithFind):
         params = {"user": {"id": base.getid(user),
                            "enabled": enabled}}
 
-        self._update("/users/%s/enabled" % base.getid(user), params, "user")
+        self._update("/users/%s/OS-KSADM/enabled" % base.getid(user), params,
+                "user")
 
     def update_password(self, user, password):
         """
@@ -57,7 +66,7 @@ class UserManager(base.ManagerWithFind):
         params = {"user": {"id": base.getid(user),
                            "password": password}}
 
-        return self._update("/users/%s/password" % base.getid(user),
+        return self._update("/users/%s/OS-KSADM/password" % base.getid(user),
                             params, "user")
 
     def update_tenant(self, user, tenant):
@@ -69,7 +78,7 @@ class UserManager(base.ManagerWithFind):
 
         # FIXME(ja): seems like a bad url - default tenant is an attribute
         #            not a subresource!???
-        return self._update("/users/%s/tenant" % base.getid(user),
+        return self._update("/users/%s/OS-KSADM/tenant" % base.getid(user),
                             params, "user")
 
     def create(self, name, password, email, tenant_id=None, enabled=True):
@@ -90,14 +99,29 @@ class UserManager(base.ManagerWithFind):
         """
         return self._delete("/users/%s" % base.getid(user))
 
-    def list(self, tenant_id=None):
+    def list(self, tenant_id=None, limit=None, marker=None):
         """
         Get a list of users (optionally limited to a tenant)
 
         :rtype: list of :class:`User`
         """
 
+        params = {}
+        if limit:
+            params['limit'] = int(limit)
+        if marker:
+            params['marker'] = int(marker)
+
+        query = ""
+        if params:
+            query = "?" + urllib.urlencode(params)
+
         if not tenant_id:
-            return self._list("/users", "users")
+            return self._list("/users%s" % query, "users")
         else:
-            return self._list("/tenants/%s/users" % tenant_id, "users")
+            return self._list("/tenants/%s/users%s" % (tenant_id, query),
+                              "users")
+
+    def list_roles(self, user, tenant=None):
+        return self.api.roles.roles_for_user(base.getid(user),
+                                             base.getid(tenant))

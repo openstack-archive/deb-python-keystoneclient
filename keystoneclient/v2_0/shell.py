@@ -21,235 +21,329 @@ from keystoneclient import utils
 CLIENT_CLASS = client.Client
 
 
-@utils.arg('tenant',
-           metavar='<tenant_id>',
-           help='ID of Tenant. (Optional)',
-           nargs='?',
-           default=None)
+@utils.arg('tenant', metavar='<tenant-id>', nargs='?', default=None,
+           help='Tenant ID (Optional);  lists all users if not specified')
 def do_user_list(kc, args):
+    """List users"""
     users = kc.users.list(tenant_id=args.tenant)
-    utils.print_list(users, ['id', 'enabled', 'email', 'name', 'tenantId'])
+    utils.print_list(users, ['id', 'enabled', 'email', 'name'])
 
 
-@utils.arg('--username', metavar='<username>', nargs='?',
-           help='Desired username. (unique)')
-@utils.arg('--password', metavar='<password>', nargs='?',
-           help='Desired password.')
-@utils.arg('--email', metavar='<email>', nargs='?',
-           help='Desired email address. (unique)')
-@utils.arg('--default-tenant', metavar='<default_tenant>', nargs='?',
-           help='User will join the default tenant as a Member.')
-@utils.arg('--enabled', metavar='<enabled>', nargs='?', default=True,
-           help='Enable user immediately (Optional, default True)')
+@utils.arg('--name', metavar='<user-name>', required=True,
+           help='New user name (must be unique)')
+@utils.arg('--tenant_id', metavar='<tenant-id>',
+           help='New user default tenant')
+@utils.arg('--pass', metavar='<pass>', dest='passwd',
+           help='New user password')
+@utils.arg('--email', metavar='<email>',
+           help='New user email address')
+@utils.arg('--enabled', metavar='<true|false>', default=True,
+           help='Initial user enabled status (default true)')
 def do_user_create(kc, args):
-    user = kc.users.create(args.username, args.password, args.email,
-                           tenant_id=args.default_tenant, enabled=args.enabled)
+    """Create new user"""
+    user = kc.users.create(args.name, args.passwd, args.email,
+                           tenant_id=args.tenant_id, enabled=args.enabled)
     utils.print_dict(user._info)
 
 
-@utils.arg('id', metavar='<user_id>', nargs='?',
-           help='User ID to update email.')
-@utils.arg('email', metavar='<email>', nargs='?',
-           help='New desired email address.')
-def do_user_update_email(kc, args):
-    user = kc.users.update_email(args.id, args.email)
-    utils.print_dict(user._info)
+@utils.arg('--name', metavar='<user-name>',
+           help='Desired new user name')
+@utils.arg('--email', metavar='<email>',
+           help='Desired new email address')
+@utils.arg('--enabled', metavar='<true|false>',
+           help='Enable or disable user')
+@utils.arg('id', metavar='<user-id>', help='User ID to update')
+def do_user_update(kc, args):
+    """Update user's name, email, and enabled status"""
+    kwargs = {}
+    if args.name:
+        kwargs['name'] = args.name
+    if args.email:
+        kwargs['email'] = args.email
+    if args.enabled:
+        kwargs['enabled'] = utils.string_to_bool(args.enabled)
 
+    if not len(kwargs):
+        print "User not updated, no arguments present."
+        return
 
-@utils.arg('id', metavar='<user_id>', nargs='?', help='User ID to enable.')
-def do_user_enable(kc, args):
     try:
-        kc.users.update_enabled(args.id, True)
-        print 'User has been enabled.'
-    except:
-        'Unable to enable user.'
+        kc.users.update(args.id, **kwargs)
+        print 'User has been updated.'
+    except Exception, e:
+        print 'Unable to update user: %s' % e
 
 
-@utils.arg('id', metavar='<user_id>', nargs='?', help='User ID to disable.')
-def do_user_disable(kc, args):
-    try:
-        kc.users.update_enabled(args.id, False)
-        print 'User has been disabled.'
-    except:
-        'Unable to disable user.'
+@utils.arg('--pass', metavar='<password>', required=True,
+           help='Desired new password')
+@utils.arg('id', metavar='<user-id>', help='User ID to update')
+def do_user_password_update(kc, args):
+    """Update user password"""
+    kc.users.update_password(args.id, args.password)
 
 
-@utils.arg('id', metavar='<user_id>', nargs='?', help='User ID to update.')
-@utils.arg('password', metavar='<password>', nargs='?',
-           help='New desired password.')
-def do_user_update_password(kc, args):
-    try:
-        kc.users.update_password(args.id, args.password)
-        print 'User password has been udpated.'
-    except:
-        'Unable to update users password.'
-
-
-@utils.arg('id', metavar='<user_id>', nargs='?', help='User ID to delete.')
+@utils.arg('id', metavar='<user-id>', help='User ID to delete')
 def do_user_delete(kc, args):
-    try:
-        kc.users.delete(args.id)
-        print 'User has been deleted.'
-    except:
-        'Unable to delete user.'
+    """Delete user"""
+    kc.users.delete(args.id)
 
 
-@utils.arg('--tenant-name', metavar='<tenant_name>', nargs='?',
-           help='Desired name of new tenant.')
-@utils.arg('--description', metavar='<description>', nargs='?', default=None,
-           help='Useful description of new tenant (optional, default is None)')
-@utils.arg('--enabled', metavar='<enabled>', nargs='?', default=True,
-           help='Enable user immediately (Optional, default True)')
+def do_tenant_list(kc, args):
+    """List all tenants"""
+    tenants = kc.tenants.list()
+    utils.print_list(tenants, ['id', 'name', 'enabled'])
+
+
+@utils.arg('id', metavar='<tenant-id>', help='Tenant ID to display')
+def do_tenant_get(kc, args):
+    """Display tenant details"""
+    tenant = kc.tenants.get(args.id)
+    utils.print_dict(tenant._info)
+
+
+@utils.arg('--name', metavar='<tenant-name>', required=True,
+           help='New tenant name (must be unique)')
+@utils.arg('--description', metavar='<tenant-description>', default=None,
+           help='Description of new tenant (default is none)')
+@utils.arg('--enabled', metavar='<true|false>', default=True,
+           help='Initial tenant enabled status (default true)')
 def do_tenant_create(kc, args):
-    tenant = kc.tenants.create(args.tenant_name,
+    """Create new tenant"""
+    tenant = kc.tenants.create(args.name,
                              description=args.description,
                              enabled=args.enabled)
     utils.print_dict(tenant._info)
 
 
-@utils.arg('id', metavar='<tenant_id>', nargs='?', help='Tenant ID to enable.')
-def do_tenant_enable(kc, args):
-    try:
-        kc.tenants.update(args.id, enabled=True)
-        print 'Tenant has been enabled.'
-    except:
-        'Unable to enable tenant.'
+@utils.arg('--name', metavar='<tenant_name>',
+           help='Desired new name of tenant')
+@utils.arg('--description', metavar='<tenant-description>', default=None,
+           help='Desired new description of tenant')
+@utils.arg('--enabled', metavar='<true|false>',
+           help='Enable or disable tenant')
+@utils.arg('id', metavar='<tenant-id>', help='Tenant ID to update')
+def do_tenant_update(kc, args):
+    """Update tenant name, description, enabled status"""
+    tenant = kc.tenants.get(args.id)
+    kwargs = {}
+    if args.name:
+        kwargs.update({'name': args.name})
+    if args.description:
+        kwargs.update({'description': args.description})
+    if args.enabled:
+        new_enable = args.enabled.lower() in ['true', 'yes', '1']
+        kwargs.update({'enabled': new_enable})
+
+    if kwargs == {}:
+        print "Tenant not updated, no arguments present."
+        return
+    tenant.update(**kwargs)
 
 
-@utils.arg('id', metavar='<tenant_id>', nargs='?', help='Tenant ID to disable')
-def do_tenant_disable(kc, args):
-    try:
-        kc.tenants.update_enabled(args.id, enabled=False)
-        print 'Tenant has been disabled.'
-    except:
-        'Unable to disable tenant.'
-
-
-@utils.arg('id', metavar='<tenant_id>', nargs='?', help='Tenant ID to delete')
+@utils.arg('id', metavar='<tenant-id>', help='Tenant ID to delete')
 def do_tenant_delete(kc, args):
-    try:
-        kc.tenants.delete(args.id)
-        print 'Tenant has been deleted.'
-    except:
-        'Unable to delete tenant.'
+    """Delete tenant"""
+    kc.tenants.delete(args.id)
 
 
-@utils.arg('--service-name', metavar='<service_name>', nargs='?',
-           help='Desired name of service. (unique)')
-# TODO(jakedahn): add service type examples to helptext.
-@utils.arg('--service-type', metavar='<service_type>', nargs='?',
-           help='Possible service types: identity, compute, network, \
-                 image, or object-store.')
-@utils.arg('--description', metavar='<service_description>', nargs='?',
-           help='Useful description of service.')
+@utils.arg('--name', metavar='<name>', required=True,
+           help='Name of new service (must be unique)')
+@utils.arg('--type', metavar='<type>', required=True,
+           help='Service type (one of: identity, compute, network, '
+                 'image, or object-store)')
+@utils.arg('--description', metavar='<service-description>',
+           help='Description of service')
 def do_service_create(kc, args):
-    service = kc.services.create(args.service_name,
-                                 args.service_type,
+    """Add service to Service Catalog"""
+    service = kc.services.create(args.name,
+                                 args.type,
                                  args.description)
     utils.print_dict(service._info)
 
 
 def do_service_list(kc, args):
+    """List all services in Service Catalog"""
     services = kc.services.list()
     utils.print_list(services, ['id', 'name', 'type', 'description'])
 
 
-@utils.arg('id',
-           metavar='<service_id>',
-           help='ID of Service to retrieve.',
-           nargs='?')
+@utils.arg('id', metavar='<service-id>', help='Service ID to display')
 def do_service_get(kc, args):
+    """Display service from Service Catalog"""
     service = kc.services.get(args.id)
     utils.print_dict(service._info)
 
 
-@utils.arg('id',
-           metavar='<service_id>',
-           help='ID of Service to delete',
-           nargs='?')
-def do_service_get(kc, args):
-    try:
-        kc.services.delete(args.id)
-        print 'Service has been deleted'
-    except:
-        print 'Unable to delete service.'
+@utils.arg('id', metavar='<service-id>', help='Service ID to delete')
+def do_service_delete(kc, args):
+    """Delete service from Service Catalog"""
+    kc.services.delete(args.id)
 
 
 def do_role_list(kc, args):
+    """List all available roles"""
     roles = kc.roles.list()
     utils.print_list(roles, ['id', 'name'])
 
 
-@utils.arg('id', metavar='<role_id>', help='ID of Role to fetch.', nargs='?')
+@utils.arg('id', metavar='<role-id>', help='Role ID to display')
 def do_role_get(kc, args):
+    """Display role details"""
     role = kc.roles.get(args.id)
     utils.print_dict(role._info)
 
 
-@utils.arg('role-name', metavar='<role_name>', nargs='?',
-           help='Desired name of new role.')
+@utils.arg('--name', metavar='<role-name>', required=True,
+           help='Name of new role')
 def do_role_create(kc, args):
-    role = kc.roles.create(args.role_name)
+    """Create new role"""
+    role = kc.roles.create(args.name)
     utils.print_dict(role._info)
 
 
-@utils.arg('id', metavar='<role_id>', help='ID of Role to delete.', nargs='?')
+@utils.arg('id', metavar='<role-id>', help='Role ID to delete')
 def do_role_delete(kc, args):
-    try:
-        kc.roles.delete(args.id)
-        print 'Role has been deleted.'
-    except:
-        print 'Unable to delete role.'
-
-
-@utils.arg('id', metavar='<user_id>', help='ID of User', nargs='?')
-def do_user_roles(kc, args):
-    roles = kc.roles.get_user_role_refs(args.id)
-    for role in roles:
-        try:
-            role.tenant = kc.tenants.get(role.tenantId).name
-        except Exception, e:
-            role.tenant = 'n/a'
-        role.name = kc.roles.get(role.roleId).name
-    utils.print_list(roles, ['tenant', 'name'])
+    """Delete role"""
+    kc.roles.delete(args.id)
 
 
 # TODO(jakedahn): refactor this to allow role, user, and tenant names.
-@utils.arg('tenant_id', metavar='<tenant_id>', help='ID of Tenant', nargs='?')
-@utils.arg('user_id', metavar='<user_id>', help='ID of User', nargs='?')
-@utils.arg('role_id', metavar='<role_id>', help='ID of Role', nargs='?')
-def do_user_add_tenant_role(kc, args):
-    kc.roles.add_user_to_tenant(args.tenant_id, args.user_id, args.role_id)
+@utils.arg('--user', metavar='<user-id>', required=True, help='User ID')
+@utils.arg('--role', metavar='<role-id>', required=True, help='Role ID')
+@utils.arg('--tenant_id', metavar='<tenant-id>', help='Tenant ID')
+def do_user_role_add(kc, args):
+    """Add role to user"""
+    kc.roles.add_user_role(args.user, args.role, args.tenant_id)
 
 
 # TODO(jakedahn): refactor this to allow role, user, and tenant names.
-@utils.arg('tenant_id', metavar='<tenant_id>', help='ID of Tenant', nargs='?')
-@utils.arg('user_id', metavar='<user_id>', help='ID of User', nargs='?')
-@utils.arg('role_id', metavar='<role_id>', help='ID of Role', nargs='?')
-def do_user_remove_tenant_role(kc, args):
-    kc.roles.remove_user_to_tenant(args.tenant_id, args.user_id, args.role_id)
+@utils.arg('--user', metavar='<user-id>', required=True, help='User ID')
+@utils.arg('--role', metavar='<role-id>', required=True, help='Role ID')
+@utils.arg('--tenant_id', metavar='<tenant-id>', help='Tenant ID')
+def do_user_role_remove(kc, args):
+    """Remove role from user"""
+    kc.roles.remove_user_role(args.user, args.role, args.tenant_id)
 
 
-@utils.arg('tenant_id', metavar='<tenant_id>', help='ID of Tenant', nargs='?')
-@utils.arg('user_id', metavar='<user_id>', help='ID of User', nargs='?')
-def do_ec2_create_credentials(kc, args):
-    credentials = kc.ec2.create(args.user_id, args.tenant_id)
+@utils.arg('--user', metavar='<user-id>', required=True, help='User ID')
+@utils.arg('--tenant_id', metavar='<tenant-id>', required=True,
+           help='Tenant ID')
+def do_ec2_credentials_create(kc, args):
+    """Create EC2-compatibile credentials for user per tenant"""
+    credentials = kc.ec2.create(args.user, args.tenant_id)
     utils.print_dict(credentials._info)
 
 
-@utils.arg('user_id', metavar='<user_id>', help='ID of User', nargs='?')
-def do_ec2_list_credentials(kc, args):
-    credentials = kc.ec2.list(args.user_id)
+@utils.arg('--user', metavar='<user-id>', required=True, help='User ID')
+@utils.arg('--access', metavar='<access-key>', required=True,
+        help='Access Key')
+def do_ec2_credentials_get(kc, args):
+    """Display EC2-compatibile credentials"""
+    cred = kc.ec2.get(args.user, args.access)
+    if cred:
+        utils.print_dict(cred._info)
+
+
+@utils.arg('--user', metavar='<user-id>', required=True, help='User ID')
+def do_ec2_credentials_list(kc, args):
+    """List EC2-compatibile credentials for a user"""
+    credentials = kc.ec2.list(args.user)
     for cred in credentials:
-        cred.tenant = kc.tenants.get(cred.tenant_id).name
-    utils.print_list(credentials, ['tenant', 'key', 'secret'])
+        try:
+            cred.tenant = getattr(kc.tenants.get(cred.tenant_id), 'name')
+        except:
+            pass
+    utils.print_list(credentials, ['tenant', 'access', 'secret'])
 
 
-@utils.arg('user_id', metavar='<user_id>', help='ID of User', nargs='?')
-@utils.arg('key', metavar='<access_key>', help='Access Key', nargs='?')
-def do_ec2_delete_credentials(kc, args):
+@utils.arg('--user', metavar='<user-id>', required=True, help='User ID')
+@utils.arg('--access', metavar='<access-key>', required=True,
+        help='Access Key')
+def do_ec2_credentials_delete(kc, args):
+    """Delete EC2-compatibile credentials"""
     try:
-        kc.ec2.delete(args.user_id, args.key)
-        print 'Deleted EC2 Credentials.'
+        kc.ec2.delete(args.user, args.access)
+        print 'Credential has been deleted.'
+    except Exception, e:
+        print 'Unable to delete credential: %s' % e
+
+
+@utils.arg('--service', metavar='<service-type>', default=None,
+           help='Service type to return')
+def do_catalog(kc, args):
+    """List service catalog, possibly filtered by service."""
+    endpoints = kc.service_catalog.get_endpoints(service_type=args.service)
+    for (service, service_endpoints) in endpoints.iteritems():
+        if len(service_endpoints) > 0:
+            print "Service: %s" % service
+            for ep in service_endpoints:
+                utils.print_dict(ep)
+
+
+@utils.arg('--service', metavar='<service-type>', required=True,
+           help='Service type to select')
+@utils.arg('--endpoint_type', metavar='<endpoint-type>', default='publicURL',
+           help='Endpoint type to select')
+@utils.arg('--attr', metavar='<service-attribute>',
+           help='Service attribute to match for selection')
+@utils.arg('--value', metavar='<value>',
+           help='Value of attribute to match')
+def do_endpoint_get(kc, args):
+    """Find endpoint filtered by a specific attribute or service type"""
+    kwargs = {
+        'service_type': args.service,
+        'endpoint_type': args.endpoint_type,
+    }
+
+    if args.attr and args.value:
+        kwargs.update({'attr': args.attr, 'filter_value': args.value})
+    elif args.attr or args.value:
+        print 'Both --attr and --value required.'
+        return
+
+    url = kc.service_catalog.url_for(**kwargs)
+    utils.print_dict({'%s.%s' % (args.service, args.endpoint_type): url})
+
+
+def do_endpoint_list(kc, args):
+    endpoints = kc.endpoints.list()
+    utils.print_list(endpoints,
+                     ['id', 'region', 'publicurl', 'internalurl', 'publicurl'])
+
+
+@utils.arg('--region', metavar='<endpoint_region>',
+           help='Endpoint region', nargs='?', default='regionOne')
+@utils.arg('--service_id', metavar='<service_id>',
+           help='ID of service associated with Endpoint', nargs='?')
+@utils.arg('--publicurl', metavar='<publicurl>',
+           help='Public URL endpoint', nargs='?')
+@utils.arg('--adminurl', metavar='<publicurl>',
+           help='Admin URL endpoint', nargs='?')
+@utils.arg('--internalurl', metavar='<publicurl>',
+           help='Internal URL endpoint', nargs='?')
+def do_endpoint_create(kc, args):
+    kwargs = {
+        'region': args.region,
+        'service_id': args.service_id,
+        'publicurl': args.publicurl,
+        'adminurl': args.adminurl,
+        'internalurl': args.internalurl,
+    }
+    endpoint = kc.endpoints.create(
+                    args.region, args.service_id, args.publicurl,
+                    args.adminurl, args.internalurl)
+    utils.print_dict(endpoint._info)
+
+
+@utils.arg('id', metavar='<endpoint_id>', help='ID of endpoint to delete')
+def do_endpoint_delete(kc, args):
+    try:
+        kc.endpoints.delete(args.id)
+        print 'Endpoint has been deleted.'
     except:
-        print 'Unable to delete EC2 Credentials.'
+        print 'Unable to delete endpoint.'
+
+
+def do_token_get(kc, args):
+    """Display the current user token"""
+    utils.print_dict(kc.service_catalog.get_token())

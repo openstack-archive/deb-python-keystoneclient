@@ -23,7 +23,7 @@ class TokenManager(base.ManagerWithFind):
 
     def authenticate(self, username=None, tenant_id=None, tenant_name=None,
                      password=None, token=None, return_raw=False):
-        if token and token != password:
+        if token:
             params = {"auth": {"token": {"id": token}}}
         elif username and password:
             params = {"auth": {"passwordCredentials": {"username": username,
@@ -35,6 +35,9 @@ class TokenManager(base.ManagerWithFind):
         elif tenant_name:
             params['auth']['tenantName'] = tenant_name
         return self._create('/tokens', params, "access", return_raw=return_raw)
+
+    def delete(self, token):
+        return self._delete("/tokens/%s" % base.getid(token))
 
     def endpoints(self, token):
         return self._get("/tokens/%s/endpoints" % base.getid(token), "token")

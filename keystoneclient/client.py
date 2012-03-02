@@ -46,7 +46,7 @@ class HTTPClient(httplib2.Http):
         self.tenant_id = tenant_id
         self.tenant_name = tenant_name
         self.password = password
-        self.auth_url = auth_url
+        self.auth_url = auth_url.rstrip('/') if auth_url else None
         self.version = 'v2.0'
         self.region_name = region_name
         self.auth_token = token
@@ -139,7 +139,7 @@ class HTTPClient(httplib2.Http):
             self.authenticate()
 
         kwargs.setdefault('headers', {})
-        if self.auth_token and self.auth_token != self.password:
+        if self.auth_token:
             kwargs['headers']['X-Auth-Token'] = self.auth_token
 
         # Perform the request once. If we get a 401 back then it

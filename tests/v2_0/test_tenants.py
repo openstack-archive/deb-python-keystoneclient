@@ -116,6 +116,54 @@ class TenantTests(utils.TestCase):
         tenant_list = self.client.tenants.list()
         [self.assertTrue(isinstance(t, tenants.Tenant)) for t in tenant_list]
 
+    def test_list_limit(self):
+        resp = httplib2.Response({
+            "status": 200,
+            "body": json.dumps(self.TEST_TENANTS),
+            })
+
+        httplib2.Http.request(urlparse.urljoin(self.TEST_URL,
+                              'v2.0/tenants?limit=1&fresh=1234'),
+                              'GET',
+                              headers=self.TEST_REQUEST_HEADERS) \
+                              .AndReturn((resp, resp['body']))
+        self.mox.ReplayAll()
+
+        tenant_list = self.client.tenants.list(limit=1)
+        [self.assertTrue(isinstance(t, tenants.Tenant)) for t in tenant_list]
+
+    def test_list_marker(self):
+        resp = httplib2.Response({
+            "status": 200,
+            "body": json.dumps(self.TEST_TENANTS),
+            })
+
+        httplib2.Http.request(urlparse.urljoin(self.TEST_URL,
+                              'v2.0/tenants?marker=1&fresh=1234'),
+                              'GET',
+                              headers=self.TEST_REQUEST_HEADERS) \
+                              .AndReturn((resp, resp['body']))
+        self.mox.ReplayAll()
+
+        tenant_list = self.client.tenants.list(marker=1)
+        [self.assertTrue(isinstance(t, tenants.Tenant)) for t in tenant_list]
+
+    def test_list_limit_marker(self):
+        resp = httplib2.Response({
+            "status": 200,
+            "body": json.dumps(self.TEST_TENANTS),
+            })
+
+        httplib2.Http.request(urlparse.urljoin(self.TEST_URL,
+                              'v2.0/tenants?marker=1&limit=1&fresh=1234'),
+                              'GET',
+                              headers=self.TEST_REQUEST_HEADERS) \
+                              .AndReturn((resp, resp['body']))
+        self.mox.ReplayAll()
+
+        tenant_list = self.client.tenants.list(limit=1, marker=1)
+        [self.assertTrue(isinstance(t, tenants.Tenant)) for t in tenant_list]
+
     def test_update(self):
         req_body = {"tenant": {"id": 4,
                                "name": "tenantX",
@@ -132,7 +180,7 @@ class TenantTests(utils.TestCase):
 
         httplib2.Http.request(urlparse.urljoin(self.TEST_URL,
                               'v2.0/tenants/4'),
-                              'PUT',
+                              'POST',
                               body=json.dumps(req_body),
                               headers=self.TEST_POST_HEADERS) \
                               .AndReturn((resp, resp['body']))
@@ -147,3 +195,81 @@ class TenantTests(utils.TestCase):
         self.assertEqual(tenant.name, "tenantX")
         self.assertEqual(tenant.description, "I changed you!")
         self.assertFalse(tenant.enabled)
+
+    def test_add_user(self):
+        resp = httplib2.Response({
+            "status": 200,
+            "body": json.dumps({}),
+            })
+
+        httplib2.Http.request(urlparse.urljoin(self.TEST_URL,
+                              'v2.0/tenants/4/users/foo/roles/OS-KSADM/barrr'),
+                              'PUT',
+                              body='null',
+                              headers=self.TEST_POST_HEADERS) \
+                              .AndReturn((resp, None))
+        self.mox.ReplayAll()
+
+        self.client.tenants.add_user('4', 'foo', 'barrr')
+
+    def test_remove_user(self):
+        resp = httplib2.Response({
+            "status": 200,
+            "body": json.dumps({}),
+            })
+
+        httplib2.Http.request(urlparse.urljoin(self.TEST_URL,
+                              'v2.0/tenants/4/users/foo/roles/OS-KSADM/barrr'),
+                              'DELETE',
+                              headers=self.TEST_REQUEST_HEADERS) \
+                              .AndReturn((resp, None))
+        self.mox.ReplayAll()
+
+        self.client.tenants.remove_user('4', 'foo', 'barrr')
+
+    def test_tenant_add_user(self):
+        req_body = {"tenant": {"id": 4,
+                               "name": "tenantX",
+                               "description": "I changed you!",
+                               "enabled": False}}
+        resp = httplib2.Response({
+            "status": 200,
+            "body": json.dumps({}),
+            })
+
+        httplib2.Http.request(urlparse.urljoin(self.TEST_URL,
+                              'v2.0/tenants/4/users/foo/roles/OS-KSADM/barrr'),
+                              'PUT',
+                              body='null',
+                              headers=self.TEST_POST_HEADERS) \
+                              .AndReturn((resp, None))
+        self.mox.ReplayAll()
+
+        # make tenant object with manager
+        tenant = self.client.tenants.resource_class(self.client.tenants,
+                                                    req_body['tenant'])
+        tenant.add_user('foo', 'barrr')
+        self.assertTrue(isinstance(tenant, tenants.Tenant))
+
+    def test_tenant_remove_user(self):
+        req_body = {"tenant": {"id": 4,
+                               "name": "tenantX",
+                               "description": "I changed you!",
+                               "enabled": False}}
+        resp = httplib2.Response({
+            "status": 200,
+            "body": json.dumps({}),
+            })
+
+        httplib2.Http.request(urlparse.urljoin(self.TEST_URL,
+                              'v2.0/tenants/4/users/foo/roles/OS-KSADM/barrr'),
+                              'DELETE',
+                              headers=self.TEST_REQUEST_HEADERS) \
+                              .AndReturn((resp, None))
+        self.mox.ReplayAll()
+
+        # make tenant object with manager
+        tenant = self.client.tenants.resource_class(self.client.tenants,
+                                                    req_body['tenant'])
+        tenant.remove_user('foo', 'barrr')
+        self.assertTrue(isinstance(tenant, tenants.Tenant))
