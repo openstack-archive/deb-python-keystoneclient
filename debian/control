@@ -6,7 +6,7 @@ Uploaders: Julien Danjou <acid@debian.org>,
            Thomas Goirand <zigo@debian.org>,
            Ghe Rivero <ghe.rivero@stackops.com>
 Build-Depends: debhelper (>= 8.0.0), python, python-setuptools, python-httplib2, python-argparse, python-prettytable
-Standards-Version: 3.9.2
+Standards-Version: 3.9.3
 Homepage: https://github.com/4P/python-keystoneclient
 Vcs-Git: git://git.debian.org/openstack/python-keystoneclient.git
 Vcs-Browser: http://git.debian.org/?p=openstack/python-keystoneclient.git;a=summary
