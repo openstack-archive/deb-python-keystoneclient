@@ -54,19 +54,24 @@ class ShellTest(utils.TestCase):
             shell('user-list')
             assert do_tenant_mock.called
             ((a, b), c) = do_tenant_mock.call_args
-            assert (b.auth_url, b.password, b.os_tenant_id,
-                    b.tenant_name, b.username, b.identity_api_version) == \
-                   (DEFAULT_AUTH_URL, DEFAULT_PASSWORD, DEFAULT_TENANT_ID,
-                    DEFAULT_TENANT_NAME, DEFAULT_USERNAME, '')
-            shell('--auth_url http://0.0.0.0:5000/ --password xyzpdq '
-                  '--tenant_id 1234 --tenant_name fred --username barney '
-                  '--identity_api_version 2.0 user-list')
+            actual = (b.os_auth_url, b.os_password, b.os_tenant_id,
+                      b.os_tenant_name, b.os_username,
+                      b.os_identity_api_version)
+            expect = (DEFAULT_AUTH_URL, DEFAULT_PASSWORD, DEFAULT_TENANT_ID,
+                      DEFAULT_TENANT_NAME, DEFAULT_USERNAME, '')
+            self.assertTrue(all([x == y for x, y in zip(actual, expect)]))
+            shell('--os_auth_url http://0.0.0.0:5000/ --os_password xyzpdq '
+                  '--os_tenant_id 1234 --os_tenant_name fred '
+                  '--os_username barney '
+                  '--os_identity_api_version 2.0 user-list')
             assert do_tenant_mock.called
             ((a, b), c) = do_tenant_mock.call_args
-            assert (b.auth_url, b.password, b.os_tenant_id,
-                    b.tenant_name, b.username, b.identity_api_version) == \
-                   ('http://0.0.0.0:5000/', 'xyzpdq', '1234',
-                    'fred', 'barney', '2.0')
+            actual = (b.os_auth_url, b.os_password, b.os_tenant_id,
+                      b.os_tenant_name, b.os_username,
+                      b.os_identity_api_version)
+            expect = ('http://0.0.0.0:5000/', 'xyzpdq', '1234',
+                      'fred', 'barney', '2.0')
+            self.assertTrue(all([x == y for x, y in zip(actual, expect)]))
 
     def test_shell_user_create_args(self):
         """Test user-create args"""
@@ -82,26 +87,30 @@ class ShellTest(utils.TestCase):
                   '--pass=secrete --tenant_id=barrr --enabled=true')
             assert do_uc_mock.called
             ((a, b), c) = do_uc_mock.call_args
-            # restore os_tenant_id when review 4295 is merged
-            assert (b.auth_url, b.password,  # b.os_tenant_id,
-                    b.tenant_name, b.username, b.identity_api_version) == \
-                   (DEFAULT_AUTH_URL, DEFAULT_PASSWORD,  # DEFAULT_TENANT_ID,
-                    DEFAULT_TENANT_NAME, DEFAULT_USERNAME, '')
-            assert (b.tenant_id, b.name, b.passwd, b.enabled) == \
-                   ('barrr', 'FOO', 'secrete', 'true')
+            actual = (b.os_auth_url, b.os_password, b.os_tenant_id,
+                      b.os_tenant_name, b.os_username,
+                      b.os_identity_api_version)
+            expect = (DEFAULT_AUTH_URL, DEFAULT_PASSWORD, DEFAULT_TENANT_ID,
+                      DEFAULT_TENANT_NAME, DEFAULT_USERNAME, '')
+            self.assertTrue(all([x == y for x, y in zip(actual, expect)]))
+            actual = (b.tenant_id, b.name, b.passwd, b.enabled)
+            expect = ('barrr', 'FOO', 'secrete', 'true')
+            self.assertTrue(all([x == y for x, y in zip(actual, expect)]))
 
-            # Test case with two --tenant_id args present
-            shell('--tenant_id=os-tenant user-create --name=FOO '
+            # Test case with --os_tenant_id and --tenant_id args present
+            shell('--os_tenant_id=os-tenant user-create --name=FOO '
                   '--pass=secrete --tenant_id=barrr --enabled=true')
             assert do_uc_mock.called
             ((a, b), c) = do_uc_mock.call_args
-            # restore os_tenant_id when review 4295 is merged
-            assert (b.auth_url, b.password,  # b.os_tenant_id,
-                    b.tenant_name, b.username, b.identity_api_version) == \
-                   (DEFAULT_AUTH_URL, DEFAULT_PASSWORD,  # 'os-tenant',
-                    DEFAULT_TENANT_NAME, DEFAULT_USERNAME, '')
-            assert (b.tenant_id, b.name, b.passwd, b.enabled) == \
-                   ('barrr', 'FOO', 'secrete', 'true')
+            actual = (b.os_auth_url, b.os_password, b.os_tenant_id,
+                      b.os_tenant_name, b.os_username,
+                      b.os_identity_api_version)
+            expect = (DEFAULT_AUTH_URL, DEFAULT_PASSWORD, 'os-tenant',
+                      DEFAULT_TENANT_NAME, DEFAULT_USERNAME, '')
+            self.assertTrue(all([x == y for x, y in zip(actual, expect)]))
+            actual = (b.tenant_id, b.name, b.passwd, b.enabled)
+            expect = ('barrr', 'FOO', 'secrete', 'true')
+            self.assertTrue(all([x == y for x, y in zip(actual, expect)]))
 
     def test_do_tenant_create(self):
         do_tenant_mock = mock.MagicMock()
@@ -136,22 +145,30 @@ class ShellTest(utils.TestCase):
                   '--tenant_id=ec2-tenant --user=ec2-user')
             assert do_ec2_mock.called
             ((a, b), c) = do_ec2_mock.call_args
-            assert (b.auth_url, b.password, b.os_tenant_id,
-                    b.tenant_name, b.username, b.identity_api_version) == \
-                   (DEFAULT_AUTH_URL, DEFAULT_PASSWORD, DEFAULT_TENANT_ID,
-                    DEFAULT_TENANT_NAME, DEFAULT_USERNAME, '')
-            assert (b.tenant_id, b.user) == ('ec2-tenant', 'ec2-user')
+            actual = (b.os_auth_url, b.os_password, b.os_tenant_id,
+                      b.os_tenant_name, b.os_username,
+                      b.os_identity_api_version)
+            expect = (DEFAULT_AUTH_URL, DEFAULT_PASSWORD, DEFAULT_TENANT_ID,
+                      DEFAULT_TENANT_NAME, DEFAULT_USERNAME, '')
+            self.assertTrue(all([x == y for x, y in zip(actual, expect)]))
+            actual = (b.tenant_id, b.user)
+            expect = ('ec2-tenant', 'ec2-user')
+            self.assertTrue(all([x == y for x, y in zip(actual, expect)]))
 
             # Test case with two --tenant_id args present
-            shell('--tenant_id=os-tenant ec2-credentials-create '
+            shell('--os_tenant_id=os-tenant ec2-credentials-create '
                   '--tenant_id=ec2-tenant --user=ec2-user')
             assert do_ec2_mock.called
             ((a, b), c) = do_ec2_mock.call_args
-            assert (b.auth_url, b.password, b.os_tenant_id,
-                    b.tenant_name, b.username, b.identity_api_version) == \
-                   (DEFAULT_AUTH_URL, DEFAULT_PASSWORD, 'os-tenant',
-                    DEFAULT_TENANT_NAME, DEFAULT_USERNAME, '')
-            assert (b.tenant_id, b.user) == ('ec2-tenant', 'ec2-user')
+            actual = (b.os_auth_url, b.os_password, b.os_tenant_id,
+                      b.os_tenant_name, b.os_username,
+                      b.os_identity_api_version)
+            expect = (DEFAULT_AUTH_URL, DEFAULT_PASSWORD, 'os-tenant',
+                      DEFAULT_TENANT_NAME, DEFAULT_USERNAME, '')
+            self.assertTrue(all([x == y for x, y in zip(actual, expect)]))
+            actual = (b.tenant_id, b.user)
+            expect = ('ec2-tenant', 'ec2-user')
+            self.assertTrue(all([x == y for x, y in zip(actual, expect)]))
 
     def test_do_ec2_get(self):
         do_shell_mock = mock.MagicMock()
@@ -175,3 +192,29 @@ class ShellTest(utils.TestCase):
                         do_shell_mock):
             shell('ec2-credentials-delete')
             assert do_shell_mock.called
+
+    def test_do_endpoints(self):
+        do_shell_mock = mock.MagicMock()
+        # grab the decorators for do_endpoint_create
+        shell_func = getattr(shell_v2_0, 'do_endpoint_create')
+        do_shell_mock.arguments = getattr(shell_func, 'arguments', [])
+        with mock.patch('keystoneclient.v2_0.shell.do_endpoint_create',
+                        do_shell_mock):
+
+            # Test create args
+            shell('endpoint-create '
+                  '--service_id=2 --publicurl=http://example.com:1234/go '
+                  '--adminurl=http://example.com:9876/adm')
+            assert do_shell_mock.called
+            ((a, b), c) = do_shell_mock.call_args
+            actual = (b.os_auth_url, b.os_password, b.os_tenant_id,
+                      b.os_tenant_name, b.os_username,
+                      b.os_identity_api_version)
+            expect = (DEFAULT_AUTH_URL, DEFAULT_PASSWORD, DEFAULT_TENANT_ID,
+                      DEFAULT_TENANT_NAME, DEFAULT_USERNAME, '')
+            self.assertTrue(all([x == y for x, y in zip(actual, expect)]))
+            actual = (b.service_id, b.publicurl, b.adminurl)
+            expect = ('2',
+                      'http://example.com:1234/go',
+                      'http://example.com:9876/adm')
+            self.assertTrue(all([x == y for x, y in zip(actual, expect)]))

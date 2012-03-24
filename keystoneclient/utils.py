@@ -64,8 +64,8 @@ def find_resource(manager, name_or_id):
     try:
         return manager.find(name=name_or_id)
     except exceptions.NotFound:
-        msg = "No %s with a name or ID of '%s' exists." % \
-              (manager.resource_class.__name__.lower(), name_or_id)
+        msg = ("No %s with a name or ID of '%s' exists." %
+               (manager.resource_class.__name__.lower(), name_or_id))
         raise exceptions.CommandError(msg)
 
 
@@ -91,4 +91,7 @@ def isunauthenticated(f):
 
 
 def string_to_bool(arg):
+    if isinstance(arg, bool):
+        return arg
+
     return arg.strip().lower() in ('t', 'true', 'yes', '1')

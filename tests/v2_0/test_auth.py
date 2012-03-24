@@ -22,35 +22,47 @@ class AuthenticateAgainstKeystoneTests(utils.TestCase):
     def setUp(self):
         super(AuthenticateAgainstKeystoneTests, self).setUp()
         self.TEST_RESPONSE_DICT = {
-                "access": {
-                    "token": {
-                        "expires": "12345",
-                        "id": self.TEST_TOKEN
+            "access": {
+                "token": {
+                    "expires": "12345",
+                    "id": self.TEST_TOKEN,
+                    "tenant": {
+                        "id": self.TEST_TENANT_ID
+                        },
                     },
-                    "serviceCatalog": self.TEST_SERVICE_CATALOG
-                }
+                "user": {
+                    "id": self.TEST_USER
+                    },
+                "serviceCatalog": self.TEST_SERVICE_CATALOG,
+                },
             }
         self.TEST_REQUEST_BODY = {
-                "auth": {
-                    "passwordCredentials": {
-                        "username": self.TEST_USER,
-                        "password": self.TEST_TOKEN,
+            "auth": {
+                "passwordCredentials": {
+                    "username": self.TEST_USER,
+                    "password": self.TEST_TOKEN,
                     },
-                    "tenantId": self.TEST_TENANT_ID
-                }
+                "tenantId": self.TEST_TENANT_ID,
+                },
             }
         self.TEST_REQUEST_HEADERS = {
-                'Content-Type': 'application/json',
-                'User-Agent': 'python-keystoneclient'
+            'Content-Type': 'application/json',
+            'User-Agent': 'python-keystoneclient',
             }
 
     def test_authenticate_failure(self):
-        self.TEST_REQUEST_BODY['auth']['passwordCredentials']['password'] = \
-                'bad_key'
+        _auth = 'auth'
+        _cred = 'passwordCredentials'
+        _pass = 'password'
+        self.TEST_REQUEST_BODY[_auth][_cred][_pass] = 'bad_key'
         resp = httplib2.Response({
             "status": 401,
-            "body": json.dumps({"unauthorized": {
-                                "message": "Unauthorized", "code": "401"}}),
+            "body": json.dumps({
+                "unauthorized": {
+                    "message": "Unauthorized",
+                    "code": "401",
+                    },
+                }),
             })
 
         # Implicit retry on API calls, so it gets called twice
@@ -66,24 +78,35 @@ class AuthenticateAgainstKeystoneTests(utils.TestCase):
                               .AndReturn((resp, resp['body']))
         self.mox.ReplayAll()
 
-        with self.assertRaises(exceptions.Unauthorized):
+        # Workaround for issue with assertRaises on python2.6
+        # where with assertRaises(exceptions.Unauthorized): doesn't work
+        # right
+        def client_create_wrapper():
             client.Client(username=self.TEST_USER,
                           password="bad_key",
                           tenant_id=self.TEST_TENANT_ID,
                           auth_url=self.TEST_URL)
 
+        self.assertRaises(exceptions.Unauthorized, client_create_wrapper)
+
     def test_auth_redirect(self):
         correct_response = json.dumps(self.TEST_RESPONSE_DICT)
         dict_responses = [
-            {"headers": {'location': self.TEST_ADMIN_URL + "/tokens"},
-             "status": 305,
-             "body": "Use proxy"},
-            {"headers": {},
-             "status": 200,
-             "body": correct_response}
-        ]
-        responses = [(to_http_response(resp), resp['body']) for
-                     resp in dict_responses]
+            {
+                "headers": {
+                    'location': self.TEST_ADMIN_URL + "/tokens",
+                    },
+                "status": 305,
+                "body": "Use proxy",
+                },
+            {
+                "headers": {},
+                "status": 200,
+                "body": correct_response,
+                },
+            ]
+        responses = [(to_http_response(resp), resp['body'])
+                     for resp in dict_responses]
 
         httplib2.Http.request(self.TEST_URL + "/tokens",
                               'POST',

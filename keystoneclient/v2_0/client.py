@@ -113,7 +113,13 @@ class Client(client.HTTPClient):
         """ Set the client's service catalog from the response data. """
         self.service_catalog = service_catalog.ServiceCatalog(body)
         try:
-            self.auth_token = self.service_catalog.get_token()['id']
+            sc = self.service_catalog.get_token()
+            self.auth_token = sc['id']
+            # Save these since we have them and they'll be useful later
+            # NOTE(termie): these used to be in the token and then were removed
+            #               ... why?
+            self.auth_tenant_id = sc.get('tenant_id')
+            self.auth_user_id = sc.get('user_id')
         except KeyError:
             raise exceptions.AuthorizationFailure()
 
