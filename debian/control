@@ -13,7 +13,7 @@ Vcs-Browser: http://git.debian.org/?p=openstack/python-keystoneclient.git;a=summ
 
 Package: python-keystoneclient
 Architecture: all
-Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends}
+Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends}, python-pkg-resources
 Description: client library for the OpenStack Keystone API
  This is a client for the OpenStack Keystone API. Installing this package
  gets you a shell command, that you can use to interact with Keystone's API.
