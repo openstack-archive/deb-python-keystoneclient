@@ -5,15 +5,16 @@ Maintainer: PKG OpenStack <openstack-devel@lists.alioth.debian.org>
 Uploaders: Julien Danjou <acid@debian.org>,
            Thomas Goirand <zigo@debian.org>,
            Ghe Rivero <ghe.rivero@stackops.com>
-Build-Depends: debhelper (>= 8.0.0), python, python-setuptools, python-httplib2, python-argparse, python-prettytable
+Build-Depends: debhelper (>= 8.0.0), python-setuptools, python-httplib2, python-argparse, python-prettytable,
+ python-all (>= 2.6.6-3~), python-nose, python-mox, python-mock, python-simplejson, python-unittest2
 Standards-Version: 3.9.3
-Homepage: https://github.com/4P/python-keystoneclient
+Homepage: https://github.com/openstack/python-keystoneclient
 Vcs-Git: git://git.debian.org/openstack/python-keystoneclient.git
 Vcs-Browser: http://git.debian.org/?p=openstack/python-keystoneclient.git;a=summary
 
 Package: python-keystoneclient
 Architecture: all
-Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends}, python-pkg-resources
+Depends: ${python:Depends}, ${misc:Depends}, python-pkg-resources
 Description: client library for the OpenStack Keystone API
  This is a client for the OpenStack Keystone API. Installing this package
  gets you a shell command, that you can use to interact with Keystone's API.
