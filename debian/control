@@ -16,6 +16,8 @@ Package: python-keystoneclient
 Architecture: all
 Depends: ${python:Depends}, ${misc:Depends}, python-pkg-resources
 Description: client library for the OpenStack Keystone API
- This is a client for the OpenStack Keystone API. Installing this package
- gets you a shell command, that you can use to interact with Keystone's API.
-
+ This is a client for the OpenStack Keystone API. There's a Python API 
+ (the ``keystoneclient`` module), and a command-line script (``keystone``).
+ .
+ Installing this package gets you a shell command, that you can use to 
+ interact with Keystone's API.

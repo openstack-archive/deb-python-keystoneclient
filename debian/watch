@@ -1,0 +1,2 @@
+version=3
+http://keystone.openstack.org/tarballs/ python-keystoneclient-(.*).tar.gz
