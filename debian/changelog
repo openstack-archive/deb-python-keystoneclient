@@ -1,4 +1,4 @@
-python-keystoneclient (2012.2~f1-1) experimental; urgency=low
+python-keystoneclient (2012.2~f1+git1-0a8c960-1) experimental; urgency=low
 
   * New upstream version
   * Removed prettytable patch (incorporated upstream)
