@@ -20,6 +20,7 @@ from keystoneclient import base
 
 
 class User(base.Resource):
+    """Represents a Keystone user"""
     def __repr__(self):
         return "<User %s>" % self._info
 
@@ -31,6 +32,7 @@ class User(base.Resource):
 
 
 class UserManager(base.ManagerWithFind):
+    """Manager class for manipulating Keystone users"""
     resource_class = User
 
     def get(self, user):
@@ -57,7 +59,7 @@ class UserManager(base.ManagerWithFind):
                            "enabled": enabled}}
 
         self._update("/users/%s/OS-KSADM/enabled" % base.getid(user), params,
-                "user")
+                     "user")
 
     def update_password(self, user, password):
         """

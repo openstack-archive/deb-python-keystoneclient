@@ -32,6 +32,7 @@ import platform
 ROOT = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 VENV = os.path.join(ROOT, '.venv')
 PIP_REQUIRES = os.path.join(ROOT, 'tools', 'pip-requires')
+TEST_REQUIRES = os.path.join(ROOT, 'tools', 'test-requires')
 PY_VERSION = "python%s.%s" % (sys.version_info[0], sys.version_info[1])
 
 
@@ -188,6 +189,7 @@ def install_dependencies(venv=VENV):
     pip_install('distribute')
 
     pip_install('-r', PIP_REQUIRES)
+    pip_install('-r', TEST_REQUIRES)
 
     # Tell the virtual env how to "import nova"
     pthfile = os.path.join(venv, "lib", PY_VERSION, "site-packages",
@@ -204,8 +206,8 @@ def print_help():
     help = """
     python-keystoneclient development environment setup is complete.
 
-    python-keystoneclient development uses virtualenv to track and manage Python
-    dependencies while in development and testing.
+    python-keystoneclient development uses virtualenv to track and manage
+    Python dependencies while in development and testing.
 
     To activate the python-keystoneclient virtualenv for the extent of your
     current shell session you can run:

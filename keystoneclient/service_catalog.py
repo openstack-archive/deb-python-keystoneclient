@@ -29,7 +29,7 @@ class ServiceCatalog(object):
     def get_token(self):
         """Fetch token details fron service catalog"""
         token = {'id': self.catalog['token']['id'],
-                'expires': self.catalog['token']['expires']}
+                 'expires': self.catalog['token']['expires']}
         try:
             token['user_id'] = self.catalog['user']['id']
             token['tenant_id'] = self.catalog['token']['tenant']['id']
@@ -39,7 +39,7 @@ class ServiceCatalog(object):
         return token
 
     def url_for(self, attr=None, filter_value=None,
-                    service_type='identity', endpoint_type='publicURL'):
+                service_type='identity', endpoint_type='publicURL'):
         """Fetch an endpoint from the service catalog.
 
         Fetch the specified endpoint from the service catalog for
