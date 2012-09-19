@@ -3,6 +3,9 @@
 # Uncomment this to turn on verbose mode.
 #export DH_VERBOSE=1
 
+DEBVERS := $(shell dpkg-parsechangelog | sed -n -e 's/^Version: //p')
+VERSION := $(shell echo '$(DEBVERS)' | sed -e 's/^[[:digit:]]*://' -e 's/[~-].*//')
+
 %:
 	dh $@  --with python2
 
@@ -13,3 +16,14 @@ endif
 
 get-orig-source:
 	uscan --verbose --force-download --rename --destdir=../build-area
+
+
+override_dh_configure:
+	echo $(VERSION) > keystoneclient/versioninfo
+	dh_configure
+
+override_dh_clean:
+	echo $(VERSION) > keystoneclient/versioninfo
+	dh_clean
+	rm -f keystoneclient/versioninfo
+
