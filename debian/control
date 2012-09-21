@@ -6,7 +6,7 @@ Uploaders: Julien Danjou <acid@debian.org>,
            Thomas Goirand <zigo@debian.org>,
            Ghe Rivero <ghe.rivero@stackops.com>
 Build-Depends: debhelper (>= 8.0.0), python-setuptools, python-httplib2, python-argparse, python-prettytable,
- python-all (>= 2.6.6-3~), python-nose, python-mox, python-mock, python-simplejson, python-unittest2
+ python-all (>= 2.6.6-3~), python-nose, python-mox, python-mock, python-simplejson, python-unittest2, pep8
 Standards-Version: 3.9.3
 Homepage: https://github.com/openstack/python-keystoneclient
 Vcs-Git: git://git.debian.org/openstack/python-keystoneclient.git
