@@ -6,6 +6,7 @@
 DEBVERS := $(shell dpkg-parsechangelog | sed -n -e 's/^Version: //p')
 VERSION := $(shell echo '$(DEBVERS)' | sed -e 's/^[[:digit:]]*://' -e 's/[~-].*//')
 DEBFLAVOR :=$(shell dpkg-parsechangelog | grep -E ^Distribution: | -cut -d" " -f2)
+DEBPKGNAME :=$(shell dpkg-parsechangelog | grep -E ^Source: | cut -d" " -f2)
 
 %:
 	dh $@  --with python2
@@ -33,9 +34,9 @@ override_dh_auto_install:
 	install -D -m 0644 tools/keystone.bash_completion $(CURDIR)/debian/python-keystoneclient/etc/bash_completion.d/keystone.bash_completion
 
 get-vcs-source:
-	git remote add upstream git://github.com/openstack/python-keystoneclient.git || true
+	git remote add upstream git://github.com/openstack/$(DEBPKGNAME).git || true
 	git fetch upstream
-	git archive --prefix=python-keystoneclient-$(VERSION)/ $(VERSION) | xz >../python-keystoneclient_$(VERSION).orig.tar.xz
+	git archive --prefix=$(DEBPKGNAME)-$(VERSION)/ $(VERSION) | xz >../$(DEBPKGNAME)_$(VERSION).orig.tar.xz
 	if ! git checkout master ; then \
 		echo "No upstream branch: checking out" ; \
 		git checkout -b master upstream/master ; \
