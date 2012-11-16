@@ -7,7 +7,8 @@ Uploaders: Julien Danjou <acid@debian.org>,
            Ghe Rivero <ghe.rivero@stackops.com>
 Build-Depends: debhelper (>= 9),
  python-all (>= 2.6.6-3~)
-Build-Depends-Indep: pep8,
+Build-Depends-Indep: openstack-pkg-tools,
+ pep8,
  python-argparse,   
  python-httplib2,
  python-mock,
@@ -24,6 +25,7 @@ Vcs-Browser: http://git.debian.org/?p=openstack/python-keystoneclient.git;a=summ
 
 Package: python-keystoneclient
 Architecture: all
+Pre-Depends: dpkg (>= 1.15.6~)
 Depends: ${python:Depends}, ${misc:Depends}, python-pkg-resources
 Description: client library for the OpenStack Keystone API
  This is the identity service used by OpenStack for authentication (authN)
