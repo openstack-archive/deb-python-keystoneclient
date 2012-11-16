@@ -7,7 +7,7 @@ Uploaders: Julien Danjou <acid@debian.org>,
            Ghe Rivero <ghe.rivero@stackops.com>
 Build-Depends: debhelper (>= 9),
  python-all (>= 2.6.6-3~)
-Build-Depends-Indep: pep8
+Build-Depends-Indep: pep8,
  python-argparse,   
  python-httplib2,
  python-mock,
@@ -16,7 +16,7 @@ Build-Depends-Indep: pep8
  python-prettytable,
  python-setuptools,
  python-simplejson,
- python-unittest2,
+ python-unittest2
 Standards-Version: 3.9.3
 Homepage: https://github.com/openstack/python-keystoneclient
 Vcs-Git: git://git.debian.org/openstack/python-keystoneclient.git
@@ -26,8 +26,14 @@ Package: python-keystoneclient
 Architecture: all
 Depends: ${python:Depends}, ${misc:Depends}, python-pkg-resources
 Description: client library for the OpenStack Keystone API
+ This is the identity service used by OpenStack for authentication (authN)
+ and high-level authorization (authZ). It currently supports token-based
+ authN with user/service authZ, and is scalable to support OAuth, SAML,
+ and OpenID in future versions. Out of the box, Keystone uses SQLite for
+ its identity store database, with the option to connect to external LDAP.
+ .
  This is a client for the OpenStack Keystone API. There's a Python API 
- (the ``keystoneclient`` module), and a command-line script (``keystone``).
+ (the "keystoneclient" module), and a command-line script ("keystone").
  .
  Installing this package gets you a shell command, that you can use to 
  interact with Keystone's API.
