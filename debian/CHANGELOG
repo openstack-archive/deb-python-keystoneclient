@@ -1,0 +1,2198 @@
+commit 27f0c721174b149c64cc67ff718d007d94fe79aa
+Merge: 677ff3c f99be3b
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Fri Nov 16 17:32:15 2012 +0000
+
+    Merge "Check for auth URL before password (bug 1076235)"
+
+commit 677ff3c5205a573ed032a55a68e63cbdceb2b9bd
+Merge: 332a133 8508b3e
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Fri Nov 16 17:29:05 2012 +0000
+
+    Merge "check creds before token/endpoint (bug 1076233)"
+
+commit 332a13396d1e33d51dccaafe40b510a8db62e677
+Merge: b145d22 957b9b1
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Fri Nov 16 04:30:27 2012 +0000
+
+    Merge "Update README and CLI help"
+
+commit b145d2294a06734cb32a2ae8977ed04e9c9f692e
+Merge: b111637 f9a7d9f
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Fri Nov 16 03:36:09 2012 +0000
+
+    Merge "Warn about bypassing auth on CLI (bug 1076225)"
+
+commit b111637419a68b09fa52b8d7285b2c6160bf9e18
+Merge: 1a35545 10e16be
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Fri Nov 16 01:34:41 2012 +0000
+
+    Merge "Throw validation response into the environment"
+
+commit 10e16be489dc13ff44d1abad71fc7ad259838a10
+Author: Kevin L. Mitchell <kevin.mitchell@rackspace.com>
+Date:   Thu Nov 15 16:03:58 2012 -0600
+
+    Throw validation response into the environment
+    
+    Allow other middleware access to the raw response from the token
+    validation step by adding it to the WSGI environment in the
+    'keystone.token_info' variable.
+    
+    Change-Id: I3849598d6eefd2bfcb04e27d723f08fb1935c231
+
+commit 1a35545db3aa2af7707928c6169e1908e24c8286
+Author: Joe Heck <heckj@mac.com>
+Date:   Wed Nov 14 05:38:16 2012 +0000
+
+    fixes auth_ref initialization error
+    
+    bug 1078589
+    
+    * allow client values to be overridden, but use auth_ref if none
+      available
+    * added tests to match this flow
+    * refactored tokens into test_fixtures.py file
+    
+    Change-Id: I771a2dee6dedf31d883417d9b4e6e64bbb620f14
+
+commit 957b9b1dcfb855e73458451dd5a52f3c0bbf1a5d
+Author: Dolph Mathews <dolph.mathews@gmail.com>
+Date:   Wed Nov 14 13:55:40 2012 -0600
+
+    Update README and CLI help
+    
+    - Provide more verbose help for config options
+    - Suppress deprecated options from help
+    - Updated options & docs in README file
+    
+    Change-Id: Ic0dc2575a15f2cff513c5013266e8f8112e167a2
+
+commit e39351ec65bb00b33d3d57785976daefe9d27c2c
+Merge: 7920899 5804b8b
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Tue Nov 13 20:47:22 2012 +0000
+
+    Merge "HACKING compliance: consistent usage of 'except'"
+
+commit 7920899af119d1697c333d202ca3272f167c19b0
+Author: Henry Nash <henryn@linux.vnet.ibm.com>
+Date:   Mon Nov 12 19:40:21 2012 +0000
+
+    Add auth-token code to keystoneclient, along with supporting files
+    
+    This step in the process duplicates the auth-token code to keystoneclient but,
+    for the moment, leaves a copy in its origional location in keystone.
+    Testing for auth-token is also copied across, as is the cms support file.
+    
+    Although no other project will yet pick up the code here in the client, since
+    the paste.ini files haev not yet been updated, it would work if anyone
+    did reference it.
+    
+    Once the client code is in, the next step is to update all the other
+    project paste files, and then finally retire the code from keystone.
+    
+    Change-Id: I88853a373d406020d54b61cba5a5e887380e3b3e
+
+commit f617b09874046a0f56f6342638cc8444ed719022
+Merge: f1cc3cf 76b7d92
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Sat Nov 10 03:04:58 2012 +0000
+
+    Merge "Make initial structural changes to keystoneclient in preparation to moving auth_token here from keystone.  No functional change should occur from this commit (even though it did refresh a newer copy of openstack.common.setup.py, none of the newer updates are in functions called from this client)"
+
+commit 76b7d92dcc189908000f7d70d3f75c5c3aec3e73
+Author: Henry Nash <henryn@linux.vnet.ibm.com>
+Date:   Thu Nov 8 20:15:07 2012 +0000
+
+    Make initial structural changes to keystoneclient in preparation
+    to moving auth_token here from keystone.  No functional change
+    should occur from this commit (even though it did refresh a newer copy
+    of openstack.common.setup.py, none of the newer updates are in
+    functions called from this client)
+    
+    blueprint authtoken-to-keystoneclient-repo
+    
+    Change-Id: Ie54feb73e0e34b56400fdaa8a8f876f9284bac27
+
+commit f1cc3cfc42db902589785320547204388aa170a3
+Author: Joe Heck <heckj@mac.com>
+Date:   Sat Oct 13 00:15:39 2012 +0000
+
+    removing repeat attempt at authorization in client
+    
+    blueprint solidify-python-api
+    
+    * extended and updated documentation strings
+    * updated README.rst with latest options
+    * made debug a pass-through value, optionally set on client (instead of
+      just being pulled from environment variable)
+    * adding AccessInfo object and associated tests
+      (access.AccessInfo meant to be a cacheable object external to client
+      and ultimately to replace service_catalog and it's existing functionality)
+    * extending authtoken to support lists of endpoints
+    * maintaining a single entity for client.management_url with first from
+      list of possible endpoints
+    * create project_name and project_id synonyms to match tenant_name and
+      tenant_id
+    * replacing authenticate call to a pure method, not overloading the
+      resource/manager path that confuses base URL concepts.
+    * throw AuthorizationFailure if client attempts to access keystone
+      resources before it has a management url
+    * special case listing tenant using auth_url for unscoped tokens authorized
+      through client
+    * special case listing tokens.authenticate for Dashboard to allow unscoped
+      tokens to hand back parity information to dashboard
+    
+    Change-Id: I4bb3a1b6a5ce2c4b3fbcebeb59116286cac8b2e3
+
+commit f99be3bf3661e8af6ebf950398ed35420f237fbc
+Author: Dolph Mathews <dolph.mathews@gmail.com>
+Date:   Wed Nov 7 23:32:46 2012 -0600
+
+    Check for auth URL before password (bug 1076235)
+    
+    Change-Id: I9cebbf199e8cf3d9dd7de532b30da9f732a6dab1
+
+commit 8508b3e859af5806dc87af6a90b35877eb3c12ff
+Author: Dolph Mathews <dolph.mathews@gmail.com>
+Date:   Wed Nov 7 23:26:31 2012 -0600
+
+    check creds before token/endpoint (bug 1076233)
+    
+    Change-Id: I09894b3fd94d18b192efca8742b09c3ceaad9895
+
+commit f9a7d9f3a8eece1c4e46719f3f21e936a065e4b8
+Author: Dolph Mathews <dolph.mathews@gmail.com>
+Date:   Wed Nov 7 23:20:39 2012 -0600
+
+    Warn about bypassing auth on CLI (bug 1076225)
+    
+    Change-Id: Id7c32e3870d5edc00007c26761c59b119e3b530e
+
+commit d471f65231427d54c329697982533e6868b7cdb1
+Merge: 0fddc40 b75c2d6
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Wed Nov 7 22:54:54 2012 +0000
+
+    Merge "Update --os-* error messages"
+
+commit 0fddc40e88f7697d8a4c25dcd97c645f768786ed
+Author: Joe Heck <heckj@mac.com>
+Date:   Tue Nov 6 17:24:22 2012 +0000
+
+    fixes 1075376
+    
+    removes setting loaded=True on resource loads where it hasn't been fully
+    loaded - breaking keystone master tests
+    
+    Change-Id: I889782d605637f7d5bbd2462d1a2dfb1574e4624
+
+commit b6f1b619d676944d6d1ab97788b099b25640f193
+Merge: 3c3f271 5f38eb7
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Tue Nov 6 06:12:53 2012 +0000
+
+    Merge "Replace refs to 'Keystone API' with 'Identity API'"
+
+commit 3c3f27131ef628b2c1c26f03cc593ee16c5143d5
+Merge: 1b7eca8 5416fec
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Mon Nov 5 22:57:59 2012 +0000
+
+    Merge "Fix keystoneclient so swift works against Rackspace Cloud Files"
+
+commit 5416fec7d9af847fecf6e0a16f3a4a00e9161127
+Author: Joseph W. Breu <breu@breu.org>
+Date:   Mon Nov 5 10:12:49 2012 -0600
+
+    Fix keystoneclient so swift works against Rackspace Cloud Files
+    
+    Fixes bug 1074784
+    https://bugs.launchpad.net/python-keystoneclient/+bug/1074784
+    
+    RAX auth doesn't return a service catalog with an identity endpoint
+    that contains an auth URL.  This causes swift client to log an
+    error of "Authorization Failure. Authorization Failed: Endpoint not
+    found."
+    
+    Change-Id: I26174a664029617f097dc35c57ef30b34cd2fb61
+
+commit 5804b8bd5095d4d18f615f07b937bac158c2434b
+Author: Dolph Mathews <dolph.mathews@gmail.com>
+Date:   Mon Nov 5 10:13:25 2012 -0600
+
+    HACKING compliance: consistent usage of 'except'
+    
+    Change-Id: I13988e94d7e20a9179874ec5be072bdb8db3a95e
+
+commit 1b7eca834977df970faabacde85c31f62619034b
+Merge: 026dc8e 62c55bc
+Author: Dolph Mathews <dolph.mathews@gmail.com>
+Date:   Tue Oct 30 22:22:04 2012 +0000
+
+    Merge remote-tracking branch 'origin/feature/keystone-v3' into HEAD
+    
+    Conflicts:
+    	tests/v2_0/test_tenants.py
+    
+    Change-Id: I37037e60210edd574da86b1dc07aa73e6761e338
+
+commit 026dc8ef1b17b1a3aa2f7bf52786a49e6de995b2
+Merge: 16ff6de d81160e
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Tue Oct 30 18:18:52 2012 +0000
+
+    Merge "Fixes https connections to keystone when no CA certificates are specified."
+
+commit b75c2d6969e7d278a58543b0d687f933b5455b6a
+Author: Dolph Mathews <dolph.mathews@gmail.com>
+Date:   Tue Oct 30 00:49:59 2012 +0000
+
+    Update --os-* error messages
+    
+    Change-Id: Ic1b3d6baef1fee74cff3bdc92dfe9bccae75a29e
+
+commit 16ff6de10a641c68927415a96e3e55217e376e34
+Merge: c3b4f7f 88fe2de
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Thu Oct 25 21:13:17 2012 +0000
+
+    Merge "Add OpenStack trove classifier for PyPI"
+
+commit 5f38eb736c50f4feb245f88780167ff0b41263c4
+Author: Dolph Mathews <dolph.mathews@gmail.com>
+Date:   Wed Oct 24 07:12:30 2012 -0500
+
+    Replace refs to 'Keystone API' with 'Identity API'
+    
+    Formally, OpenStack Keystone implements the OpenStack Identity API, and
+    this is a client to the API, not to Keystone itself.
+    
+    Change-Id: If568866221a29ba041f0f2cd56dc81deeb9ebc00
+
+commit c3b4f7fd0e4c010b05e91f952fb2345da6c6cba5
+Merge: 56a4e4b 0dfc698
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Wed Oct 24 05:02:06 2012 +0000
+
+    Merge "Don't log an exception for an expected empty catalog."
+
+commit 0dfc69806d3767a7f6be91d9df18f20d31866c91
+Author: Gabriel Hurley <gabriel@strikeawe.com>
+Date:   Tue Oct 23 11:27:43 2012 -0700
+
+    Don't log an exception for an expected empty catalog.
+    
+    Cleans up the code around exception handling and logging
+    when first authenticating (which often returns an unscoped token).
+    There's no need to be logging an exception on an expected empty
+    catalog and moreover the except block was a bare "except" which
+    could mask other errors.
+    
+    Fixes bug 1070493
+    
+    Change-Id: I5e791e95ce3f9ab77723a7f4698cb11b169dacfb
+
+commit 88fe2dedc9fb69380668ad6b6e9133799dcb0e0c
+Author: Doug Hellmann <doug.hellmann@dreamhost.com>
+Date:   Mon Oct 22 18:45:01 2012 -0400
+
+    Add OpenStack trove classifier for PyPI
+    
+    Add trove classifier to have the client listed among the
+    other OpenStack-related projets on PyPI.
+    
+    Change-Id: I1ddae8d1272a2b1c5e4c666c9aa4e4a274431415
+    Signed-off-by: Doug Hellmann <doug.hellmann@dreamhost.com>
+
+commit 56a4e4bd7da1353684d34e5a9817b88501e41d8c
+Author: Ionuț Arțăriși <iartarisi@suse.cz>
+Date:   Thu Sep 13 15:45:40 2012 +0200
+
+    add a new HTTPClient attr for setting the original IP
+    
+    The original IP is useful in cases where keystoneclient is used by a
+    different openstack component and we need to know who made the original
+    request. Otherwise it gets overwritten by e.g. Dashboard's host's IP.
+    
+    bug 1046837
+    
+    Change-Id: Ic22c565e92010afd89c8573c375919215b70d73d
+
+commit e04b0e16ae4ef3c63cedf05979cca93595f34f28
+Merge: a6102fe bec66e8
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Fri Oct 19 19:48:03 2012 +0000
+
+    Merge "use mock context managers instead of decorators+functions"
+
+commit d81160e32e9828c6ba59da28a1f5ed79c9d05fdf
+Author: Sam Morrison <sorrison@gmail.com>
+Date:   Sat Oct 20 05:05:17 2012 +1100
+
+    Fixes https connections to keystone when no CA certificates
+    are specified.
+    
+    Fixes bug 1064835
+    
+    Change-Id: I77987f01cc1395a4857ebdcb0bb6adf697866dd7
+
+commit bec66e8c8650a0d433f1ed50bf3b104dd0c07f3e
+Author: Ionuț Arțăriși <iartarisi@suse.cz>
+Date:   Tue Oct 16 17:45:58 2012 +0200
+
+    use mock context managers instead of decorators+functions
+    
+    Change-Id: I761ee19169b39e47c4aa191b553965446432dba9
+
+commit a6102fe0b9cc177c8164ea0fb39286a4b27c6c79
+Author: Jay Pipes <jaypipes@gmail.com>
+Date:   Wed Oct 17 14:52:48 2012 -0400
+
+    Ensure JSON isn't read on no  HTTP response body
+    
+    This patch moves the json.loads(body) call in the
+    HTTP response handling to after the check for non-
+    200-300 return codes. This gets rid of the
+    ValueError exception raise when you hit, for instance,
+    a 400 or 404.
+    
+    Also changes a number of logger.exception() calls to
+    logger.debug() calls, since some exceptions are expected
+    and should not be logged as exceptions per-se.
+    
+    fixes LP bug#1067512
+    
+    Change-Id: If66fb1846ddc19da5bc2f15c6e0dd09019a56932
+
+commit fc4cbcae39ee094cef2c3cce4c96813eb9affcff
+Merge: 0a1fa11 a71d0a3
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Sat Oct 13 00:27:45 2012 +0000
+
+    Merge "Added 'service_id' column to endpoint-list"
+
+commit 0a1fa11d4f78a56c12f1c7bf8d2abd500e4a27cc
+Merge: 2c25837 b94c6c0
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Fri Oct 12 16:41:58 2012 +0000
+
+    Merge "Useful error msg when missing catalog (bug 949904)"
+
+commit 2c258377846e60a88d413c21226437a79cdb3c41
+Merge: db02315 7663afc
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Fri Oct 12 16:37:11 2012 +0000
+
+    Merge "virtualenv quite installation for zypper"
+
+commit a71d0a39b7135ecec7e2c17794b8738eee5bb121
+Author: Laurence Miao <laurence.miao@gmail.com>
+Date:   Thu Oct 4 00:31:32 2012 +0800
+
+    Added 'service_id' column to endpoint-list
+    
+     * keystoneclient/v2_0/shell.py
+    
+    Change-Id: If2c007b557ab17d9f43ab7e2541450c05c2abdbd
+
+commit b94c6c063ef802abd42678b7a1725102762a5acb
+Author: Dolph Mathews <dolph.mathews@gmail.com>
+Date:   Tue Oct 9 03:58:33 2012 +0000
+
+    Useful error msg when missing catalog (bug 949904)
+    
+    Change-Id: I498e9b79e9739437b7e61997b37e84283b496561
+
+commit db0231584905cbcc37ee08ad8e7ea951661bc948
+Author: Dolph Mathews <dolph.mathews@gmail.com>
+Date:   Wed Oct 10 22:09:11 2012 +0000
+
+    bootstrap a keystone user (e.g. admin) in one cmd
+    
+    Change-Id: I67ec8cad0f1893113f8041d8bffb9a078a8b9bbe
+
+commit 62c55bc2f0f13630db6d9962ae0edf468f495276
+Author: Dolph Mathews <dolph.mathews@gmail.com>
+Date:   Wed Oct 10 07:38:27 2012 +0000
+
+    Enable/disable services/endpoints (bug 1048662)
+    
+    Change-Id: I664b7f7dfa281a4481bfc37eab0948a901f1c0c5
+
+commit 46360085ebcbea61a04ab001e7d9597d0ed0b746
+Author: Dolph Mathews <dolph.mathews@gmail.com>
+Date:   Thu Sep 13 07:55:26 2012 -0500
+
+    v3 Domain/Project role grants
+    
+    Change-Id: Idbe0702b42603d6f9f133c9f1855ea9b4f222066
+
+commit 0ee514703094e3410d71b0078bd3d27db4d790dc
+Author: Dolph Mathews <dolph.mathews@gmail.com>
+Date:   Wed Sep 12 17:34:09 2012 -0500
+
+    Fixed httplib2 mocking (bug 1050091, bug 1050097)
+    
+    - 204 No Content should be mocked with empty response bodies
+    - Content-Type headers should not be mocked with empty response bodies
+    - httplib2 would never return None as a response body
+    - The Identity API never expects a req/resp body with a string value of "null"
+    
+    Change-Id: Ie22e8e5288573268165ed06049978195955f8ca6
+
+commit dd84cdc340c782f53c79ede7ec1e196828605f96
+Author: Dolph Mathews <dolph.mathews@gmail.com>
+Date:   Tue Sep 11 15:43:47 2012 -0500
+
+    v3 List projects for a user
+    
+    Change-Id: I4d3dfebb0bbe3799c05b9bc39fe2454ccf300873
+
+commit 6c84d7bf8567bfa3024cd38f80c01ed84768a89c
+Author: Dolph Mathews <dolph.mathews@gmail.com>
+Date:   Tue Sep 11 15:42:38 2012 -0500
+
+    v3 Credential CRUD
+    
+    Change-Id: I646ff7db3ccf827f912ebdb78fdf8d765d52c26c
+
+commit 298b1c4903a87b2063772b66150af1fa344a95d4
+Author: Dolph Mathews <dolph.mathews@gmail.com>
+Date:   Tue Sep 11 15:40:37 2012 -0500
+
+    v3 User CRUD
+    
+    Change-Id: Ieea3c474ce3795e2c97e399988228cdb2715f2ef
+
+commit 577c78c9919478305154919e4011cc55469d7815
+Author: Dolph Mathews <dolph.mathews@gmail.com>
+Date:   Tue Sep 11 15:38:22 2012 -0500
+
+    v3 Project CRUD
+    
+    Change-Id: I027dbba3a0573fde590295be5b31e3701d8c01f5
+
+commit f885c0d09a6464e0d94d1c295a605877d711f88a
+Author: Dolph Mathews <dolph.mathews@gmail.com>
+Date:   Tue Sep 11 15:34:56 2012 -0500
+
+    v3 Role CRUD
+    
+    Change-Id: Iacb6e56ef60537b7cd3a4fbe3db1f0db1604fdc2
+
+commit ac3beb3671cdccf9a5285e8b2296e950b1a8be9b
+Author: Dolph Mathews <dolph.mathews@gmail.com>
+Date:   Tue Sep 11 12:32:01 2012 -0500
+
+    v3 Domain CRUD
+    
+    Change-Id: I830055dc3bd079715403029a85890c40b687f632
+
+commit 0534c02351c225412354215a1653aa755d92a6e5
+Author: Dolph Mathews <dolph.mathews@gmail.com>
+Date:   Tue Sep 11 11:44:05 2012 -0500
+
+    v3 Policy CRUD
+    
+    Change-Id: Iaecf3427877dd1751bb546c24413bc759938922c
+
+commit 2af709ceb6cf20f37f79baed1d93a14874b49a5b
+Author: Dolph Mathews <dolph.mathews@gmail.com>
+Date:   Tue Sep 11 11:40:25 2012 -0500
+
+    v3 Endpoint CRUD
+    
+    Change-Id: Iff60668a80f8a6679a691a8f256652d7814f2785
+
+commit a0ff56fea0b7dfcb21fdd5e0f81c5e937f8c2324
+Author: Dolph Mathews <dolph.mathews@gmail.com>
+Date:   Tue Sep 11 11:22:30 2012 -0500
+
+    v3 Service CRUD
+    
+    Change-Id: I5594ce92e99241f95775773233f09170a8a371b1
+
+commit 6a99409a0da5328f3c766e5a392a99ecda86f0cd
+Author: Adam Young <ayoung@redhat.com>
+Date:   Sat Oct 6 10:02:48 2012 -0400
+
+    change default  wrap for tokens from 78 characters to 0
+    
+     Bug 1061514
+    
+    Change-Id: I2b202287854728c930d78954167d764825f848e7
+
+commit 2ca00dc61796c51457a3db5acf997c3852fac2c4
+Author: Dolph Mathews <dolph.mathews@gmail.com>
+Date:   Tue Sep 11 11:20:16 2012 -0500
+
+    v3 Client & test utils
+    
+    Change-Id: I6cafaad053b7fa1ca31f4f5aed1f86aa97c4e87e
+
+commit 315285e76ad520e89b5616503bdce8e061c77141
+Author: Dolph Mathews <dolph.mathews@gmail.com>
+Date:   Tue Sep 11 11:12:37 2012 -0500
+
+    Manager for generic CRUD on v3
+    
+    Change-Id: I15944f2e171e26b5209b55356edd1110b301310c
+
+commit 7663afc3a950d020500c1233fdd7b3ef1f01fcf2
+Author: Laurence Miao <laurence.miao@gmail.com>
+Date:   Thu Oct 4 13:27:58 2012 +0800
+
+    virtualenv quite installation for zypper
+    
+     * tools/install_venv.py
+       Added new class Suse
+    
+    Change-Id: I4629ca683edcd07f5707fe015bfc58bf904209f2
+
+commit 91d582e2ce1a4991a23a7e0cb8212b2482b2020f
+Merge: 539fb5f 135100a
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Mon Oct 1 22:34:31 2012 +0000
+
+    Merge "updating base keystoneclient documentation"
+
+commit 539fb5f61c3b2b78f15e5e95b3cb5eb5e5b9bd57
+Merge: 338f64f a8f7879
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Mon Oct 1 21:56:56 2012 +0000
+
+    Merge "enabling i18n with Babel"
+
+commit 338f64ff560f6441caae91861f86239d133ca1e3
+Merge: 6c127df 0d48d1b
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Mon Oct 1 20:40:30 2012 +0000
+
+    Merge "updating keystoneclient doc theme"
+
+commit 135100a2ed7849e13b2260b526844cc4170c12f6
+Author: Joe Heck <heckj@mac.com>
+Date:   Fri Sep 28 15:57:25 2012 +0000
+
+    updating base keystoneclient documentation
+    
+    * updated changelog
+    * described CLI authentication for admin and user
+    * tweaked API usage docs a bit with formatting and typos
+    
+    Change-Id: I61c3aab99bb0ecbad1de6d32a767558ca1a2ab5b
+
+commit 0d48d1b6cea6e479e987ef954680206030249bcf
+Author: Joe Heck <heckj@mac.com>
+Date:   Sat Sep 29 15:28:08 2012 -0700
+
+    updating keystoneclient doc theme
+    
+    adding in openstack theming
+    enabling last update from git
+    removing old manual references to API, converted entirely to autodoc
+    updated .gitignore
+    fixed docstring warnings and errors
+    
+    Change-Id: Id22ddc446331d52cbf56c3462d8b532fc37f64ac
+
+commit a8f7879fcfec1f2b64eba96b75fca7d75ad8e711
+Author: Joe Heck <heckj@mac.com>
+Date:   Sat Sep 29 16:03:23 2012 -0700
+
+    enabling i18n with Babel
+    
+    Change-Id: I7d5a170f31c2846474b3836a08c6445577613e98
+
+commit 6c127df0f3ef75b1afbae6aaf991e63246f77fa7
+Author: Joe Heck <heckj@mac.com>
+Date:   Sat Sep 29 14:59:35 2012 -0700
+
+    pep8 1.3.1 cleanup
+    
+    Change-Id: Ie4f3747b488829b4c05076bc02c377b5da939e10
+
+commit ff5ea25a9a37f8207bcda634316de4d063ce984a
+Merge: 06916aa 5991727
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Sat Sep 29 19:13:29 2012 +0000
+
+    Merge "Fixed httplib2 mocking (bug 1050091, bug 1050097)"
+
+commit 06916aab53a017cc18171d0b4e042865e75e8fce
+Author: Bhuvan Arumugam <bhuvan@apache.org>
+Date:   Sat Sep 8 23:24:46 2012 -0700
+
+    Allow empty description for tenants.
+    
+    Bug: 1025929
+    
+    (based on the patch submitted by Ivan Bondarev)
+    
+    * keystoneclient/v2_0/shell.py
+      do_tenant_update(): Update description if it is defined.
+    
+    * keystoneclient/v2_0/tenants.py
+      Token.update(), TokenManager.update():
+      Update description if it is defined, even if it's empty.
+    
+    * tests/v2_0/test_tenants.py
+      test_update_empty_description(): New test case for empty
+      description.
+    
+    Change-Id: I4c4e93f6bd5d38828685fd55eb1e694f521928e9
+
+commit 8ab3c92debf5ce2050158bbf95cbde05c19db908
+Merge: 2ac805c 2f89c9b
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Wed Sep 26 18:35:54 2012 +0000
+
+    Merge "switching options to match authentication paths"
+
+commit 2ac805c6a900f4dc8dda555a3e2bb8545f2d3cb1
+Merge: 818ab8e 33a0f73
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Tue Sep 25 18:32:08 2012 +0000
+
+    Merge "Add wrap option to keystone token-get for humans"
+
+commit 33a0f73113e9ec35f5e0d6f245a4fc9dc05f76b8
+Author: Joe Gordon <jogo@cloudscaling.com>
+Date:   Thu Sep 20 23:54:20 2012 +0000
+
+    Add wrap option to keystone token-get for humans
+    
+    When using Keystone PKI, a token ID can be over 3200 chars long.
+    Add optional --wrap option to make 'keystone token-get' human readable
+    
+    fix bug 1053728
+    
+    Change-Id: Ic3dffa773f9b8fc227a8fe7592a3d87e8e22e510
+
+commit 2f89c9bc4cb31188d6286b266a14ef32f85bcffa
+Author: Joe Heck <heckj@mac.com>
+Date:   Thu Sep 20 23:22:06 2012 +0000
+
+    switching options to match authentication paths
+    
+    as defined in http://wiki.openstack.org/UnifiedCLI/Authentication
+    
+    Change-Id: I1b5a0ce21040e536d3a9fbc39a2a08b51124880d
+
+commit 818ab8e3cd024826ac0d0686ff7fa8243db7d4e8
+Author: Joe Heck <heckj@mac.com>
+Date:   Tue Sep 25 15:47:51 2012 +0000
+
+    Fixes setup compatibility issue on Windows
+    
+    Fixes Bug #1052161
+    
+    "python setup.py build" fails on Windows due to a hardcoded shell path:
+    /bin/sh
+    
+    Change-Id: I9b5838aa96d3f41f8baf58f28d3e9e6d9646f6cb
+
+commit 57d48aad91aee263cd626a917022da8b02decf64
+Merge: 15d134d 641f612
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Mon Sep 24 19:31:38 2012 +0000
+
+    Merge "removing deprecated commandline options"
+
+commit 15d134d13015b17c48a0e138f01808d9698bbe89
+Author: Bhuvan Arumugam <bhuvan@apache.org>
+Date:   Sat Sep 8 22:59:13 2012 -0700
+
+    Handle "503 Service Unavailable" exception.
+    
+    Bug: 1028799
+    
+    No traceback, if service is unavailable; error out gracefully.
+    
+    * keystoneclient/exceptions.py
+      ServiceUnavailable: New class to handle 503 status code.
+      Add the new class to list of handled exceptions.
+    
+    Change-Id: I39a8ac594ef922d682731a926be26c8b6f648f9d
+
+commit 641f6123624b6ac89182c303dfcb0459b28055a2
+Author: Joe Heck <heckj@mac.com>
+Date:   Thu Sep 20 23:00:58 2012 +0000
+
+    removing deprecated commandline options
+    
+    Change-Id: Ie0cb579583012cf41ff34946a48b16f132ac2421
+
+commit c784105148bf4b860f4773cd349d1a0a7c53f050
+Author: Alex Meade <alex.meade@rackspace.com>
+Date:   Mon Sep 17 15:48:18 2012 -0400
+
+    Require httplib2 version 0.7 or higher.
+    
+    SSL validation was not available until version 0.7 of httplib, which keystone
+    client makes use of. Therefore, we cannot just allow any version.
+    
+    Change-Id: I05dc72aa77a4f861cc238fccf5a22192f7bdbf6f
+
+commit 59917278d7a2e3760d6229f874b2a953bf2b28cc
+Author: Dolph Mathews <dolph.mathews@gmail.com>
+Date:   Wed Sep 12 17:34:09 2012 -0500
+
+    Fixed httplib2 mocking (bug 1050091, bug 1050097)
+    
+    - 204 No Content should be mocked with empty response bodies
+    - Content-Type headers should not be mocked with empty response bodies
+    - httplib2 would never return None as a response body
+    - The Identity API never expects a req/resp body with a string value of "null"
+    
+    Change-Id: Ie22e8e5288573268165ed06049978195955f8ca6
+
+commit e25959724508b3ea74ed3f456e4eaae4f72609dd
+Author: Dolph Mathews <dolph.mathews@gmail.com>
+Date:   Tue Sep 11 11:10:40 2012 -0500
+
+    Allow serialization impl to be overridden
+    
+    Change-Id: I0f955c78897d4212f06942e59a7018dbe5d28540
+
+commit 703c8b340ca95721906342795f93d9ba7d2bdaae
+Author: Dolph Mathews <dolph.mathews@gmail.com>
+Date:   Tue Sep 11 11:10:00 2012 -0500
+
+    Add generic entity.delete()
+    
+    Change-Id: I00188326b6343a4eb4d1dd1b6a24e691ffd30415
+
+commit b91cdf492a50348e06a6db6e1ebb1f89065fe55b
+Author: Dolph Mathews <dolph.mathews@gmail.com>
+Date:   Tue Sep 11 11:06:54 2012 -0500
+
+    Add support for HEAD and PATCH
+    
+    Change-Id: Ic874c49b791e9d2cb3d44b15511cbb467a551589
+
+commit 4e0af25f22f356f797bebc524dd136e84b1a5d1f
+Author: Dolph Mathews <dolph.mathews@gmail.com>
+Date:   Tue Sep 11 08:43:22 2012 -0500
+
+    Don't need to lazy load resources loaded from API
+    
+    Change-Id: Ibff7feabc8cba062bc9367c6755279b88a9a3c04
+
+commit 0a8c96073c3dd76df346c262898303f6fb7435d6
+Merge: de8622c 916d4be
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Fri Aug 31 00:28:20 2012 +0000
+
+    Merge "fixing pep8 formatting for 1.0.1+ pep8"
+
+commit 916d4be6c2b873e9085b12f2c1bbc21ae8f9587c
+Author: Joe Heck <heckj@mac.com>
+Date:   Wed Aug 29 23:40:13 2012 +0000
+
+    fixing pep8 formatting for 1.0.1+ pep8
+    
+    Change-Id: I3a4f9d43f3e36dac8f976100587d709736ad34ab
+
+commit de8622cd8e34d658db7fe5e069ee386878549a87
+Author: lrqrun <lrqrun@gmail.com>
+Date:   Wed Aug 29 13:55:32 2012 +0800
+
+    Fix PEP8 issues.
+    
+    Fix some pep8 issues in doc/source/conf.py make the code looks pretty.
+    
+    Change-Id: Ib1e2f8214ad7f4bc49c8c3dfa016843f8df15fe6
+
+commit b3913197b4690a276407e6bb7aa32d6f234038cc
+Merge: ad9dee5 d50f89b
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Fri Aug 24 13:26:28 2012 +0000
+
+    Merge "Add nosehtmloutput as a test dependency."
+
+commit ad9dee53c42a6be584c830b2018e69e7b7fe0f34
+Merge: d7af859 8691926
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Thu Aug 23 20:08:28 2012 +0000
+
+    Merge "splitting http req and resp logging also some pep8 cleanup in shell.py"
+
+commit 869192654c4056b9a1f824bc5798f55ca9c60f8a
+Author: Joe Heck <heckj@mac.com>
+Date:   Thu Aug 16 18:18:22 2012 -0700
+
+    splitting http req and resp logging
+    also some pep8 cleanup in shell.py
+    
+    Change-Id: I71aa2586a0196c0a6ba64b892b56c9d221bdcc1d
+
+commit d7af8598ae913bb87dd9da41b5de20b458c53491
+Author: Dean Troyer <dtroyer@gmail.com>
+Date:   Wed Aug 22 11:41:11 2012 -0500
+
+    Change underscores in new cert options to dashes
+    
+    * --os_cacert -> --os-cacert
+    * --os_cert   -> --os-cert
+    * --os_key    -> --os-key
+    
+    * OS_CA_CERT didn't match --os-cacert, change to OS_CACERT
+    
+    Fixes bug 1040162
+    
+    Change-Id: Ib03ff492b6ab2b76e54974e5436a444725615ea6
+
+commit d50f89b65f4ad7cd888b89ce3fa539c7cfc7351e
+Author: Clark Boylan <clark.boylan@gmail.com>
+Date:   Tue Aug 21 14:35:32 2012 -0700
+
+    Add nosehtmloutput as a test dependency.
+    
+    Adding nosehtmloutput as a test dependency allows nose to output its
+    results to an html file. This will be used by Jenkins to save logs on
+    a different server.
+    
+    Change-Id: I6d217ff3098650e013985afdd8f4186d8d77d609
+
+commit dec8f77c9233f195999b8db9adbd4f026834fd42
+Author: Sascha Peilicke <saschpe@suse.de>
+Date:   Mon Jul 9 17:07:41 2012 +0200
+
+    Add '--insecure' commandline argument
+    
+    Allows to ignore validation errors that typically occur with self-signed
+    SSL certificates. Making this explicit is important as one would
+    typically only use this in development or in-house deployments.
+    
+    This should also fix bug 1012591.
+    
+    Change-Id: I1210fafc9257648c902176fbcfae9d47e47fc557
+
+commit e77234bd3e9f49de509bd1ff776966e58be79904
+Author: Ken Thomas <krt@yahoo-inc.com>
+Date:   Mon Jun 25 20:41:41 2012 +0000
+
+    If no password in env or command line, try prompting
+    
+    Implements keystone portion of blueprint prompt-for-password
+    
+    For security reasons, having the password on the command line
+    or in the environment is an issue for us. (See the blueprint for
+    details.) This change will simply make one attempt to prompt for
+    a password if (1) nothing was specified already and (2) there's
+    a tty available for the user to respond on. If we don't get a
+    password, then the existing error will be raised.
+    
+    Remoted getpass from pip-requires, it's in the std lib
+    
+    Tweaked a comment
+    
+    Tweaked error message
+    
+    Don't catch Ctl-C
+    
+    Fix import to match conventions
+    
+    Missed a tweak during the rebase.
+    
+    Added suggested password prompt
+    
+    Change-Id: I54bca2397da7bd366f7ac503e767b109efc093e7
+
+commit e082e20a334d701ec937e9f36a8a2fdf99a13694
+Merge: d0e8003 a816c0f
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Tue Jul 10 00:49:56 2012 +0000
+
+    Merge "Install test-requires in development venv."
+
+commit d0e800385ee62de75bb7a3c366af7e90e77bf37e
+Merge: c8aa2e0 3b4b7c3
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Mon Jul 9 17:42:16 2012 +0000
+
+    Merge "Replace obsolete option in README"
+
+commit a816c0ffbaefe5cf1b545c822c3295e263b84375
+Author: Sascha Peilicke <saschpe@suse.de>
+Date:   Mon Jul 9 17:36:05 2012 +0200
+
+    Install test-requires in development venv.
+    
+    Otherwise ./run_tests.sh may fail
+    
+    Change-Id: I122fc474568e6670e6c8aa2a3c854a3f2ceccd53
+
+commit c8aa2e06aa7f102afa6cc549ed49106046c53eda
+Author: Dominik Heidler <dheidler@suse.de>
+Date:   Wed Jun 27 11:46:58 2012 +0200
+
+    add keystone bash-completion
+    
+    Change-Id: I84d3897fc056d411fdaaee301465c72e20a66ff8
+
+commit 3b4b7c37fb772a679703aaf6efbec9777bbbf6eb
+Author: Alan Pevec <apevec@redhat.com>
+Date:   Fri Jul 6 00:33:40 2012 +0200
+
+    Replace obsolete option in README
+    
+    commit 1fa29109c2194102b4c79fa7fd7328843af6998e missed this instance
+    because it was missed in the previous parameter rename, in its long
+    interesting naming history:
+    --os-version renamed to --version renamed to -identity_api_version
+    renamed to --os_identity_api_version renamed to
+    --os-identity-api-version
+    
+    Change-Id: I7cb3bb30f9071d5071d424c37f94b032ca93bb2c
+
+commit abc7c47c18f54c33668e9862fac614b7ce1d6d0a
+Author: Liem Nguyen <liem.m.nguyen@gmail.com>
+Date:   Wed May 23 18:16:50 2012 +0000
+
+    Support 2-way SSL with Keystone server if it is configured to enforce
+    2-way SSL.  See also https://review.openstack.org/#/c/7706/ for the
+    corresponding review for the 2-way SSL addition to Keystone.
+    
+    Change-Id: If0cb46a43d663687396d93604a7139d85a4e7114
+
+commit 29be6d081df065e3075f963199641c59b23007cc
+Merge: d64b415 11258a0
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Tue Jul 3 18:40:44 2012 +0000
+
+    Merge "Don't call PrettyTable add_row with a tuple."
+
+commit d64b4152dd435e9a21e3612a57bda796915e2332
+Merge: a1194d2 f75310c
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Tue Jul 3 16:59:24 2012 +0000
+
+    Merge "decoding json only on 2xx success response bug 1007661"
+
+commit a1194d29de8959744ff57bc472a1ae6ef72cf3e1
+Merge: ea3f85f 1fa2910
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Tue Jul 3 16:59:22 2012 +0000
+
+    Merge "Change CLI options to use dashes"
+
+commit 11258a06c21c8240820c6e14b3e44a92120d5889
+Author: Dan Prince <dprince@redhat.com>
+Date:   Fri Jun 29 16:27:25 2012 -0400
+
+    Don't call PrettyTable add_row with a tuple.
+    
+    Updates the print_dict function in utils.py so that it doesn't
+    try to append a tuple with add_row. According to pydoc add_row
+    should get passed a list (not a tuple):
+    
+      Arguments:
+    
+        row - row of data, should be a list with as many elements as
+        the table has fields
+    
+    This fixes a TypeError which can occur with the existing code:
+    
+    TypeError: can only concatenate list (not "tuple") to list
+    
+    Fixes LP Bug #1019409.
+    
+    Change-Id: I16f745afa872106c3bc44c33d88db2a5aacd776c
+
+commit ea3f85f026f25460f47f2f0d5974daa104c15fcc
+Merge: 3ed4007 3813abc
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Fri Jun 29 15:38:37 2012 +0000
+
+    Merge "Do not display None in pretty tables for fields with no value"
+
+commit 1fa29109c2194102b4c79fa7fd7328843af6998e
+Author: Dean Troyer <dtroyer@gmail.com>
+Date:   Thu Jun 28 11:53:44 2012 -0500
+
+    Change CLI options to use dashes
+    
+    Change documented options to use dashes instead of underscores
+    in option names.  Continue to support old underscore names for
+    backward compatibility for a release or two (TBD).
+    
+    Blueprint: command-options
+    
+    Change-Id: Ied0d325a9fdd32f80bf8c993887e1975aa6adf16
+
+commit 3ed4007e1136c7a0266f51c5b6b98e88997a5f60
+Author: Monty Taylor <mordred@inaugust.com>
+Date:   Mon Jun 25 11:21:33 2012 -0500
+
+    Add post-tag versioning.
+    
+    Change-Id: Ic6cff31681b77e865ea0f1715e882cf7f191f7cd
+
+commit f75310c623ebebec3e23335e6dab07fabbddd423
+Author: Joe Heck <heckj@mac.com>
+Date:   Fri Jun 1 17:03:35 2012 -0700
+
+    decoding json only on 2xx success response
+    bug 1007661
+    
+    Change-Id: I9090c78bb9a19ae46d865fca80af0b3bf4257dc6
+
+commit 3813abcf20fa5451c2df8b1b3f252e6b5a3bf6f4
+Author: Vincent Untz <vuntz@suse.com>
+Date:   Tue Jun 26 11:08:24 2012 +0200
+
+    Do not display None in pretty tables for fields with no value
+    
+    Fields that are present but unset in a backend (like the email field for
+    a user created with no email in the KVS backend with the keystone
+    command line) will appear as "None" when listed, instead of as an empty
+    field.
+    
+    Change-Id: I86dc0a204847518e61ba9f6f46d4637d897cfac1
+
+commit 44a1ee32e29825257cac5c0a61fc3be51b79eb65
+Author: Dolph Mathews <dolph.mathews@gmail.com>
+Date:   Thu Mar 29 14:56:57 2012 -0700
+
+    Drop support for legacy OS args
+    
+    Change-Id: If37778e6bb8c34d88974f2dbf22207110a3dea1a
+
+commit f6267d5c0d72da6e1270894172b0497527b280c0
+Merge: 8288121 cfb437e
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Thu Jun 21 01:24:09 2012 +0000
+
+    Merge "Skip argparse when injecting requirements."
+
+commit 8288121a8c30f2d202db57a00ad4441827664c37
+Merge: 1231ae0 ee220c1
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Wed Jun 20 23:39:39 2012 +0000
+
+    Merge "Require service_id for endpoint-create (bug 987457)"
+
+commit cfb437e72052ab65bc8d3d0748827c65c6d894bb
+Author: Monty Taylor <mordred@inaugust.com>
+Date:   Wed Jun 20 07:46:43 2012 -0700
+
+    Skip argparse when injecting requirements.
+    
+    Python 2.7 doesn't need argparse. Although pip installs are fine installing
+    it, listing the requirement in install_requires causes havoc for distro
+    installs which do not explicitly install argparse for 2.7 as a package.
+    
+    Fixes bug 1013953
+    
+    Change-Id: I0275d02e15c8fd2e63b88213ac32f6dd18e2fd26
+
+commit 1231ae03e5686da787192ddc254fcc7bd4666c66
+Author: Ken Thomas <krt@yahoo-inc.com>
+Date:   Mon Jun 18 22:19:53 2012 +0000
+
+    Move unittest2 dependency
+    
+    bug 1014845
+    
+    It looks like an earlier fix for bug 933076 put the unittest2
+    dependency in the wrong file. Moving it to the correct file.
+    
+    Added a version to the unittest2 dependency
+    Removed a blank line
+    
+    Change-Id: I06a8963fc5aca80438348d26569d8efb4568f754
+
+commit 31f949f54bf213e4a51ba59a54b49865121651f2
+Author: Monty Taylor <mordred@inaugust.com>
+Date:   Fri Jun 15 14:38:20 2012 -0400
+
+    Fix coverage job. Turns out you need coverage.
+    
+    Change-Id: I8e429b50d6c3188d1d242a9a5d3cba07066b85c1
+
+commit 5fb1e1f27f74a58318bf360d4535e4900ca2398f
+Author: Monty Taylor <mordred@inaugust.com>
+Date:   Thu Jun 14 14:14:25 2012 -0400
+
+    Update to latest openstack.common setup code.
+    
+    Change-Id: I044447b162e97d7464e49ba7fed0d41a757a3210
+
+commit 3ba77383238d463c903eb5c9ae0da9879fd700e0
+Author: Clark Boylan <clark.boylan@gmail.com>
+Date:   Fri Jun 8 15:41:05 2012 -0700
+
+    Move docs to doc.
+    
+    To better facilitate the building and publishing of sphinx
+    documentation by Jenkins we are moving all openstack projects with
+    sphinx documentation to a common doc tree structure. Documentation
+    goes in project/doc/source and build results go in project/doc/build.
+    
+    Change-Id: I205e8bb1ddf6dae1d7392b32975319c6a6d98673
+
+commit f2c87f68cf4adfff43df4989578e662446f37cd5
+Merge: 49f2fbe f680cb3
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Thu Jun 7 17:58:21 2012 +0000
+
+    Merge "fix bug lp:936168,format output."
+
+commit 49f2fbe34aa34a72c795640a008d665f22e4ec56
+Merge: 52b3922 9b15c41
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Thu Jun 7 17:44:24 2012 +0000
+
+    Merge "Updated Sphinx documentation"
+
+commit f680cb3b2a2ee922a9b109f81ec59c7a836d9b1f
+Author: Yaguang Tang <heut2008@gmail.com>
+Date:   Sun Jun 3 21:06:39 2012 +0800
+
+    fix bug lp:936168,format output.
+    
+    Change-Id: I361c638deec1f91db5156ea8c0c0eaacee1097aa
+
+commit 52b392281ef301c4ee85ae071ec8e26facdcbbdc
+Author: Joe Heck <heckj@mac.com>
+Date:   Fri Jun 1 18:07:26 2012 -0700
+
+    pep8 1.1 changes and updates
+    
+    Change-Id: I8bc3582bb3f35a3d841bb1e8c03b62ba61ff92d7
+
+commit 9b15c4133c8a04dd1cdcb3c8ae612fdebe5e3fa3
+Author: Lorin Hochstein <lorin@nimbisservices.com>
+Date:   Fri May 4 09:33:29 2012 -0400
+
+    Updated Sphinx documentation
+    
+    - Added examples using the API
+    - Added API reference pages
+    - Added docstrings to classes so they would be picked up by sphinx
+    - Removed warning about CLI coming soon
+    
+    Change-Id: I6e187efe508c5ae310ec97efe4650495f958306d
+
+commit aa9761433065a260dc2b571deb10957347a76d4e
+Merge: eef5120 f60c1cf
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Fri May 18 17:11:49 2012 +0000
+
+    Merge "Auto generate AUTHORS for python-keystoneclient."
+
+commit eef5120b161b3479f59949e13108322ad7212d26
+Merge: bcffca8 51f6cc6
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Tue May 15 11:14:02 2012 +0000
+
+    Merge "Fix Tenant.update() for enabled=False"
+
+commit bcffca8c70dad582f00139775979825136b60390
+Merge: 418bc5e 93df552
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Tue May 15 07:12:26 2012 +0000
+
+    Merge "Change --user to --user_id and --role to --role_id in the keystone client for consistency."
+
+commit 51f6cc6573319f66b6127d5f2b50e57949b59107
+Author: Dean Troyer <dtroyer@gmail.com>
+Date:   Fri May 11 10:53:47 2012 -0500
+
+    Fix Tenant.update() for enabled=False
+    
+    Tenant.update() fails when attempting to set enabled=False due to how
+    the test to see if it was set in the arg list is formed.
+    
+    Change-Id: Ibeea992c172cb9858d7201c9025f9715f98d3416
+
+commit 93df552774fdf950fe5c49fafe8a362c15a8919d
+Author: Everett Toews <everett.toews@gmail.com>
+Date:   Tue May 8 21:58:24 2012 +0000
+
+    Change --user to --user_id and --role to --role_id in the keystone client for consistency.
+    
+    Also changed an out-of-place tenant to tenant_id and removed unnecessary nargs in do_user_list.
+    
+    Fixes bug 994744.
+    
+    Change-Id: I418c07c8523f40822ca3251e85cd630ec877b45f
+
+commit 418bc5e737036766ae8d3c5fba7a99cbe5597260
+Author: Dean Troyer <dtroyer@gmail.com>
+Date:   Mon May 7 10:14:21 2012 -0500
+
+    Remove printt
+    
+    prettyprint 0.6 removed printt at the last minute, replace with get_string
+    
+    Fixes bug 995811
+    
+    Change-Id: Iaabe47c1ae9270d9d00f804388a1837767cb20f1
+
+commit f60c1cf4d4b4b75f9ce55cccab8a6f202761da5d
+Author: Bhuvan Arumugam <bhuvan@apache.org>
+Date:   Fri May 4 21:43:43 2012 -0700
+
+    Auto generate AUTHORS for python-keystoneclient.
+    
+    Bug: 976267
+    
+    Now that git commits are gated by CLA, we shouldn't enforce
+    committers to add an entry in AUTHORS file. The AUTHORS file
+    should be generated automatically, based on git commits.
+    
+    This commit fixes the problem.
+    
+    * AUTHORS
+      Remove this file.
+    
+    * .gitignore
+      Add AUTHORS file.
+    
+    * keystoneclient/openstack/common/setup.py
+      generate_authors(): New method to create AUTHORS file. If
+      AUTHORS.in file exists, append it's content to AUTHORS file.
+    
+    * setup.py
+      Import the new method.
+      Generate AUTHORS file before creating the package.
+    
+    * openstack-common.conf
+      Add config file to copy libraries from openstack-common project,
+      using update.py script.
+    
+    * keystoneclient/openstack/__init__.py
+    * keystoneclient/openstack/common/__init__.py
+      Add new placeholders.
+    
+    Change-Id: I1a17ee8f1e19e8ad522f0d2e37c04fffba5e16cb
+
+commit e9ba370434537bcf1e53266e24397311d595b71e
+Merge: 2ff5ad0 5c269ba
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Thu May 3 18:15:46 2012 +0000
+
+    Merge "Split user-role-list from user-list"
+
+commit 2ff5ad00462d5db9ec702318f033777ce716d7e8
+Merge: 5628eea 49582d0
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Mon Apr 30 15:27:57 2012 +0000
+
+    Merge "fix parameter name error in exapmle"
+
+commit ee220c19a883a6ce5bb25d010f94822ed5e88222
+Author: Dolph Mathews <dolph.mathews@gmail.com>
+Date:   Mon Apr 23 13:45:14 2012 -0500
+
+    Require service_id for endpoint-create (bug 987457)
+    
+    Change-Id: I6568fcee740fb497afe8f3fd824c7c93dfc8304d
+
+commit 5628eeaf76882d469b9acbbf1c8516982e819c7b
+Author: Josh Kearney <josh@jk0.org>
+Date:   Thu Apr 5 17:25:37 2012 -0500
+
+    Removed unused imports and variables.
+    
+    Also fixes AUTHORS file. Previous version was copied directly from python-novaclient.
+    
+    Change-Id: I33654b6fe7197efbff300ebaf4892a8b53d85c54
+
+commit 7b8532908b869902dea1d9355c93c40fec258ef6
+Author: Thierry Carrez <thierry@openstack.org>
+Date:   Tue Apr 3 11:56:55 2012 +0200
+
+    Include last missing files in tarball
+    
+    Fix MANIFEST.in to include missing files in published tarballs.
+    Fixes bug 963478.
+    
+    Change-Id: Ide576c8e0dd91ba6788d8fc9596a97ab0533fc12
+
+commit 49582d0b38b02d4a9dca0a8c3c2bb2765583ff06
+Author: Peng Yong <ppyy@pubyun.com>
+Date:   Sun Apr 1 13:49:13 2012 +0800
+
+    fix parameter name error in exapmle
+    
+    Change-Id: I7e20a82b1cb6a5608043625d4e869a67949af8e7
+
+commit e957119771154566b52cac93833465fc95ff03d8
+Author: Dolph Mathews <dolph.mathews@gmail.com>
+Date:   Thu Mar 29 14:54:24 2012 -0700
+
+    Drop support for OS --tenant_id (bug 960977)
+    
+    Change-Id: I36849c53e1c63609fc9df7fcd1c245bb3d3a6872
+
+commit 5194621738ba5e244950248b630ee2a23b2025dd
+Author: Thierry Carrez <thierry@openstack.org>
+Date:   Fri Mar 23 21:43:39 2012 +0100
+
+    Open Folsom
+    
+    Bump version to 2012.2 to formally open Folsom development.
+    
+    Change-Id: I4f4ea23c840f3fd5dce1cfa5ca0cc6dc2ced73b1
+
+commit bf13df13dd9880c0f1cd43ff013a3014ee28f45b
+Merge: 6d67b4a fd94b49
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Wed Mar 21 21:04:58 2012 +0000
+
+    Merge "Useful messages for missing auth data (bug 946297)"
+
+commit fd94b49197ab5b6edcb1975639eb32f1e7b8ca05
+Author: Dolph Mathews <dolph.mathews@gmail.com>
+Date:   Wed Mar 14 11:54:21 2012 -0500
+
+    Useful messages for missing auth data (bug 946297)
+    
+    Change-Id: I5afe543ff883358fddfb4c8b546de1d68415e0e3
+
+commit 6d67b4a6a24a9ed7eade711dd4f72bc3668dd6b4
+Author: Monty Taylor <mordred@inaugust.com>
+Date:   Wed Mar 21 10:34:46 2012 -0400
+
+    Updated tox.ini to work properly with Jenkins.
+    
+    As part of doing that, fixed a unittest to work with python2.6.
+    Change-Id: I575a8534bf008077c1a24a25336f1d711f742297
+
+commit 77742d7b134bd2066ea42982637a798c1d1cf068
+Merge: b8e9d09 c8350b7
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Wed Mar 21 00:04:37 2012 +0000
+
+    Merge "Backslash continuations (python-keystoneclient)"
+
+commit b8e9d090b9a37af8474e784dca485a27f414f38d
+Author: Dolph Mathews <dolph.mathews@gmail.com>
+Date:   Tue Mar 13 22:17:27 2012 -0500
+
+    Implement user-get based on tenant-get (bug 940272)
+    
+    Change-Id: Id679f1df068247db8f6a1f13515870488011b544
+
+commit c8350b7a67248f9ef85ac1df80f124628b14e31d
+Author: Zhongyue Luo <lzyeval@gmail.com>
+Date:   Wed Feb 29 11:31:10 2012 +0800
+
+    Backslash continuations (python-keystoneclient)
+    
+    Fixes bug #940023
+    
+    Backslash continuations removal for python-keystoneclient
+    
+    Change-Id: I816fc39ced20bb8ba8a42d3f07a03da94a76f8ea
+
+commit c10ba52316897607dc37181440622803738ae068
+Merge: 9dc4e6a decf46c
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Fri Mar 16 02:28:20 2012 +0000
+
+    Merge "CLI shows help without args (bug 936398)"
+
+commit 5c269ba6b344f638f3857ae4219d4330e263dae8
+Author: Dolph Mathews <dolph.mathews@gmail.com>
+Date:   Wed Mar 14 20:22:31 2012 -0500
+
+    Split user-role-list from user-list
+    
+    Change-Id: Id39e178c0ec068afbf5cae2d5bba3cf2238d608e
+
+commit 9dc4e6a8e1560045a5acbf66b7bcc5bb390059b3
+Author: Dean Troyer <dtroyer@gmail.com>
+Date:   Tue Mar 13 23:43:53 2012 -0500
+
+    Change CLIAuth arg names
+    
+    Change the argument names used for common Keystone authentication per the
+    updated http://wiki.openstack.org/CLIAuth:
+    
+    --auth_url -> --os_auth_url
+    --password -> --os_password
+    --username -> --os_username
+    --tenant_id -> os_tenant_id
+    --tenant_name -> os_tenant_name
+    --region -> os_region_name
+    
+    All old args are depricated but available for backward compatibility.
+    
+    Fixes bug 954532
+    
+    Change-Id: I26f8e0cf491549f5836c4079ff86e4823c0ef9a7
+
+commit 5c223fb641abab8dc148741dd17f2029d4370f7f
+Author: Dolph Mathews <dolph.mathews@gmail.com>
+Date:   Tue Mar 13 15:51:23 2012 -0500
+
+    enabled treated as string (bug 953678)
+    
+    Change-Id: I897797b3fb264647c486e6c10eab8edd00eadbcc
+
+commit decf46c1cbda15d8944d5275b2651df2b8d47372
+Author: Dolph Mathews <dolph.mathews@gmail.com>
+Date:   Tue Mar 13 23:00:22 2012 -0500
+
+    CLI shows help without args (bug 936398)
+    
+    Change-Id: If0adfc5283f725c797ee6043fbfc59a775d9b462
+
+commit 8c824bd6397b585edaaa23067e21b5be9b581e77
+Merge: 04c4a15 a7be349
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Sat Mar 10 19:07:03 2012 +0000
+
+    Merge "fix bug 950685,make update user password works"
+
+commit 04c4a15fc038d58e8465bbecf083232047121d8f
+Merge: 4a975ce 93d07cc
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Sat Mar 10 11:07:20 2012 +0000
+
+    Merge "List roles for user on CLI (bug 932282)"
+
+commit a7be3495f1503bb4856488db6250cbb9c298bb1a
+Author: Yaguang Tang <heut2008@gmail.com>
+Date:   Sat Mar 10 16:02:56 2012 +0800
+
+    fix bug 950685,make update user password works
+    
+    Change-Id: If9c33fefdf7439cd5a6c301094b630bd541e821a
+
+commit 4a975ce9938679365e542a754477353314282ace
+Author: Dean Troyer <dtroyer@gmail.com>
+Date:   Tue Feb 28 11:58:22 2012 -0600
+
+    Add endpoint commands help text
+    
+    Makes the new endpoint-* commands help text consistient with the
+    other keystone commands.  Also removes 'nargs' from options that
+    require arguments.
+    
+    Change-Id: Idc638883b3675cf1d30163064e58ffe761c6f08b
+
+commit 93d07cc793ad710d8456ccb732e155ee504ca780
+Author: Dolph Mathews <dolph.mathews@gmail.com>
+Date:   Fri Mar 9 09:59:34 2012 -0600
+
+    List roles for user on CLI (bug 932282)
+    
+    Change-Id: I947d2ff74b0a131e4ecc7d696877aea4d994fe71
+
+commit 6ce6ebbc96ff5892c39aba2a91e660c300d0f512
+Author: termie <github@anarkystic.com>
+Date:   Wed Mar 7 11:55:35 2012 -0800
+
+    prevent keyerrors when accessing optional keys
+    
+    You used to have these in the token, why were they removed and then
+    subsequently grabbed at? The change that added these doesn't work against
+    keystone, btw, so I'm surprised it got in, these dict keys are not
+    required to be in the return from service_catalog.get_token() and
+    adding them as properties is only going to make matters worse as people
+    rarely think about having None attributes.
+    
+    Change-Id: I695bbd6730d25d8db3a25cea81e3ffb0ef289bbb
+
+commit 5c5918baac03fde8b9e16607034ac61ca8dfeb81
+Merge: 9c07999 bdc0abb
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Wed Mar 7 18:16:17 2012 +0000
+
+    Merge "Make ec2-credentials-* commands work properly for non-admin user"
+
+commit 9c07999dd5f5357fa7eee055fe9a4fdaa6a1a562
+Author: Dolph Mathews <dolph.mathews@gmail.com>
+Date:   Wed Mar 7 10:32:10 2012 -0600
+
+    Removed ?fresh=nonsense (bug 936405)
+    
+    Change-Id: I69f7411967ef23348854c206efc79a3cf7d3755d
+
+commit bdc0abbd81a7988188adaae2af22006274a23801
+Author: Dean Troyer <dtroyer@gmail.com>
+Date:   Tue Mar 6 12:08:42 2012 -0600
+
+    Make ec2-credentials-* commands work properly for non-admin user
+    
+    * Add user id to token-get output
+    * Save authenticated user and tenant IDs in client in Client._extract_service_catalog()
+    * Handle default user and tenant IDs in ec2-credentials-* commands
+    
+    Fixed bug 947011
+    
+    Change-Id: I97750f666ba03f32f0bb1be0c2df5ad8a321b433
+
+commit 96a106e529e36298583701d7af5d33ba9a02bc72
+Author: Hengqing Hu <hudayou@hotmail.com>
+Date:   Sat Mar 3 12:44:11 2012 +0800
+
+    Remove trailing whitespaces in regular file
+    
+    Change-Id: I49c7f59fd1c695ccfccbd597a15e01d2d140eb20
+
+commit ca767856b600f2f14243b0979f706b78635996fd
+Merge: 4ec85e8 7292a71
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Tue Feb 28 07:07:59 2012 +0000
+
+    Merge "Endpoints: Add create, delete, list support"
+
+commit 7292a7197cc8a8acaf8d17713e211dd6dac6503a
+Author: Adam Gandelman <adamg@canonical.com>
+Date:   Mon Feb 27 12:10:39 2012 -0800
+
+    Endpoints: Add create, delete, list support
+    
+    This adds the ability for admins to list, create and delete
+    endpoints in the service catalog.
+    
+    New endpoints can be created and associated with an existing
+    service, similar to the original Keystone.
+    
+    The current, file-backed templated catalog driver does not support these
+    actions.  This requires that the SQL catalog backend is merged:
+    
+    https://review.openstack.org/#change,4464
+    
+    Update: As per discussion on above review, Remove use of OS-KSADM key,
+            update tests accordingly.
+    
+    Change-Id: Ie6f219fe989327bd61e293ce100b70dbf7f6de52
+
+commit 4ec85e8275237606def40cf04817890324fe6e72
+Author: Dean Troyer <dtroyer@gmail.com>
+Date:   Fri Feb 24 15:39:15 2012 -0600
+
+    Clean up EC2 CRUD
+    
+    Fixes bug 932427
+    
+    * adds ec2-credentials-get
+    * cleans up ec2-credentials-list output
+    * display status of 3c2-credentials-delete
+    * add basic shell tests
+    
+    Rebased 27Feb2012
+    
+    Change-Id: Ic06ba9e2e49bad872f9091e1830d5296b0d411aa
+
+commit 265d4e9ffb62e15c35a9cee7803953faa6caa460
+Author: Dean Troyer <dtroyer@gmail.com>
+Date:   Fri Feb 17 16:56:40 2012 -0600
+
+    Fix --tenant_id corner case with ec2-create-creds command
+    
+    And add some tests for that case
+    
+    Rebased after CLI changes merged
+    Rebased again after more bit rot discovered
+    
+    Change-Id: I95fa5ab19bff1d5e884b5c3675a123b134866e21
+
+commit 81116e4441723cb97531f09af800e1602675befe
+Merge: 2a1c94a a395835
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Fri Feb 24 23:10:15 2012 +0000
+
+    Merge "Help output tweaks, Vol I"
+
+commit 2a1c94a75375dec5bd2a8a6dace98b411d2ab29e
+Author: jakedahn <jake@ansolabs.com>
+Date:   Tue Feb 21 15:02:41 2012 -0800
+
+    Improve usability of CLI.
+    
+      * Fixes bug #936422
+      * Fixes bug #932223
+      * Depends on bcwaldon's review: https://review.openstack.org/#change,4305
+      * This review proposes making changes outlined in this spreadsheet:
+        https://docs.google.com/spreadsheet/ccc?key=0Ak6TA47h_6fwdGZwRE5WWEJBdEhnckpMTG5RcWFjY3c#gid=0
+        This cleans up the CLI, normalizing commands and arguments, correcting
+        optional and required arguments and flags.
+      * included https://review.openstack.org/4270 here per Brian's request
+    
+      Note that some commands have changed names to conform to noun-verb form:
+      user-update-password  ->  user-password-update
+      add-user-role  ->  user-role-add
+      remove-user-role  ->  user-role-remove
+      ec2-create-credentials  ->  ec2-credentials-create
+      ec2-list-credentials  ->  ec2-credentials-list
+      ec2-delete-credentials  ->  ec2-credentials-delete
+      token  ->  token-get
+    
+    Change-Id: I8128fa105a1b8002199211f9e475b1a7a6229b8c
+
+commit 1f75cab683f43fbdc4f2a603806e8f2624a9a5aa
+Merge: 709b881 92b264b
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Thu Feb 23 19:49:22 2012 +0000
+
+    Merge "Use unittest2 instead of unittest."
+
+commit 709b8812fbb9a4c00044cf6f92bd66b4c7236263
+Merge: c4093ec 47c057a
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Thu Feb 23 19:43:20 2012 +0000
+
+    Merge "Fix inconsistient method names and add tests"
+
+commit a395835ebcbf70470abff63655c037c46d933284
+Author: Dean Troyer <dtroyer@gmail.com>
+Date:   Mon Feb 20 17:52:49 2012 -0600
+
+    Help output tweaks, Vol I
+    
+    Fixes bug 936399 and bug 936424
+    
+    * Refer to 'Identiy API' rather than 'Keystone API'
+    * 'keystone help' and 'keystone --help' now produce the same output,
+      the list of sub-commands
+    * updates README
+    
+    Change-Id: I179149807a0aa66947e4ac17ad2839a653a55888
+
+commit c4093ec56edb7d14afc7e55d558e1b4796a975ee
+Author: Brian Waldon <bcwaldon@gmail.com>
+Date:   Sun Feb 19 04:32:26 2012 -0800
+
+    Move --version to --identity_api_version
+    
+    * Default to OS_IDENTITY_API_VERSION before KEYSTONE_VERSION
+    * Copy in 'env' function from python-novaclient hat supports multiple env var names
+    * Fixes bug 936162
+    
+    Change-Id: I3b4013408465ea45788517cb31afb7fc652e6e95
+
+commit f4297ce10d9fde2f87e3ae45591944d6da2f0a4c
+Author: Dean Troyer <dtroyer@gmail.com>
+Date:   Mon Feb 20 11:50:08 2012 -0600
+
+    Remove internal '-' from flag names
+    
+    Fixes bug 936400
+    * global --auth-url becomes --auth_url
+    * user-create --default-tenant becomes --tenant_id
+    
+    Change-Id: I483bb369556f4da2a6de61a39d00a7adbe1cf12e
+
+commit 47c057afd5e558c79764a2c742d5c29a6a048a5b
+Author: Dean Troyer <dtroyer@gmail.com>
+Date:   Mon Feb 20 10:57:06 2012 -0600
+
+    Fix inconsistient method names and add tests
+    
+    Fixes bug 937104
+    
+    https://review.openstack.org/3527 renamed methods in RoleManager:
+    get_user_role_refs() -> roles_for_user()
+    add_user_to_tenant() -> add_user_role()
+    remove_user_from_tenant() -> remove_user_role()
+    
+    * Calls to old method names in Tenant and TenantManager are fixed.
+    * Add tests for all renamed and affected methods.
+    
+    Change-Id: Idf569d7dd737c5ccc38b4ea8212d5336998ae0f1
+
+commit 5d5160ce5078aace8eded645f670761c4ca3212a
+Author: Ghe Rivero <ghe@debian.org>
+Date:   Sun Feb 19 23:28:12 2012 +0100
+
+    Added condition requirement to argparse
+    
+    Change-Id: Ibffdcbd3ed7e2c2e982023455d60d10a6001ff23
+
+commit bbd2561507538282c5fb1c549b298226399237a1
+Author: Dean Troyer <dtroyer@gmail.com>
+Date:   Thu Feb 2 23:16:01 2012 -0600
+
+    Add tenant commands to cli
+    
+    * Adds tenant-list, tenant-get and tenant-update to keystone command
+    * Removes tenant-enable and tenant-disable
+    * Fixes more overlap in cli args, clean up command args, particularly
+      removing nargs from arguments that are not optional.
+    * Fixes bug 932235
+    
+    Change-Id: I1aafec1b2a3943e0f6c86f0228ab29f181a7ffce
+
+commit 0cc939c9040d9c35865603cc6806deaf6205004e
+Author: Brian Waldon <bcwaldon@gmail.com>
+Date:   Thu Feb 16 09:05:17 2012 -0800
+
+    Display token and service catalog for user
+    
+    * Adds commands 'token', 'catalog' and 'endpoint-get' to keystone CLI
+    * Fixes bug 930421
+    
+    Change-Id: I9eceea3bf98a5c87b122fa663c96f7119ef8d3cc
+
+commit 0414cf1ef26517f1f18443bdcd1deb5ef4a47c11
+Author: Gabriel Hurley <gabriel@strikeawe.com>
+Date:   Thu Feb 16 11:56:59 2012 -0800
+
+    Restores proper PUT method for user update now that KSL supports it.
+    
+    Change-Id: Ifd68a9878489efa29442f1035d0393ada9c6d3ff
+
+commit ed5ca4e8417b04cc6275e4224e569732b44d4932
+Merge: e7c638b a1f927e
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Thu Feb 16 18:06:22 2012 +0000
+
+    Merge "Fixes user update methods."
+
+commit e7c638b4f1f305625c4b64df9e565eade5592585
+Author: Alan Pevec <apevec@redhat.com>
+Date:   Thu Feb 16 18:21:03 2012 +0100
+
+    Add license file to the tarball
+    
+    Change-Id: Ic291ba96defe44368c0e78c877c2258fb0f64fbc
+
+commit a1f927e899df4be76584545a2afe1cf6b1541f27
+Author: Tihomir Trifonov <t.trifonov@gmail.com>
+Date:   Wed Feb 1 16:01:06 2012 +0200
+
+    Fixes user update methods.
+    
+    1. Fixes the url for user update methods to reflect extension status,
+       e.g. 'users/{user_id}/tenant' to 'users/{user_id}/OS-KSADM/tenant',
+       as per Keystone API.
+    
+    2. Fixes the update_user method, as it expects a POST instead of PUT.
+    
+    Change-Id: I045ca7650b2ef8969af695900da1b4f62d4da6bd
+
+commit 92b264bbbcea1485ae789f74f468728284a3997e
+Author: Ken Thomas <krt@yahoo-inc.com>
+Date:   Wed Feb 15 13:20:35 2012 -0800
+
+    Use unittest2 instead of unittest.
+    
+    This allows the test to run on RHEL 6.2
+    and python 2.6.
+    
+    Fixed bug 933076
+    
+    Change-Id: Idb026114ac1813266d77a70d13b0c3b9467f5199
+
+commit 9a6a086baff2ef00f2d80b96f4c5fec086cc6d91
+Author: Vishvananda Ishaya <vishvananda@gmail.com>
+Date:   Thu Feb 9 02:02:55 2012 +0000
+
+    Fix conflicts with shell args for subcommands
+    
+    Change-Id: I48517f6b8e25268a00532d9e6fd8fed54f5317cd
+
+commit 587862c151f81601dbd92f4bfb99e1af8ce4dda0
+Author: Vishvananda Ishaya <vishvananda@gmail.com>
+Date:   Thu Feb 9 01:44:11 2012 +0000
+
+    Allow --token and --endpoint to bypass catalog
+    
+     * allows skipping of service catalog
+     * removes odd logic about password equivalence
+     * also removes extra call to authenticate
+    
+    Change-Id: I5c0979107da99593b4ce8eb16c9695ba530da095
+
+commit 173ea0ce0e72eb96d2394455ec8f139cd21808ac
+Author: Dean Troyer <dtroyer@gmail.com>
+Date:   Mon Jan 30 14:13:57 2012 -0600
+
+    Blueprint cli-auth: common cli args
+    
+    Remove os_ from internal variable names corresponding to OS_ env
+    variables.
+    
+    Strip trailing '/' from --auth_url since server doesn't seem to
+    tolerate '//' in the URL path.
+    
+    Fixes lp923920
+    
+    Change-Id: I3e48441d63b6504fd088aa07241f66d63590d935
+
+commit f13b06c028c664208ea6a296f1693529d3d7b065
+Merge: 14b09e8 3016b25
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Wed Feb 1 22:34:53 2012 +0000
+
+    Merge "Correct tenant update HTTP method."
+
+commit 14b09e824bca0c64ac8494e6a35c5dcbda13f70b
+Merge: 04c0375 6c996e8
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Mon Jan 30 21:14:14 2012 +0000
+
+    Merge "Added delete token"
+
+commit 3016b2504af82b4892585a8fbae8211a2cc76fee
+Author: Gabriel Hurley <gabriel@strikeawe.com>
+Date:   Mon Jan 30 13:05:36 2012 -0800
+
+    Correct tenant update HTTP method.
+    
+    Change-Id: I274104336f908922396c64ca0ee4ac5a7f5e2937
+
+commit 04c03752f52bd648dc70b0b9d5eda3fd277dd86c
+Merge: d497e65 2914c2b
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Mon Jan 30 19:56:28 2012 +0000
+
+    Merge "Updates client to work with keystone essex roles API routes."
+
+commit d497e65e67324fcb27228acfa0ca883607b0ee07
+Merge: d29168f deb3d99
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Mon Jan 30 19:52:09 2012 +0000
+
+    Merge "Enabling/disabling users should use OS-KSADM extension (bug 922394)"
+
+commit 6c996e807a93cb2fd27780e312d4604f98872b2c
+Author: Dolph Mathews <dolph.mathews@gmail.com>
+Date:   Mon Jan 30 10:20:12 2012 -0600
+
+    Added delete token
+    
+    Change-Id: I202f89f74702df6b775d4fa3ca3fca2111709949
+
+commit 2914c2b1d1e36aa12ba5bd9b4c2ee9b594f1a79c
+Author: Gabriel Hurley <gabriel@strikeawe.com>
+Date:   Sat Jan 28 18:35:46 2012 -0800
+
+    Updates client to work with keystone essex roles API routes.
+    
+    Also adds pep8 to requirements since it was missing, and adds the
+    automatically-created venv to the gitignore list.
+    
+    Change-Id: Iafa05c1889d7706b79d0f9392a9ac24f2f5a1719
+
+commit deb3d999856e03d5fd213b81d7c6cf84c86433ca
+Author: Dolph Mathews <dolph.mathews@gmail.com>
+Date:   Fri Jan 27 10:08:59 2012 -0600
+
+    Enabling/disabling users should use OS-KSADM extension (bug 922394)
+    
+    Change-Id: I11bf244ea123092df2f0ae8e0e7c9196e3cd1e2c
+
+commit d29168fa3fe656ba4f2322226e4ae511c89dfed2
+Author: Anthony Young <sleepsonthefloor@gmail.com>
+Date:   Thu Jan 26 16:13:09 2012 -0800
+
+    Add limit and marker to user_list and tenant_list
+    
+     * This will ultimately enable seeing more than 10 users/tenants at a
+       time in horizon :)
+    
+    Change-Id: I54ab6305746a16fda8e57c9c67c48ea2d6b906c6
+
+commit 8db366c448d4074c044f596a8e4271befdb797cb
+Author: Ziad Sawalha <github@highbridgellc.com>
+Date:   Wed Dec 28 00:23:31 2011 -0600
+
+    Support for version and extension discovery
+    
+    - Supports unauthenticated call to Keystone to discover
+      supported API versions
+    - Added command-line support (usage: keystone discover)
+    - Added client support (keystoneclient.genenric client).
+      Client returns dicts, whereas shell command prints
+      formated output.
+    - Added tests for genenric client
+    - Replicates 'nove discover' in python-novaclient
+    - Starts to address blueprint keystone-client
+    - keystone discover output looks like this:
+        $ keystone discover
+        Keystone found at http://localhost:35357
+            - supports version v1.0 (DEPRECATED) here http://localhost:35357/v1.0
+            - supports version v1.1 (CURRENT) here http://localhost:35357/v1.1
+            - supports version v2.0 (BETA) here http://localhost:35357/v2.0
+                - and HP-IDM: HP Token Validation Extension
+                - and OS-KSADM: Openstack Keystone Admin
+                - and OS-KSCATALOG: Openstack Keystone Catalog
+    
+    Change-Id: Id16d34dac094c780d36afb3e31c98c318b6071ac
+
+commit cbe1f82931002e3562ab41582ff86470681b889b
+Author: jakedahn <jake@ansolabs.com>
+Date:   Wed Jan 18 01:17:57 2012 -0800
+
+    Implementing a minimal, but useful CLI.
+    
+    Change-Id: I8181cc2395ae1aad6a324ec65395ebc62455f29b
+
+commit d1171195e771b3de4a40c3773d10f5d0837da2b2
+Author: Thierry Carrez <thierry@openstack.org>
+Date:   Tue Jan 17 15:06:25 2012 +0100
+
+    Adjust version number to match other deliveries
+    
+    Set version from 2.7 to 2012.1 to match the other OpenStack
+    Keystone deliveries (python-keystoneclient will be released
+    as part of Keystone 2012.1~e3). Also adjusted the location
+    of the git repository to match new location. Fixes bug 917656.
+    
+    Change-Id: I4d8d071e3cdc5665e29a89067958f5f1e8964221
+
+commit d67df1a3d9e0bb8b2adc4db8712bfab6dfe0272c
+Author: Jesse Andrews <anotherjesse@gmail.com>
+Date:   Mon Jan 16 17:02:15 2012 -0800
+
+    update ec2 crud responses we test against
+    
+    this is to support blueprint: generate-ec2-access-secret
+    
+    Change-Id: I55c2758e68b207adc363cde22e82ff9b5fdbf1f4
+
+commit c7a72f15d76ee3b2383902a31b87bb1fe067073f
+Merge: 716d5ef 572f250
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Tue Jan 17 00:47:50 2012 +0000
+
+    Merge changes Iff60e659,Iff2102fc
+    
+    * changes:
+      Install a good version of pip in the venv.
+      Modify tox.ini file to do the standard thigns.
+
+commit 716d5ef25a15e2b2ef70356e3eb0bf6981b9c3d5
+Author: Jesse Andrews <anotherjesse@gmail.com>
+Date:   Fri Jan 6 16:06:24 2012 -0800
+
+    support ec2 crud calls
+    
+    This is to support blueprint generate-ec2-access-secret
+    
+    Change-Id: I4474acc7d2193c4b04ecb11028d8ecb13e523266
+
+commit 572f250cd7a69e83ddb70442d23d2d8e09497128
+Author: Monty Taylor <mordred@inaugust.com>
+Date:   Mon Jan 2 14:01:24 2012 -0800
+
+    Install a good version of pip in the venv.
+    
+    Change-Id: Iff60e6595a3a331961ac8d6be2224edf6548b470
+
+commit f2796f1e81e167f92d6c12d00be06452ce96b9dd
+Author: Monty Taylor <mordred@inaugust.com>
+Date:   Fri Dec 30 14:27:36 2011 -0800
+
+    Modify tox.ini file to do the standard thigns.
+    
+    Change-Id: Iff2102fccdb60e8845ab2cd22c6661f1d56dde5c
+
+commit 64c42c838eab5a437c49dbd41ebfa56fc2367fea
+Author: Monty Taylor <mordred@inaugust.com>
+Date:   Fri Dec 16 19:00:26 2011 -0500
+
+    Added in common test, venv and gitreview stuff.
+
+commit 5704463a7001ad0c0c05d59e442a1c37b14d3313
+Merge: 6c164d2 6e97024
+Author: Gabriel Hurley <gabriel@strikeawe.com>
+Date:   Wed Dec 21 13:07:32 2011 -0800
+
+    Merge pull request #3 from anotherjesse/standardize
+    
+    Standardize OS API variable naming and project cleanup.
+
+commit 6e970244a0a6f2a4c4719cca75b95d3248286b82
+Author: Jesse Andrews <anotherjesse@gmail.com>
+Date:   Wed Dec 21 13:00:10 2011 -0800
+
+    log when no service catalog
+
+commit 1805097c8b20c65197d59340c38b74f7754167ac
+Author: Jesse Andrews <anotherjesse@gmail.com>
+Date:   Mon Dec 19 11:36:31 2011 -0800
+
+    update comment to be tenant_name
+
+commit 8ab0bb9d2260f66f7e85805e997df686ee9d2e74
+Author: Jesse Andrews <anotherjesse@gmail.com>
+Date:   Mon Dec 19 11:35:27 2011 -0800
+
+    should have had tenant_name
+
+commit 11a49bbe7d00b75f7ac294b10352d0e3e4169c49
+Author: Jesse Andrews <anotherjesse@gmail.com>
+Date:   Mon Dec 19 10:03:08 2011 -0800
+
+    use full name for args in readme
+
+commit f765daf3360727c2baee0cfc9114d8728c1c4336
+Author: Jesse Andrews <anotherjesse@gmail.com>
+Date:   Mon Dec 19 10:00:39 2011 -0800
+
+    finish removing project_id
+
+commit 977227ce3e6b93d2f8408858f472b3c0e02caf21
+Author: Jesse Andrews <anotherjesse@gmail.com>
+Date:   Sun Dec 18 23:29:00 2011 -0800
+
+    update test env shell
+
+commit 12969bb677844dc09d86b045b1c04f09f83a5c44
+Author: Jesse Andrews <anotherjesse@gmail.com>
+Date:   Sun Dec 18 23:19:26 2011 -0800
+
+    Fix the tests
+
+commit d37c20ca72fbcdb929601b8af1ef8fedd76e1afd
+Author: Jesse Andrews <anotherjesse@gmail.com>
+Date:   Sun Dec 18 22:08:26 2011 -0800
+
+    remove X-Auth-Project-Id, re-add auth by token support (most tests pass)
+
+commit 604b748b517f61da29fa3b9e572fdade3bbaa803
+Author: Jesse Andrews <anotherjesse@gmail.com>
+Date:   Sun Dec 18 21:31:23 2011 -0800
+
+    pep8
+
+commit 74bdba290b7b7c61909d0c7ab48161cff3a3f5c7
+Author: Jesse Andrews <anotherjesse@gmail.com>
+Date:   Sun Dec 18 21:26:38 2011 -0800
+
+    set the management_url from the service_catalog
+
+commit caad71d1b74c17148e29e94a99d0879d77fe1ad0
+Author: Jesse Andrews <anotherjesse@gmail.com>
+Date:   Sat Dec 17 23:02:27 2011 -0800
+
+    more work on standardizing project_id
+
+commit 70f83389a93b364fa9486bcc8be47f793f2f60cb
+Author: Jesse Andrews <anotherjesse@gmail.com>
+Date:   Sat Dec 17 22:50:49 2011 -0800
+
+    typo in comments
+
+commit 55c01652b2d4b42572ec4615bffdc2ee8970cd48
+Author: Jesse Andrews <anotherjesse@gmail.com>
+Date:   Sat Dec 17 22:48:37 2011 -0800
+
+    remove print statements and uncomment exceptions
+
+commit a8001d3e6c12fd5c09be8c90dc7ada145907dca6
+Author: Jesse Andrews <anotherjesse@gmail.com>
+Date:   Sat Dec 17 22:36:59 2011 -0800
+
+    more work on standardization of cliauth
+
+commit 0f392a58c33aba4b7e6a6801a2a1e2f38066b57f
+Author: Jesse Andrews <anotherjesse@gmail.com>
+Date:   Sat Dec 17 22:28:31 2011 -0800
+
+    remove user_id as you shouldn't auth using it
+
+commit cfbebeeae036f0c7db6c99f5e0c328469967da0d
+Author: Jesse Andrews <anotherjesse@gmail.com>
+Date:   Sat Dec 17 22:07:13 2011 -0800
+
+    initial pass to cliauth blueprint
+
+commit 6c164d2fe01d4a7d2353967397287cc9fcc0c286
+Author: Gabriel Hurley <gabriel@strikeawe.com>
+Date:   Wed Dec 7 13:05:13 2011 -0800
+
+    Improved error message when unable to communicate with keystone.
+
+commit 0c2a521974f0a074b2d6db0d8ce3fa33cf6f0105
+Author: Gabriel Hurley <gabriel@strikeawe.com>
+Date:   Thu Nov 17 14:25:04 2011 -0800
+
+    Improved logging/error messages.
+
+commit 553947100377ffbb84d9dbbb457e65423365d39f
+Merge: 0d228cf 8aac166
+Author: Gabriel Hurley <gabriel@strikeawe.com>
+Date:   Thu Nov 17 10:37:21 2011 -0800
+
+    Merge pull request #2 from 4P/pep8cleanup
+    
+    PEP8 cleanup and test fixes.
+
+commit 8aac166bda2f8403f183c1c3054f016a15c2e355
+Author: Joe Heck <heckj@mac.com>
+Date:   Thu Nov 17 10:07:29 2011 -0800
+
+    adding myself to authors
+
+commit c39261176bed942eb917661657599b00ea23b2f3
+Author: Joe Heck <heckj@mac.com>
+Date:   Fri Nov 11 09:29:27 2011 -0800
+
+    switching back per docs
+
+commit e109d09304b8a0281b4c590b9179472fa5efa2b2
+Author: Joe Heck <heckj@mac.com>
+Date:   Thu Nov 10 20:49:52 2011 -0800
+
+    fixing up the VerifyAll() bits
+
+commit 5788d215e9a345fca765f2cb53efb0d1f80eb3f8
+Author: Joe Heck <heckj@mac.com>
+Date:   Thu Nov 10 17:23:48 2011 -0800
+
+    more pep8 cleanup
+
+commit 0d228cfc7bf70ed307edb58b0d187e1d6ed7ac93
+Merge: 6cd7a43 e2d98e5
+Author: Gabriel Hurley <gabriel@strikeawe.com>
+Date:   Thu Nov 10 11:44:47 2011 -0800
+
+    Merge pull request #1 from 4P/pep8cleanup
+    
+    pep8 cleanup
+
+commit e2d98e58447e9375706a4d33777cc4ed326380a7
+Author: Joe Heck <heckj@mac.com>
+Date:   Thu Nov 10 08:51:12 2011 -0800
+
+    pep8 cleanup
+
+commit 6cd7a4302452ef9f801629d3f4c6a61bb61bc6f6
+Author: Gabriel Hurley <gabriel@strikeawe.com>
+Date:   Mon Oct 31 15:59:25 2011 -0700
+
+    Updated the docs a little bit.
+
+commit 2cb99fccfed4f538a9c718ea3dbc466c3f96c517
+Author: Gabriel Hurley <gabriel@strikeawe.com>
+Date:   Mon Oct 31 15:41:05 2011 -0700
+
+    Project ID always treated as a string.
+    
+    Keystone chokes on authorization if the project id is sent as an integer, so we'll cast it to a unicode string on our end.
+
+commit cbaa587d6233f5a7a4327196a6224bba4c85cba3
+Author: Gabriel Hurley <gabriel@strikeawe.com>
+Date:   Thu Oct 27 13:23:41 2011 -0700
+
+    Cleans up the data returned for a token a little.
+
+commit d7995ebb1b807a2dafbb2dbcc55dee55df0cd112
+Author: Gabriel Hurley <gabriel@strikeawe.com>
+Date:   Thu Oct 27 13:23:20 2011 -0700
+
+    Fixed a typo... "API" should've been "CLI". Thanks termie. ;-)
+
+commit 17f6b83ee6157371104b065d7fb9cb6e5b03c386
+Author: Gabriel Hurley <gabriel@strikeawe.com>
+Date:   Tue Oct 25 16:50:08 2011 -0700
+
+    Initial commit.
