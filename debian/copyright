@@ -1,15 +1,16 @@
-Format: http://dep.debian.net/deps/dep5
+Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: python-keystoneclient
-Source: <https://github.com/4P/python-keystoneclient>
+Source: https://github.com/openstack/python-keystoneclient.git
 
 Files: *
-Copyright: Copyright (c) 2009 Jacob Kaplan-Moss - initial codebase
-           Copyright (c) 2011 Rackspace - OpenStack extensions
-           Copyright (c) 2011 Nebula, Inc - Keystone refactor
+Copyright: (c) 2009 Jacob Kaplan-Moss - initial codebase
+           (c) 2011 Rackspace - OpenStack extensions
+           (c) 2011 Nebula, Inc - Keystone refactor
 License: Apache-2.0
 
 Files: debian/*
-Copyright: 2011 Julien Danjou <acid@debian.org>
+Copyright: (c) 2011 Julien Danjou <acid@debian.org>
+           (c) 2012 Thomas Goirand <zigo@debian.org>
 License: Apache-2.0
 
 License: Apache-2.0
