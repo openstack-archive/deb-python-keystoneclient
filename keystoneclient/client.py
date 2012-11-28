@@ -10,7 +10,6 @@ OpenStack Client interface. Handles the REST calls and responses.
 
 import copy
 import logging
-import os
 import urlparse
 
 import httplib2
@@ -26,6 +25,7 @@ if not hasattr(urlparse, 'parse_qsl'):
     urlparse.parse_qsl = cgi.parse_qsl
 
 
+from keystoneclient import access
 from keystoneclient import exceptions
 
 
@@ -39,40 +39,71 @@ class HTTPClient(httplib2.Http):
     def __init__(self, username=None, tenant_id=None, tenant_name=None,
                  password=None, auth_url=None, region_name=None, timeout=None,
                  endpoint=None, token=None, cacert=None, key=None,
-                 cert=None, insecure=False):
+                 cert=None, insecure=False, original_ip=None, debug=False,
+                 auth_ref=None):
         super(HTTPClient, self).__init__(timeout=timeout, ca_certs=cacert)
         if cert:
             if key:
                 self.add_certificate(key=key, cert=cert, domain='')
             else:
                 self.add_certificate(key=cert, cert=cert, domain='')
-        self.username = username
-        self.tenant_id = tenant_id
-        self.tenant_name = tenant_name
-        self.password = password
-        self.auth_url = auth_url.rstrip('/') if auth_url else None
         self.version = 'v2.0'
+        # set baseline defaults
+        self.username = None
+        self.tenant_id = None
+        self.tenant_name = None
+        self.auth_url = None
+        self.token = None
+        self.auth_token = None
+        self.management_url = None
+        # if loading from a dictionary passed in via auth_ref,
+        # load values from AccessInfo parsing that dictionary
+        self.auth_ref = access.AccessInfo(**auth_ref) if auth_ref else None
+        if self.auth_ref:
+            self.username = self.auth_ref.username
+            self.tenant_id = self.auth_ref.tenant_id
+            self.tenant_name = self.auth_ref.tenant_name
+            self.auth_url = self.auth_ref.auth_url[0]
+            self.management_url = self.auth_ref.management_url[0]
+            self.auth_token = self.auth_ref.auth_token
+        # allow override of the auth_ref defaults from explicit
+        # values provided to the client
+        if username:
+            self.username = username
+        if tenant_id:
+            self.tenant_id = tenant_id
+        if tenant_name:
+            self.tenant_name = tenant_name
+        if auth_url:
+            self.auth_url = auth_url.rstrip('/')
+        if token:
+            self.auth_token = token
+        if endpoint:
+            self.management_url = endpoint.rstrip('/')
+        self.password = password
+        self.original_ip = original_ip
         self.region_name = region_name
-        self.auth_token = token
-
-        self.management_url = endpoint
 
         # httplib2 overrides
         self.force_exception_to_status_code = True
         self.disable_ssl_certificate_validation = insecure
 
         # logging setup
-        self.debug_log = os.environ.get('KEYSTONECLIENT_DEBUG', False)
+        self.debug_log = debug
         if self.debug_log:
             ch = logging.StreamHandler()
             _logger.setLevel(logging.DEBUG)
             _logger.addHandler(ch)
 
     def authenticate(self):
-        """ Authenticate against the keystone API.
+        """ Authenticate against the Identity API.
 
         Not implemented here because auth protocols should be API
         version-specific.
+
+        Expected to authenticate or validate an existing authentication
+        reference already associated with the client. Invoking this call
+        *always* makes a call to the Keystone.
         """
         raise NotImplementedError
 
@@ -107,6 +138,9 @@ class HTTPClient(httplib2.Http):
         if self.debug_log:
             _logger.debug("RESP: %s\nRESP BODY: %s\n", resp, body)
 
+    def serialize(self, entity):
+        return json.dumps(entity)
+
     def request(self, url, method, **kwargs):
         """ Send an http request with the specified characteristics.
 
@@ -117,15 +151,25 @@ class HTTPClient(httplib2.Http):
         request_kwargs = copy.copy(kwargs)
         request_kwargs.setdefault('headers', kwargs.get('headers', {}))
         request_kwargs['headers']['User-Agent'] = self.USER_AGENT
+        if self.original_ip:
+            request_kwargs['headers']['Forwarded'] = "for=%s;by=%s" % (
+                self.original_ip, self.USER_AGENT)
         if 'body' in kwargs:
             request_kwargs['headers']['Content-Type'] = 'application/json'
-            request_kwargs['body'] = json.dumps(kwargs['body'])
+            request_kwargs['body'] = self.serialize(kwargs['body'])
 
         self.http_log_req((url, method,), request_kwargs)
         resp, body = super(HTTPClient, self).request(url,
                                                      method,
                                                      **request_kwargs)
         self.http_log_resp(resp, body)
+
+        if resp.status in (400, 401, 403, 404, 408, 409, 413, 500, 501):
+            _logger.debug("Request returned failure status: %s", resp.status)
+            raise exceptions.from_response(resp, body)
+        elif resp.status in (301, 302, 305):
+            # Redirected. Reissue the request to the new location.
+            return self.request(resp['location'], method, **kwargs)
 
         if body:
             try:
@@ -136,51 +180,38 @@ class HTTPClient(httplib2.Http):
             _logger.debug("No body was returned.")
             body = None
 
-        if resp.status in (400, 401, 403, 404, 408, 409, 413, 500, 501):
-            _logger.exception("Request returned failure status.")
-            raise exceptions.from_response(resp, body)
-        elif resp.status in (301, 302, 305):
-            # Redirected. Reissue the request to the new location.
-            return self.request(resp['location'], method, **kwargs)
-
         return resp, body
 
     def _cs_request(self, url, method, **kwargs):
-        if not self.management_url:
-            self.authenticate()
+        """ Makes an authenticated request to keystone endpoint by
+        concatenating self.management_url and url and passing in method and
+        any associated kwargs. """
 
+        if self.management_url is None:
+            raise exceptions.AuthorizationFailure(
+                'Current authorization does not have a known management url')
         kwargs.setdefault('headers', {})
         if self.auth_token:
             kwargs['headers']['X-Auth-Token'] = self.auth_token
 
-        # Perform the request once. If we get a 401 back then it
-        # might be because the auth token expired, so try to
-        # re-authenticate and try again. If it still fails, bail.
-        try:
-            resp, body = self.request(self.management_url + url, method,
-                                      **kwargs)
-            return resp, body
-        except exceptions.Unauthorized:
-            try:
-                if getattr(self, '_failures', 0) < 1:
-                    self._failures = getattr(self, '_failures', 0) + 1
-                    self.authenticate()
-                    resp, body = self.request(self.management_url + url,
-                                              method, **kwargs)
-                    return resp, body
-                else:
-                    raise
-            except exceptions.Unauthorized:
-                raise
+        resp, body = self.request(self.management_url + url, method,
+                                  **kwargs)
+        return resp, body
 
     def get(self, url, **kwargs):
         return self._cs_request(url, 'GET', **kwargs)
+
+    def head(self, url, **kwargs):
+        return self._cs_request(url, 'HEAD', **kwargs)
 
     def post(self, url, **kwargs):
         return self._cs_request(url, 'POST', **kwargs)
 
     def put(self, url, **kwargs):
         return self._cs_request(url, 'PUT', **kwargs)
+
+    def patch(self, url, **kwargs):
+        return self._cs_request(url, 'PATCH', **kwargs)
 
     def delete(self, url, **kwargs):
         return self._cs_request(url, 'DELETE', **kwargs)

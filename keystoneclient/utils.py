@@ -1,4 +1,5 @@
 import uuid
+import hashlib
 
 import prettytable
 
@@ -39,12 +40,25 @@ def print_list(objs, fields, formatters={}):
     print pt.get_string(sortby=fields[0])
 
 
-def print_dict(d):
+def _word_wrap(string, max_length=0):
+    """wrap long strings to be no longer then max_length"""
+    if max_length <= 0:
+        return string
+    return '\n'.join([string[i:i + max_length] for i in
+                     range(0, len(string), max_length)])
+
+
+def print_dict(d, wrap=0):
+    """pretty table prints dictionaries.
+
+    Wrap values to max_length wrap if wrap>0
+    """
     pt = prettytable.PrettyTable(['Property', 'Value'], caching=False)
     pt.aligns = ['l', 'l']
     for (prop, value) in d.iteritems():
         if value is None:
             value = ''
+        value = _word_wrap(value, max_length=wrap)
         pt.add_row([prop, value])
     print pt.get_string(sortby='Property')
 
@@ -75,9 +89,10 @@ def find_resource(manager, name_or_id):
 
 
 def unauthenticated(f):
-    """ Adds 'unauthenticated' attribute to decorated function.
+    """Adds 'unauthenticated' attribute to decorated function.
 
-    Usage:
+    Usage::
+
         @unauthenticated
         def mymethod(f):
             ...
@@ -100,3 +115,9 @@ def string_to_bool(arg):
         return arg
 
     return arg.strip().lower() in ('t', 'true', 'yes', '1')
+
+
+def hash_signed_token(signed_text):
+    hash_ = hashlib.md5()
+    hash_.update(signed_text)
+    return hash_.hexdigest()

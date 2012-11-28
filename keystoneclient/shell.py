@@ -28,6 +28,7 @@ from keystoneclient import exceptions as exc
 from keystoneclient import utils
 from keystoneclient.v2_0 import shell as shell_v2_0
 from keystoneclient.generic import shell as shell_generic
+from keystoneclient.contrib.bootstrap import shell as shell_bootstrap
 
 
 def env(*vars, **kwargs):
@@ -70,35 +71,43 @@ class OpenStackIdentityShell(object):
         parser.add_argument('--os-username',
                             metavar='<auth-user-name>',
                             default=env('OS_USERNAME'),
-                            help='Defaults to env[OS_USERNAME]')
+                            help='Name used for authentication with the '
+                                 'OpenStack Identity service. '
+                                 'Defaults to env[OS_USERNAME]')
         parser.add_argument('--os_username',
                             help=argparse.SUPPRESS)
 
         parser.add_argument('--os-password',
                             metavar='<auth-password>',
                             default=env('OS_PASSWORD'),
-                            help='Defaults to env[OS_PASSWORD]')
+                            help='Password used for authentication with the '
+                                 'OpenStack Identity service. '
+                                 'Defaults to env[OS_PASSWORD]')
         parser.add_argument('--os_password',
                             help=argparse.SUPPRESS)
 
         parser.add_argument('--os-tenant-name',
                             metavar='<auth-tenant-name>',
                             default=env('OS_TENANT_NAME'),
-                            help='Defaults to env[OS_TENANT_NAME]')
+                            help='Tenant to request authorization on. '
+                                 'Defaults to env[OS_TENANT_NAME]')
         parser.add_argument('--os_tenant_name',
                             help=argparse.SUPPRESS)
 
         parser.add_argument('--os-tenant-id',
                             metavar='<tenant-id>',
                             default=env('OS_TENANT_ID'),
-                            help='Defaults to env[OS_TENANT_ID]')
+                            help='Tenant to request authorization on. '
+                                 'Defaults to env[OS_TENANT_ID]')
         parser.add_argument('--os_tenant_id',
                             help=argparse.SUPPRESS)
 
         parser.add_argument('--os-auth-url',
                             metavar='<auth-url>',
                             default=env('OS_AUTH_URL'),
-                            help='Defaults to env[OS_AUTH_URL]')
+                            help='Specify the Identity endpoint to use for '
+                                 'authentication. '
+                                 'Defaults to env[OS_AUTH_URL]')
         parser.add_argument('--os_auth_url',
                             help=argparse.SUPPRESS)
 
@@ -118,19 +127,25 @@ class OpenStackIdentityShell(object):
         parser.add_argument('--os_identity_api_version',
                             help=argparse.SUPPRESS)
 
-        parser.add_argument('--token',
+        parser.add_argument('--os-token',
                             metavar='<service-token>',
-                            default=env('SERVICE_TOKEN'),
-                            help='Defaults to env[SERVICE_TOKEN]')
+                            default=env('OS_SERVICE_TOKEN'),
+                            help='Specify an existing token to use instead of '
+                                 'retrieving one via authentication (e.g. '
+                                 'with username & password). '
+                                 'Defaults to env[OS_SERVICE_TOKEN]')
 
-        parser.add_argument('--endpoint',
+        parser.add_argument('--os-endpoint',
                             metavar='<service-endpoint>',
-                            default=env('SERVICE_ENDPOINT'),
-                            help='Defaults to env[SERVICE_ENDPOINT]')
+                            default=env('OS_SERVICE_ENDPOINT'),
+                            help='Specify an endpoint to use instead of '
+                                 'retrieving one from the service catalog '
+                                 '(via authentication). '
+                                 'Defaults to env[OS_SERVICE_ENDPOINT]')
 
         parser.add_argument('--os-cacert',
                             metavar='<ca-certificate>',
-                            default=env('OS_CA_CERT'),
+                            default=env('OS_CA_CERT', default=None),
                             help='Defaults to env[OS_CACERT]')
         parser.add_argument('--os_cacert',
                             help=argparse.SUPPRESS)
@@ -152,34 +167,25 @@ class OpenStackIdentityShell(object):
         parser.add_argument('--insecure',
                             default=False,
                             action="store_true",
-                            help="Explicitly allow keystoneclient to perform "
-                                 "\"insecure\" SSL (https) requests. The "
-                                 "server's certificate will not be verified "
-                                 "against any certificate authorities. This "
-                                 "option should be used with caution.")
+                            help='Explicitly allow keystoneclient to perform '
+                                 '"insecure" SSL (https) requests. The '
+                                 'server\'s certificate will not be verified '
+                                 'against any certificate authorities. This '
+                                 'option should be used with caution.')
 
-        # FIXME(dtroyer): The args below are here for diablo compatibility,
-        #                 remove them in folsum cycle
-
-        parser.add_argument('--username',
-                            metavar='<auth-user-name>',
-                            help='Deprecated')
-
-        parser.add_argument('--password',
-                            metavar='<auth-password>',
-                            help='Deprecated')
-
-        parser.add_argument('--tenant_name',
-                            metavar='<tenant-name>',
-                            help='Deprecated')
-
-        parser.add_argument('--auth_url',
-                            metavar='<auth-url>',
-                            help='Deprecated')
-
-        parser.add_argument('--region_name',
-                            metavar='<region-name>',
-                            help='Deprecated')
+        #FIXME(heckj):
+        # deprecated command line options for essex compatibility. To be
+        # removed in Grizzly release cycle.
+        parser.add_argument('--token',
+                            metavar='<service-token>',
+                            dest='os_token',
+                            default=env('SERVICE_TOKEN'),
+                            help=argparse.SUPPRESS)
+        parser.add_argument('--endpoint',
+                            dest='os_endpoint',
+                            metavar='<service-endpoint>',
+                            default=env('SERVICE_ENDPOINT'),
+                            help=argparse.SUPPRESS)
 
         return parser
 
@@ -198,6 +204,7 @@ class OpenStackIdentityShell(object):
 
         self._find_actions(subparsers, actions_module)
         self._find_actions(subparsers, shell_generic)
+        self._find_actions(subparsers, shell_bootstrap)
         self._find_actions(subparsers, self)
         self._add_bash_completion_subparser(subparsers)
 
@@ -265,42 +272,48 @@ class OpenStackIdentityShell(object):
             self.do_bash_completion(args)
             return 0
 
-        #FIXME(usrleon): Here should be restrict for project id same as
-        # for username or apikey but for compatibility it is not.
+        # TODO(heckj): supporting backwards compatibility with environment
+        # variables. To be removed after DEVSTACK is updated, ideally in
+        # the Grizzly release cycle.
+        args.os_token = args.os_token or env('SERVICE_TOKEN')
+        args.os_endpoint = args.os_endpoint or env('SERVICE_ENDPOINT')
 
         if not utils.isunauthenticated(args.func):
             # if the user hasn't provided any auth data
-            if not (args.token or args.endpoint or args.os_username or
+            if not (args.os_token or args.os_endpoint or args.os_username or
                     args.os_password or args.os_auth_url):
-                raise exc.CommandError('Expecting authentication method via \n'
-                                       '  either a service token, '
-                                       '--token or env[SERVICE_TOKEN], \n'
-                                       '  or credentials, '
+                raise exc.CommandError('Expecting authentication method via'
+                                       '\n  either a service token, '
+                                       '--os-token or env[OS_SERVICE_TOKEN], '
+                                       '\n  or credentials, '
                                        '--os-username or env[OS_USERNAME].')
 
-            # if it looks like the user wants to provide a service token
-            # but is missing something
-            if args.token or args.endpoint and not (
-                    args.token and args.endpoint):
-                if not args.token:
-                    raise exc.CommandError(
-                        'Expecting a token provided via either --token or '
-                        'env[SERVICE_TOKEN]')
-
-                if not args.endpoint:
-                    raise exc.CommandError(
-                        'Expecting an endpoint provided via either --endpoint '
-                        'or env[SERVICE_ENDPOINT]')
+            # user supplied a token and endpoint and at least one other cred
+            if (args.os_token and args.os_endpoint) and (args.os_username or
+                                                         args.os_tenant_id or
+                                                         args.os_tenant_name or
+                                                         args.os_password or
+                                                         args.os_auth_url):
+                msg = ('WARNING: Bypassing authentication using a token & '
+                       'endpoint (authentication credentials are being '
+                       'ignored).')
+                print msg
 
             # if it looks like the user wants to provide a credentials
             # but is missing something
-            if ((args.os_username or args.os_password or args.os_auth_url)
-                    and not (args.os_username and args.os_password and
-                             args.os_auth_url)):
+            if (not (args.os_token and args.os_endpoint)
+                and ((args.os_username or args.os_password or args.os_auth_url)
+                and not (args.os_username and args.os_password and
+                         args.os_auth_url))):
                 if not args.os_username:
                     raise exc.CommandError(
                         'Expecting a username provided via either '
                         '--os-username or env[OS_USERNAME]')
+
+                if not args.os_auth_url:
+                    raise exc.CommandError(
+                        'Expecting an auth URL via either --os-auth-url or '
+                        'env[OS_AUTH_URL]')
 
                 if not args.os_password:
                     # No password, If we've got a tty, try prompting for it
@@ -318,37 +331,46 @@ class OpenStackIdentityShell(object):
                             '--os-password, env[OS_PASSWORD], or '
                             'prompted response')
 
-                if not args.os_auth_url:
+            # if it looks like the user wants to provide a service token
+            # but is missing something
+            if args.os_token or args.os_endpoint and not (
+                    args.os_token and args.os_endpoint):
+                if not args.os_token:
                     raise exc.CommandError(
-                        'Expecting an auth URL via either --os-auth-url or '
-                        'env[OS_AUTH_URL]')
+                        'Expecting a token provided via either --os-token or '
+                        'env[OS_SERVICE_TOKEN]')
+
+                if not args.os_endpoint:
+                    raise exc.CommandError(
+                        'Expecting an endpoint provided via either '
+                        '--os-endpoint or env[OS_SERVICE_ENDPOINT]')
 
         if utils.isunauthenticated(args.func):
             self.cs = shell_generic.CLIENT_CLASS(endpoint=args.os_auth_url,
                                                  cacert=args.os_cacert,
                                                  key=args.os_key,
                                                  cert=args.os_cert,
-                                                 insecure=args.insecure)
+                                                 insecure=args.insecure,
+                                                 debug=args.debug)
         else:
             token = None
-            endpoint = None
-            if args.token and args.endpoint:
-                token = args.token
-                endpoint = args.endpoint
+            if args.os_token and args.os_endpoint:
+                token = args.os_token
             api_version = options.os_identity_api_version
             self.cs = self.get_api_class(api_version)(
                 username=args.os_username,
                 tenant_name=args.os_tenant_name,
                 tenant_id=args.os_tenant_id,
                 token=token,
-                endpoint=endpoint,
+                endpoint=args.os_endpoint,
                 password=args.os_password,
                 auth_url=args.os_auth_url,
                 region_name=args.os_region_name,
                 cacert=args.os_cacert,
                 key=args.os_key,
                 cert=args.os_cert,
-                insecure=args.insecure)
+                insecure=args.insecure,
+                debug=args.debug)
 
         try:
             args.func(self.cs, args)
@@ -409,7 +431,7 @@ def main():
     try:
         OpenStackIdentityShell().main(sys.argv[1:])
 
-    except Exception, e:
+    except Exception as e:
         if httplib2.debuglevel == 1:
             raise  # dump stack.
         else:

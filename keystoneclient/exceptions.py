@@ -9,6 +9,10 @@ class CommandError(Exception):
     pass
 
 
+class ValidationError(Exception):
+    pass
+
+
 class AuthorizationFailure(Exception):
     pass
 
@@ -21,6 +25,11 @@ class NoTokenLookupException(Exception):
 
 class EndpointNotFound(Exception):
     """Could not find Service or Region in Service Catalog."""
+    pass
+
+
+class EmptyCatalog(Exception):
+    """ The service catalog is empty. """
     pass
 
 
@@ -95,6 +104,14 @@ class HTTPNotImplemented(ClientException):
     message = "Not Implemented"
 
 
+class ServiceUnavailable(ClientException):
+    """
+    HTTP 503 - Service Unavailable: The server is currently unavailable.
+    """
+    http_status = 503
+    message = "Service Unavailable"
+
+
 # In Python 2.4 Exception is old-style and thus doesn't have a __subclasses__()
 # so we can do this:
 #     _code_map = dict((c.http_status, c)
@@ -106,7 +123,8 @@ _code_map = dict((c.http_status, c) for c in [BadRequest,
                                               Forbidden,
                                               NotFound,
                                               OverLimit,
-                                              HTTPNotImplemented])
+                                              HTTPNotImplemented,
+                                              ServiceUnavailable])
 
 
 def from_response(response, body):
