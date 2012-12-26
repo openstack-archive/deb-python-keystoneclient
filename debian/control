@@ -17,7 +17,8 @@ Build-Depends-Indep: pep8,
  python-prettytable,
  python-setuptools,
  python-simplejson,
- python-unittest2
+ python-unittest2,
+ python-requests
 Standards-Version: 3.9.3
 Homepage: https://github.com/openstack/python-keystoneclient
 Vcs-Git: git://git.debian.org/openstack/python-keystoneclient.git
@@ -26,7 +27,11 @@ Vcs-Browser: http://git.debian.org/?p=openstack/python-keystoneclient.git;a=summ
 Package: python-keystoneclient
 Architecture: all
 Pre-Depends: dpkg (>= 1.15.6~)
-Depends: ${python:Depends}, ${misc:Depends}, python-pkg-resources
+Depends: ${python:Depends}, ${misc:Depends}, python-pkg-resources,
+ python-argparse,
+ python-prettytable,
+ python-requests,
+ python-simplejson
 Description: client library for the OpenStack Keystone API
  This is the identity service used by OpenStack for authentication (authN)
  and high-level authorization (authZ). It currently supports token-based

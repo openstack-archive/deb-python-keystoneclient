@@ -1,4 +1,4 @@
-python-keystoneclient (1:0.2.0-1) experimental; urgency=low
+python-keystoneclient (1:0.2.1-1) experimental; urgency=low
 
   [ Mehdi Abaakouk ]
   * New upstream version
