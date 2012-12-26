@@ -82,7 +82,7 @@ class Manager(object):
 
     def _head(self, url):
         resp, body = self.api.head(url)
-        return resp.status == 204
+        return resp.status_code == 204
 
     def _create(self, url, body, response_key, return_raw=False):
         resp, body = self.api.post(url, body=body)
@@ -93,15 +93,17 @@ class Manager(object):
     def _delete(self, url):
         resp, body = self.api.delete(url)
 
-    def _update(self, url, body=None, response_key=None, method="PUT"):
+    def _update(self, url, body=None, response_key=None, method="PUT",
+                management=True):
         methods = {"PUT": self.api.put,
                    "POST": self.api.post,
                    "PATCH": self.api.patch}
         try:
             if body is not None:
-                resp, body = methods[method](url, body=body)
+                resp, body = methods[method](url, body=body,
+                                             management=management)
             else:
-                resp, body = methods[method](url)
+                resp, body = methods[method](url, management=management)
         except KeyError:
             raise exceptions.ClientException("Invalid update method: %s"
                                              % method)

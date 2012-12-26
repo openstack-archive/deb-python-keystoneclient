@@ -1,6 +1,7 @@
 import os
 import mock
-import httplib2
+
+import requests
 
 from keystoneclient import shell as openstack_shell
 from keystoneclient.v2_0 import shell as shell_v2_0
@@ -42,11 +43,6 @@ class ShellTest(utils.TestCase):
     def test_help_unknown_command(self):
         self.assertRaises(exceptions.CommandError, shell, 'help foofoo')
 
-    def test_debug(self):
-        httplib2.debuglevel = 0
-        shell('--debug help')
-        assert httplib2.debuglevel == 1
-
     def test_shell_args(self):
         do_tenant_mock = mock.MagicMock()
         with mock.patch('keystoneclient.v2_0.shell.do_user_list',
@@ -87,6 +83,24 @@ class ShellTest(utils.TestCase):
                       b.os_identity_api_version)
             expect = ('http://1.1.1.1:5000/', 'xyzpdq', '4321',
                       'wilma', 'betty', '2.0')
+            self.assertTrue(all([x == y for x, y in zip(actual, expect)]))
+
+            # Test keyring options
+            shell('--os-auth-url http://1.1.1.1:5000/ --os-password xyzpdq '
+                  '--os-tenant-id 4321 --os-tenant-name wilma '
+                  '--os-username betty '
+                  '--os-identity-api-version 2.0 '
+                  '--os-cache '
+                  '--stale-duration 500 '
+                  '--force-new-token user-list')
+            assert do_tenant_mock.called
+            ((a, b), c) = do_tenant_mock.call_args
+            actual = (b.os_auth_url, b.os_password, b.os_tenant_id,
+                      b.os_tenant_name, b.os_username,
+                      b.os_identity_api_version, b.os_cache,
+                      b.stale_duration, b.force_new_token)
+            expect = ('http://1.1.1.1:5000/', 'xyzpdq', '4321',
+                      'wilma', 'betty', '2.0', True, '500', True)
             self.assertTrue(all([x == y for x, y in zip(actual, expect)]))
 
     def test_shell_user_create_args(self):
