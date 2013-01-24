@@ -151,7 +151,7 @@ def do_user_delete(kc, args):
 def do_tenant_list(kc, args):
     """List all tenants"""
     tenants = kc.tenants.list()
-    utils.print_list(tenants, ['id', 'name', 'enabled'])
+    utils.print_list(tenants, ['id', 'name', 'enabled'], order_by='name')
 
 
 @utils.arg('id', metavar='<tenant-id>', help='Tenant ID to display')
@@ -223,7 +223,8 @@ def do_service_create(kc, args):
 def do_service_list(kc, args):
     """List all services in Service Catalog"""
     services = kc.services.list()
-    utils.print_list(services, ['id', 'name', 'type', 'description'])
+    utils.print_list(services, ['id', 'name', 'type', 'description'],
+                     order_by='name')
 
 
 @utils.arg('id', metavar='<service-id>', help='Service ID to display')
@@ -242,7 +243,7 @@ def do_service_delete(kc, args):
 def do_role_list(kc, args):
     """List all roles"""
     roles = kc.roles.list()
-    utils.print_list(roles, ['id', 'name'])
+    utils.print_list(roles, ['id', 'name'], order_by='name')
 
 
 @utils.arg('id', metavar='<role-id>', help='Role ID to display')
@@ -311,7 +312,8 @@ def do_user_role_list(kc, args):
         role.user_id = args.user_id
         role.tenant_id = args.tenant_id
 
-    utils.print_list(roles, ['id', 'name', 'user_id', 'tenant_id'])
+    utils.print_list(roles, ['id', 'name', 'user_id', 'tenant_id'],
+                     order_by='name')
 
 
 @utils.arg('--user-id', metavar='<user-id>', help='User ID')
@@ -319,7 +321,7 @@ def do_user_role_list(kc, args):
 @utils.arg('--tenant-id', metavar='<tenant-id>', help='Tenant ID')
 @utils.arg('--tenant_id', help=argparse.SUPPRESS)
 def do_ec2_credentials_create(kc, args):
-    """Create EC2-compatibile credentials for user per tenant"""
+    """Create EC2-compatible credentials for user per tenant"""
     if not args.tenant_id:
         # use the authenticated tenant id as a default
         args.tenant_id = kc.auth_tenant_id
@@ -335,7 +337,7 @@ def do_ec2_credentials_create(kc, args):
 @utils.arg('--access', metavar='<access-key>', required=True,
            help='Access Key')
 def do_ec2_credentials_get(kc, args):
-    """Display EC2-compatibile credentials"""
+    """Display EC2-compatible credentials"""
     if not args.user_id:
         # use the authenticated user id as a default
         args.user_id = kc.auth_user_id
@@ -347,7 +349,7 @@ def do_ec2_credentials_get(kc, args):
 @utils.arg('--user-id', metavar='<user-id>', help='User ID')
 @utils.arg('--user_id', help=argparse.SUPPRESS)
 def do_ec2_credentials_list(kc, args):
-    """List EC2-compatibile credentials for a user"""
+    """List EC2-compatible credentials for a user"""
     if not args.user_id:
         # use the authenticated user id as a default
         args.user_id = kc.auth_user_id
@@ -367,7 +369,7 @@ def do_ec2_credentials_list(kc, args):
 @utils.arg('--access', metavar='<access-key>', required=True,
            help='Access Key')
 def do_ec2_credentials_delete(kc, args):
-    """Delete EC2-compatibile credentials"""
+    """Delete EC2-compatible credentials"""
     if not args.user_id:
         # use the authenticated user id as a default
         args.user_id = kc.auth_user_id
