@@ -1,2 +1,2 @@
 version=3
-http://keystone.openstack.org/tarballs/ python-keystoneclient-(.*).tar.gz
+https://github.com/openstack/python-keystoneclient/tags .*/(\d[\d\.]+)\.tar\.gz
