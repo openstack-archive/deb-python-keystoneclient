@@ -20,8 +20,8 @@ Build-Depends-Indep: pep8,
                      python-unittest2
 Standards-Version: 3.9.4
 Homepage: https://github.com/openstack/python-keystoneclient
-Vcs-Git: git://git.debian.org/openstack/python-keystoneclient.git
-Vcs-Browser: http://git.debian.org/?p=openstack/python-keystoneclient.git;a=summary
+Vcs-Git: git://anonscm.debian.org/openstack/python-keystoneclient.git
+Vcs-Browser: http://anonscm.debian.org/gitweb/?p=openstack/python-keystoneclient.git;a=summary
 
 Package: python-keystoneclient
 Architecture: all

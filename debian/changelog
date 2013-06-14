@@ -5,6 +5,7 @@ python-keystoneclient (1:0.2.5-3) unstable; urgency=low
   * Added export OSLO_PACKAGE_VERSION=$(VERSION) in debian/rules.
   * Added build-depends: python-pbr.
   * Bumped Standard-Version: to 3.9.4.
+  * Using cannonical URLs for the VCS fields.
 
  -- Thomas Goirand <zigo@debian.org>  Thu, 30 May 2013 14:06:05 +0800
 
