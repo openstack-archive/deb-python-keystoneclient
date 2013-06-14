@@ -17,6 +17,7 @@
 
 import argparse
 import getpass
+import sys
 
 from keystoneclient.v2_0 import client
 from keystoneclient import utils
@@ -34,6 +35,9 @@ def require_service_catalog(f):
         if not kc.has_service_catalog():
             raise Exception(msg)
         return f(kc, args)
+
+    # Change __doc__ attribute back to origin function's __doc__
+    wrapped.__doc__ = f.__doc__
 
     return wrapped
 
@@ -103,14 +107,19 @@ def do_user_update(kc, args):
         print 'Unable to update user: %s' % e
 
 
-@utils.arg('--pass', metavar='<password>', dest='passwd', required=True,
+@utils.arg('--pass', metavar='<password>', dest='passwd', required=False,
            help='Desired new password')
 @utils.arg('user', metavar='<user>',
            help='Name or ID of user to update password')
 def do_user_password_update(kc, args):
     """Update user password"""
     user = utils.find_resource(kc.users, args.user)
-    kc.users.update_password(user, args.passwd)
+    new_passwd = args.passwd or utils.prompt_for_password()
+    if new_passwd is None:
+        msg = ("\nPlease specify password using the --pass option "
+               "or using the prompt")
+        sys.exit(msg)
+    kc.users.update_password(user, new_passwd)
 
 
 @utils.arg('--current-password', metavar='<current-password>',

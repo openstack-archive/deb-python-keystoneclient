@@ -13,11 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from datetime import datetime
 import urlparse
 
-from keystoneclient import client as base_client
-from keystoneclient.v2_0 import client
 from tests import fakes
 from tests import utils
 
@@ -373,12 +370,6 @@ class FakeHTTPClient(fakes.FakeClient):
                   "name": "KeystoneServiceAdmin"}]
              }
         ]
-        return (200, body)
-
-    def post_OS_KSADM_roles(self, **kw):
-        body = {"role":
-               {"name": "new-role",
-                "id": "1"}}
         return (200, body)
 
     def post_OS_KSADM_roles(self, **kw):

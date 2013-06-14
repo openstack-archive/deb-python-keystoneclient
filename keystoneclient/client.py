@@ -35,8 +35,8 @@ _logger = logging.getLogger(__name__)
 
 def try_import_keyring():
     try:
-        import keyring
-        import pickle
+        import keyring  # noqa
+        import pickle  # noqa
         return True
     except ImportError:
         if (hasattr(sys.stderr, 'isatty') and sys.stderr.isatty()):
@@ -113,7 +113,7 @@ class HTTPClient(object):
 
         # logging setup
         self.debug_log = debug
-        if self.debug_log:
+        if self.debug_log and not _logger.handlers:
             ch = logging.StreamHandler()
             _logger.setLevel(logging.DEBUG)
             _logger.addHandler(ch)
@@ -185,8 +185,8 @@ class HTTPClient(object):
 
         if not token:
             token = self.auth_token_from_user
-            if (not token and self.auth_ref
-                and not self.auth_ref.will_expire_soon(self.stale_duration)):
+            if (not token and self.auth_ref and not
+                    self.auth_ref.will_expire_soon(self.stale_duration)):
                 token = self.auth_ref.auth_token
 
         (keyring_key, auth_ref) = self.get_auth_ref_from_keyring(auth_url,
@@ -351,33 +351,38 @@ class HTTPClient(object):
             request_kwargs.setdefault('timeout', self.timeout)
 
         self.http_log_req((url, method,), request_kwargs)
-        resp = requests.request(
-            method,
-            url,
-            verify=self.verify_cert,
-            **request_kwargs)
+
+        try:
+            resp = requests.request(
+                method,
+                url,
+                verify=self.verify_cert,
+                **request_kwargs)
+        except requests.ConnectionError:
+            msg = 'Unable to establish connection to %s' % url
+            raise exceptions.ClientException(msg)
 
         self.http_log_resp(resp)
-
-        if resp.status_code >= 400:
-            _logger.debug(
-                "Request returned failure status: %s",
-                resp.status_code)
-            raise exceptions.from_response(resp, resp.text)
-        elif resp.status_code in (301, 302, 305):
-            # Redirected. Reissue the request to the new location.
-            return self.request(resp.headers['location'], method, **kwargs)
 
         if resp.text:
             try:
                 body = json.loads(resp.text)
-            except ValueError:
+            except (ValueError, TypeError):
                 body = None
                 _logger.debug("Could not decode JSON from body: %s"
                               % resp.text)
         else:
             _logger.debug("No body was returned.")
             body = None
+
+        if resp.status_code >= 400:
+            _logger.debug(
+                "Request returned failure status: %s",
+                resp.status_code)
+            raise exceptions.from_response(resp, body or resp.text)
+        elif resp.status_code in (301, 302, 305):
+            # Redirected. Reissue the request to the new location.
+            return self.request(resp.headers['location'], method, **kwargs)
 
         return resp, body
 

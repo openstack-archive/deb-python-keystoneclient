@@ -1,5 +1,7 @@
-import uuid
+import getpass
 import hashlib
+import sys
+import uuid
 
 import prettytable
 
@@ -21,7 +23,8 @@ def pretty_choice_list(l):
 
 
 def print_list(objs, fields, formatters={}, order_by=None):
-    pt = prettytable.PrettyTable([f for f in fields], caching=False)
+    pt = prettytable.PrettyTable([f for f in fields],
+                                 caching=False, print_empty=False)
     pt.aligns = ['l' for f in fields]
 
     for o in objs:
@@ -55,7 +58,8 @@ def print_dict(d, wrap=0):
 
     Wrap values to max_length wrap if wrap>0
     """
-    pt = prettytable.PrettyTable(['Property', 'Value'], caching=False)
+    pt = prettytable.PrettyTable(['Property', 'Value'],
+                                 caching=False, print_empty=False)
     pt.aligns = ['l', 'l']
     for (prop, value) in d.iteritems():
         if value is None:
@@ -128,3 +132,22 @@ def hash_signed_token(signed_text):
     hash_ = hashlib.md5()
     hash_.update(signed_text)
     return hash_.hexdigest()
+
+
+def prompt_for_password():
+    """
+     Prompt user for password if not provided so the password
+     doesn't show up in the bash history.
+    """
+    if not (hasattr(sys.stdin, 'isatty') and sys.stdin.isatty()):
+        # nothing to do
+        return
+
+    while True:
+        try:
+            new_passwd = getpass.getpass('New Password: ')
+            rep_passwd = getpass.getpass('Repeat New Password: ')
+            if new_passwd == rep_passwd:
+                return new_passwd
+        except EOFError:
+            return

@@ -2,7 +2,6 @@ import argparse
 import cStringIO
 import json
 import os
-import requests
 import sys
 import uuid
 
@@ -78,9 +77,6 @@ class ShellTest(utils.TestCase):
             os.environ = _old_env
         return out
 
-    def test_help_unknown_command(self):
-        self.assertRaises(exceptions.CommandError, shell, 'help foofoo')
-
     def test_help_no_args(self):
         do_tenant_mock = mock.MagicMock()
         with mock.patch('keystoneclient.shell.OpenStackIdentityShell.do_help',
@@ -102,34 +98,30 @@ class ShellTest(utils.TestCase):
 
     def test_auth_no_credentials(self):
         with testtools.ExpectedException(
-            exceptions.CommandError,
-            'Expecting authentication method'):
+                exceptions.CommandError, 'Expecting authentication method'):
             self.shell('user-list')
 
     def test_auth_password_authurl_no_username(self):
         with testtools.ExpectedException(
-            exceptions.CommandError,
-            'Expecting a username provided via either'):
+                exceptions.CommandError,
+                'Expecting a username provided via either'):
             self.shell('--os-password=%s --os-auth-url=%s user-list'
                        % (uuid.uuid4().hex, uuid.uuid4().hex))
 
     def test_auth_username_password_no_authurl(self):
         with testtools.ExpectedException(
-            exceptions.CommandError,
-            'Expecting an auth URL via either'):
+                exceptions.CommandError, 'Expecting an auth URL via either'):
             self.shell('--os-password=%s --os-username=%s user-list'
                        % (uuid.uuid4().hex, uuid.uuid4().hex))
 
     def test_token_no_endpoint(self):
         with testtools.ExpectedException(
-            exceptions.CommandError,
-            'Expecting an endpoint provided'):
+                exceptions.CommandError, 'Expecting an endpoint provided'):
             self.shell('--token=%s user-list' % uuid.uuid4().hex)
 
     def test_endpoint_no_token(self):
         with testtools.ExpectedException(
-            exceptions.CommandError,
-            'Expecting a token provided'):
+                exceptions.CommandError, 'Expecting a token provided'):
             self.shell('--endpoint=http://10.0.0.1:5000/v2.0/ user-list')
 
     def test_shell_args(self):
