@@ -23,6 +23,9 @@ override_dh_clean:
 	dh_clean
 	rm -f keystoneclient/versioninfo
 
+override_dh_auto_clean:
+	echo "Nothing to do"
+
 override_dh_auto_install:
 	dh_auto_install
 	install -D -m 0644 tools/keystone.bash_completion $(CURDIR)/debian/python-keystoneclient/etc/bash_completion.d/keystone.bash_completion
