@@ -16,6 +16,7 @@ Build-Depends-Indep: pep8,
                      python-prettytable,
                      python-requests,
                      python-setuptools,
+                     python-setuptools-git,
                      python-simplejson,
                      python-unittest2
 Standards-Version: 3.9.4
