@@ -8,6 +8,7 @@ Uploaders: Julien Danjou <acid@debian.org>,
 Build-Depends: debhelper (>= 9), openstack-pkg-tools, python-all (>= 2.6.6-3~)
 Build-Depends-Indep: pep8,
                      python-argparse,
+                     python-pbr,
                      python-httplib2,
                      python-mock,
                      python-mox,
