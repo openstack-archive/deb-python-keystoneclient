@@ -1,3 +1,11 @@
+python-keystoneclient (1:0.2.5-2) unstable; urgency=low
+
+  * Add Fix-memcache-encryption-middleware.patch (Closes: #713819)
+    [OSSA 2013-017] Keystone middleware memcache signing/encryption feature
+    (CVE-2013-2166 and CVE-2013-2167)
+
+ -- Prach Pongpanich <prachpub@gmail.com>  Sun, 23 Jun 2013 11:54:52 +0700
+
 python-keystoneclient (1:0.2.5-1) unstable; urgency=low
 
   * New upstream release (Closes: #709535).
