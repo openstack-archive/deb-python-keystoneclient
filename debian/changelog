@@ -2,6 +2,7 @@ python-keystoneclient (1:0.3.2-1) unstable; urgency=low
 
   * New upstream release.
   * Removed patches (applied upstream).
+  * Lots of new (build-)depends.
 
  -- Thomas Goirand <zigo@debian.org>  Sun, 01 Sep 2013 22:01:20 +0800
 
