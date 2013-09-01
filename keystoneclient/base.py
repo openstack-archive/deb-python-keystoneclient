@@ -19,6 +19,7 @@ Base utilities to build API operation managers and objects on top of.
 """
 
 import abc
+import functools
 import urllib
 
 from keystoneclient import exceptions
@@ -33,9 +34,8 @@ except NameError:
 
 
 def getid(obj):
-    """
-    Abstracts the common pattern of allowing both an object or an object's ID
-    (UUID) as a parameter when dealing with relationships.
+    """Abstracts the common pattern of allowing both an object or an object's
+    ID (UUID) as a parameter when dealing with relationships.
     """
 
     # Try to return the object's UUID first, if we have a UUID.
@@ -50,10 +50,32 @@ def getid(obj):
         return obj
 
 
+def filter_kwargs(f):
+    @functools.wraps(f)
+    def func(*args, **kwargs):
+        for key, ref in kwargs.items():
+            if ref is None:
+                # drop null values
+                del kwargs[key]
+                continue
+
+            id_value = getid(ref)
+            if id_value == ref:
+                continue
+
+            # if an object with an id was passed remove the object
+            # from params and replace it with just the id.
+            # e.g user: User(id=1) becomes user_id: 1
+            del kwargs[key]
+            kwargs['%s_id' % key] = id_value
+
+        return f(*args, **kwargs)
+    return func
+
+
 class Manager(object):
-    """
-    Managers interact with a particular type of API (servers, flavors, images,
-    etc.) and provide CRUD operations for them.
+    """Managers interact with a particular type of API (servers, flavors,
+    images, etc.) and provide CRUD operations for them.
     """
     resource_class = None
 
@@ -114,8 +136,7 @@ class Manager(object):
 
 
 class ManagerWithFind(Manager):
-    """
-    Like a `Manager`, but with additional `find()`/`findall()` methods.
+    """Like a `Manager`, but with additional `find()`/`findall()` methods.
     """
 
     __metaclass__ = abc.ABCMeta
@@ -125,8 +146,7 @@ class ManagerWithFind(Manager):
         pass
 
     def find(self, **kwargs):
-        """
-        Find a single item with attributes matching ``**kwargs``.
+        """Find a single item with attributes matching ``**kwargs``.
 
         This isn't very efficient: it loads the entire list then filters on
         the Python side.
@@ -143,8 +163,7 @@ class ManagerWithFind(Manager):
             return rl[0]
 
     def findall(self, **kwargs):
-        """
-        Find all items with attributes matching ``**kwargs``.
+        """Find all items with attributes matching ``**kwargs``.
 
         This isn't very efficient: it loads the entire list then filters on
         the Python side.
@@ -178,8 +197,9 @@ class CrudManager(Manager):
     """
     collection_key = None
     key = None
+    base_url = None
 
-    def build_url(self, base_url=None, **kwargs):
+    def build_url(self, dict_args_in_out=None):
         """Builds a resource URL for the given kwargs.
 
         Given an example collection where `collection_key = 'entities'` and
@@ -197,84 +217,93 @@ class CrudManager(Manager):
         If a `base_url` is provided, the generated URL will be appended to it.
 
         """
-        url = base_url if base_url is not None else ''
+        if dict_args_in_out is None:
+            dict_args_in_out = {}
 
+        url = dict_args_in_out.pop('base_url', None) or self.base_url or ''
         url += '/%s' % self.collection_key
 
         # do we have a specific entity?
-        entity_id = kwargs.get('%s_id' % self.key)
+        entity_id = dict_args_in_out.pop('%s_id' % self.key, None)
         if entity_id is not None:
             url += '/%s' % entity_id
 
         return url
 
-    def _filter_kwargs(self, kwargs):
-        # drop null values
-        for key, ref in kwargs.copy().iteritems():
-            if ref is None:
-                kwargs.pop(key)
-            else:
-                id_value = getid(ref)
-                if id_value != ref:
-                    kwargs.pop(key)
-                    kwargs['%s_id' % key] = id_value
-        return kwargs
-
+    @filter_kwargs
     def create(self, **kwargs):
-        kwargs = self._filter_kwargs(kwargs)
+        url = self.build_url(dict_args_in_out=kwargs)
         return self._create(
-            self.build_url(**kwargs),
+            url,
             {self.key: kwargs},
             self.key)
 
+    @filter_kwargs
     def get(self, **kwargs):
-        kwargs = self._filter_kwargs(kwargs)
         return self._get(
-            self.build_url(**kwargs),
+            self.build_url(dict_args_in_out=kwargs),
             self.key)
 
+    @filter_kwargs
     def head(self, **kwargs):
-        kwargs = self._filter_kwargs(kwargs)
-        return self._head(self.build_url(**kwargs))
+        return self._head(self.build_url(dict_args_in_out=kwargs))
 
-    def list(self, base_url=None, **kwargs):
-        kwargs = self._filter_kwargs(kwargs)
+    @filter_kwargs
+    def list(self, **kwargs):
+        url = self.build_url(dict_args_in_out=kwargs)
 
         return self._list(
-            '%(base_url)s%(query)s' % {
-                'base_url': self.build_url(base_url=base_url, **kwargs),
+            '%(url)s%(query)s' % {
+                'url': url,
                 'query': '?%s' % urllib.urlencode(kwargs) if kwargs else '',
             },
             self.collection_key)
 
-    def put(self, base_url=None, **kwargs):
-        kwargs = self._filter_kwargs(kwargs)
-
+    @filter_kwargs
+    def put(self, **kwargs):
         return self._update(
-            self.build_url(base_url=base_url, **kwargs),
+            self.build_url(dict_args_in_out=kwargs),
             method='PUT')
 
+    @filter_kwargs
     def update(self, **kwargs):
-        kwargs = self._filter_kwargs(kwargs)
-        params = kwargs.copy()
-        params.pop('%s_id' % self.key)
+        url = self.build_url(dict_args_in_out=kwargs)
 
         return self._update(
-            self.build_url(**kwargs),
-            {self.key: params},
+            url,
+            {self.key: kwargs},
             self.key,
             method='PATCH')
 
+    @filter_kwargs
     def delete(self, **kwargs):
-        kwargs = self._filter_kwargs(kwargs)
-
         return self._delete(
-            self.build_url(**kwargs))
+            self.build_url(dict_args_in_out=kwargs))
+
+    @filter_kwargs
+    def find(self, **kwargs):
+        """Find a single item with attributes matching ``**kwargs``."""
+        url = self.build_url(dict_args_in_out=kwargs)
+
+        rl = self._list(
+            '%(url)s%(query)s' % {
+                'url': url,
+                'query': '?%s' % urllib.urlencode(kwargs) if kwargs else '',
+            },
+            self.collection_key)
+        num = len(rl)
+
+        if num == 0:
+            msg = "No %s matching %s." % (self.resource_class.__name__, kwargs)
+            raise exceptions.NotFound(404, msg)
+        elif num > 1:
+            raise exceptions.NoUniqueMatch
+        else:
+            return rl[0]
 
 
 class Resource(object):
-    """
-    A resource represents a particular instance of an object (tenant, user,
+    """A resource represents a particular instance of an object (tenant, user,
     etc). This is pretty much just a bag for attributes.
 
     :param manager: Manager object

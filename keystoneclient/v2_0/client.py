@@ -14,9 +14,8 @@
 #    under the License.
 import logging
 
-from keystoneclient import client
 from keystoneclient import exceptions
-from keystoneclient import service_catalog
+from keystoneclient import httpclient
 from keystoneclient.v2_0 import ec2
 from keystoneclient.v2_0 import endpoints
 from keystoneclient.v2_0 import roles
@@ -29,7 +28,7 @@ from keystoneclient.v2_0 import users
 _logger = logging.getLogger(__name__)
 
 
-class Client(client.HTTPClient):
+class Client(httpclient.HTTPClient):
     """Client for the OpenStack Keystone v2.0 API.
 
     :param string username: Username for authentication. (optional)
@@ -49,16 +48,21 @@ class Client(client.HTTPClient):
     :param string original_ip: The original IP of the requesting user
                                which will be sent to Keystone in a
                                'Forwarded' header. (optional)
-    :param string cert: If provided, used as a local certificate to communicate
-                        with the keystone endpoint. If provided, requires the
-                        additional parameter key. (optional)
-    :param string key: The key associated with the certificate for secure
-                       keystone communication. (optional)
-    :param string cacert: the ca-certs to verify the secure communications
-                          with keystone. (optional)
-    :param boolean insecure: If using an SSL endpoint, allows for the certicate
-                             to be unsigned - does not verify the certificate
-                             chain. default: False (optional)
+    :param string cert: Path to the Privacy Enhanced Mail (PEM) file which
+                        contains the corresponding X.509 client certificate
+                        needed to established two-way SSL connection with
+                        the identity service. (optional)
+    :param string key: Path to the Privacy Enhanced Mail (PEM) file which
+                       contains the unencrypted client private key needed
+                       to established two-way SSL connection with the
+                      identity service. (optional)
+    :param string cacert: Path to the Privacy Enhanced Mail (PEM) file which
+                          contains the trusted authority X.509 certificates
+                          needed to established SSL connection with the
+                          identity service. (optional)
+    :param boolean insecure: Does not perform X.509 certificate validation
+                             when establishing SSL connection with identity
+                             service. default: False (optional)
     :param dict auth_ref: To allow for consumers of the client to manage their
                           own caching strategy, you may initialize a client
                           with a previously captured auth_reference (token)
@@ -118,8 +122,9 @@ class Client(client.HTTPClient):
     """
 
     def __init__(self, **kwargs):
-        """ Initialize a new client for the Keystone v2.0 API. """
+        """Initialize a new client for the Keystone v2.0 API."""
         super(Client, self).__init__(**kwargs)
+        self.version = 'v2.0'
         self.endpoints = endpoints.EndpointManager(self)
         self.roles = roles.RoleManager(self)
         self.services = services.ServiceManager(self)
@@ -133,33 +138,14 @@ class Client(client.HTTPClient):
         if self.management_url is None:
             self.authenticate()
 
-    #TODO(heckj): move to a method on auth_ref
-    def has_service_catalog(self):
-        """Returns True if this client provides a service catalog."""
-        return hasattr(self, 'service_catalog')
-
-    def process_token(self):
-        """ Extract and process information from the new auth_ref.
-
-        And set the relevant authentication information.
-        """
-        # if we got a response without a service catalog, set the local
-        # list of tenants for introspection, and leave to client user
-        # to determine what to do. Otherwise, load up the service catalog
-        if self.auth_ref.scoped:
-            if self.management_url is None and self.auth_ref.management_url:
-                self.management_url = self.auth_ref.management_url[0]
-            self.tenant_name = self.auth_ref.tenant_name
-            self.tenant_id = self.auth_ref.tenant_id
-            self.user_id = self.auth_ref.user_id
-        self._extract_service_catalog(self.auth_url, self.auth_ref)
-
     def get_raw_token_from_identity_service(self, auth_url, username=None,
                                             password=None, tenant_name=None,
-                                            tenant_id=None, token=None):
-        """ Authenticate against the Keystone API.
+                                            tenant_id=None, token=None,
+                                            project_name=None, project_id=None,
+                                            **kwargs):
+        """Authenticate against the v2 Identity API.
 
-        :returns: ``raw token`` if authentication was successful.
+        :returns: (``resp``, ``body``) if authentication was successful.
         :raises: AuthorizationFailure if unable to authenticate or validate
                  the existing authorization token
         :raises: ValueError if insufficient parameters are used.
@@ -168,8 +154,8 @@ class Client(client.HTTPClient):
         try:
             return self._base_authN(auth_url,
                                     username=username,
-                                    tenant_id=tenant_id,
-                                    tenant_name=tenant_name,
+                                    tenant_id=project_id or tenant_id,
+                                    tenant_name=project_name or tenant_name,
                                     password=password,
                                     token=token)
         except (exceptions.AuthorizationFailure, exceptions.Unauthorized):
@@ -181,10 +167,11 @@ class Client(client.HTTPClient):
 
     def _base_authN(self, auth_url, username=None, password=None,
                     tenant_name=None, tenant_id=None, token=None):
-        """ Takes a username, password, and optionally a tenant_id or
+        """Takes a username, password, and optionally a tenant_id or
         tenant_name to get an authentication token from keystone.
         May also take a token and a tenant_id to re-scope a token
-        to a tenant."""
+        to a tenant.
+        """
         headers = {}
         url = auth_url + "/tokens"
         if token:
@@ -200,18 +187,4 @@ class Client(client.HTTPClient):
         elif tenant_name:
             params['auth']['tenantName'] = tenant_name
         resp, body = self.request(url, 'POST', body=params, headers=headers)
-        return body['access']
-
-    # TODO(heckj): remove entirely in favor of access.AccessInfo and
-    # associated methods
-    def _extract_service_catalog(self, url, body):
-        """ Set the client's service catalog from the response data. """
-        self.service_catalog = service_catalog.ServiceCatalog(
-            body, region_name=self.region_name)
-        try:
-            sc = self.service_catalog.get_token()
-            # Save these since we have them and they'll be useful later
-            self.auth_tenant_id = sc.get('tenant_id')
-            self.auth_user_id = sc.get('user_id')
-        except KeyError:
-            raise exceptions.AuthorizationFailure()
+        return resp, body

@@ -1,10 +1,29 @@
+# vim: tabstop=4 shiftwidth=4 softtabstop=4
+
+# Copyright 2013 OpenStack LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License"); you may
+# not use this file except in compliance with the License. You may obtain
+# a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+# License for the specific language governing permissions and limitations
+# under the License.
+
 import json
 import mock
 
+import httpretty
 import requests
+import testtools
+from testtools import matchers
 
-from keystoneclient import client
 from keystoneclient import exceptions
+from keystoneclient import httpclient
 from tests import utils
 
 
@@ -16,8 +35,8 @@ MOCK_REQUEST = mock.Mock(return_value=(FAKE_RESPONSE))
 
 
 def get_client():
-    cl = client.HTTPClient(username="username", password="password",
-                           tenant_id="tenant", auth_url="auth_test")
+    cl = httpclient.HTTPClient(username="username", password="password",
+                               tenant_id="tenant", auth_url="auth_test")
     return cl
 
 
@@ -26,6 +45,18 @@ def get_authed_client():
     cl.management_url = "http://127.0.0.1:5000"
     cl.auth_token = "token"
     return cl
+
+
+class FakeLog(object):
+    def __init__(self):
+        self.warn_log = str()
+        self.debug_log = str()
+
+    def warn(self, msg=None, *args, **kwargs):
+        self.warn_log = "%s\n%s" % (self.warn_log, (msg % args))
+
+    def debug(self, msg=None, *args, **kwargs):
+        self.debug_log = "%s\n%s" % (self.debug_log, (msg % args))
 
 
 class ClientTest(utils.TestCase):
@@ -44,7 +75,7 @@ class ClientTest(utils.TestCase):
             with mock.patch('time.time', mock.Mock(return_value=1234)):
                 resp, body = cl.get("/hi")
                 headers = {"X-Auth-Token": "token",
-                           "User-Agent": cl.USER_AGENT}
+                           "User-Agent": httpclient.USER_AGENT}
                 MOCK_REQUEST.assert_called_with(
                     "GET",
                     "http://127.0.0.1:5000/hi",
@@ -97,7 +128,7 @@ class ClientTest(utils.TestCase):
             headers = {
                 "X-Auth-Token": "token",
                 "Content-Type": "application/json",
-                "User-Agent": cl.USER_AGENT
+                "User-Agent": httpclient.USER_AGENT
             }
             MOCK_REQUEST.assert_called_with(
                 "POST",
@@ -108,14 +139,91 @@ class ClientTest(utils.TestCase):
 
     def test_forwarded_for(self):
         ORIGINAL_IP = "10.100.100.1"
-        cl = client.HTTPClient(username="username", password="password",
-                               tenant_id="tenant", auth_url="auth_test",
-                               original_ip=ORIGINAL_IP)
+        cl = httpclient.HTTPClient(username="username", password="password",
+                                   tenant_id="tenant", auth_url="auth_test",
+                                   original_ip=ORIGINAL_IP)
 
         with mock.patch.object(requests, "request", MOCK_REQUEST):
             res = cl.request('/', 'GET')
 
             args, kwargs = MOCK_REQUEST.call_args
             self.assertIn(
-                ('Forwarded', "for=%s;by=%s" % (ORIGINAL_IP, cl.USER_AGENT)),
+                ('Forwarded', "for=%s;by=%s" % (ORIGINAL_IP,
+                                                httpclient.USER_AGENT)),
                 kwargs['headers'].items())
+
+    def test_client_deprecated(self):
+        # Can resolve symbols from the keystoneclient.client module.
+        # keystoneclient.client was deprecated and renamed to
+        # keystoneclient.httpclient. This tests that keystoneclient.client
+        # can still be used.
+
+        from keystoneclient import client
+
+        # These statements will raise an AttributeError if the symbol isn't
+        # defined in the module.
+
+        client.HTTPClient
+
+
+class BasicRequestTests(testtools.TestCase):
+
+    url = 'http://keystone.test.com/'
+
+    def setUp(self):
+        super(BasicRequestTests, self).setUp()
+        self.logger = FakeLog()
+        httpretty.enable()
+
+    def tearDown(self):
+        httpretty.disable()
+        super(BasicRequestTests, self).tearDown()
+
+    def request(self, method='GET', response='Test Response', status=200,
+                url=None, **kwargs):
+        if not url:
+            url = self.url
+
+        httpretty.register_uri(method, url, body=response, status=status)
+
+        return httpclient.request(url, method, debug=True,
+                                  logger=self.logger, **kwargs)
+
+    @property
+    def last_request(self):
+        return httpretty.httpretty.last_request
+
+    def test_basic_params(self):
+        method = 'GET'
+        response = 'Test Response'
+        status = 200
+
+        resp = self.request(method=method, status=status, response=response)
+
+        self.assertEqual(self.last_request.method, method)
+
+        self.assertThat(self.logger.debug_log, matchers.Contains('curl'))
+        self.assertThat(self.logger.debug_log, matchers.Contains('-X %s' %
+                                                                 method))
+        self.assertThat(self.logger.debug_log, matchers.Contains(self.url))
+
+        self.assertThat(self.logger.debug_log, matchers.Contains(str(status)))
+        self.assertThat(self.logger.debug_log, matchers.Contains(response))
+
+    def test_headers(self):
+        headers = {'key': 'val', 'test': 'other'}
+
+        self.request(headers=headers)
+
+        for k, v in headers.iteritems():
+            self.assertEqual(self.last_request.headers[k], v)
+
+        for header in headers.iteritems():
+            self.assertThat(self.logger.debug_log,
+                            matchers.Contains('-H "%s: %s"' % header))
+
+    def test_body(self):
+        data = "BODY DATA"
+        resp = self.request(response=data)
+        self.assertThat(self.logger.debug_log, matchers.Contains('BODY:'))
+        self.assertThat(self.logger.debug_log, matchers.Contains(data))

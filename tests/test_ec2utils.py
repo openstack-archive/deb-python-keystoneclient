@@ -58,7 +58,7 @@ class Ec2SignerTest(testtools.TestCase):
         self.assertFalse(self.signer._v4_creds(credentials))
 
     def test_generate_0(self):
-        """Test generate function for v0 signature"""
+        """Test generate function for v0 signature."""
         credentials = {'host': '127.0.0.1',
                        'verb': 'GET',
                        'path': '/v1/',
@@ -71,7 +71,7 @@ class Ec2SignerTest(testtools.TestCase):
         self.assertEqual(signature, expected)
 
     def test_generate_1(self):
-        """Test generate function for v1 signature"""
+        """Test generate function for v1 signature."""
         credentials = {'host': '127.0.0.1',
                        'verb': 'GET',
                        'path': '/v1/',
@@ -82,7 +82,7 @@ class Ec2SignerTest(testtools.TestCase):
         self.assertEqual(signature, expected)
 
     def test_generate_v2_SHA256(self):
-        """Test generate function for v2 signature, SHA256"""
+        """Test generate function for v2 signature, SHA256."""
         credentials = {'host': '127.0.0.1',
                        'verb': 'GET',
                        'path': '/v1/',
@@ -93,7 +93,7 @@ class Ec2SignerTest(testtools.TestCase):
         self.assertEqual(signature, expected)
 
     def test_generate_v2_SHA1(self):
-        """Test generate function for v2 signature, SHA1"""
+        """Test generate function for v2 signature, SHA1."""
         credentials = {'host': '127.0.0.1',
                        'verb': 'GET',
                        'path': '/v1/',
@@ -105,8 +105,9 @@ class Ec2SignerTest(testtools.TestCase):
         self.assertEqual(signature, expected)
 
     def test_generate_v4(self):
-        """
-        Test v4 generator with data from AWS docs example, see:
+        """Test v4 generator with data from AWS docs example.
+
+        see:
         http://docs.aws.amazon.com/general/latest/gr/
         sigv4-create-canonical-request.html
         and
@@ -143,3 +144,112 @@ class Ec2SignerTest(testtools.TestCase):
         expected = ('ced6826de92d2bdeed8f846f0bf508e8'
                     '559e98e4b0199114b84c54174deb456c')
         self.assertEqual(signature, expected)
+
+    def test_generate_v4_port(self):
+        """Test v4 generator with host:port format."""
+        # Create a new signer object with the AWS example key
+        secret = 'wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY'
+        signer = Ec2Signer(secret)
+
+        body_hash = ('b6359072c78d70ebee1e81adcbab4f0'
+                     '1bf2c23245fa365ef83fe8f1f955085e2')
+        auth_str = ('AWS4-HMAC-SHA256 '
+                    'Credential=AKIAIOSFODNN7EXAMPLE/20110909/'
+                    'us-east-1/iam/aws4_request,'
+                    'SignedHeaders=content-type;host;x-amz-date,')
+        headers = {'Content-type':
+                   'application/x-www-form-urlencoded; charset=utf-8',
+                   'X-Amz-Date': '20110909T233600Z',
+                   'Host': 'foo:8000',
+                   'Authorization': auth_str}
+        # Note the example in the AWS docs is inconsistent, previous
+        # examples specify no query string, but the final POST example
+        # does, apparently incorrectly since an empty parameter list
+        # aligns all steps and the final signature with the examples
+        params = {}
+        credentials = {'host': 'foo:8000',
+                       'verb': 'POST',
+                       'path': '/',
+                       'params': params,
+                       'headers': headers,
+                       'body_hash': body_hash}
+        signature = signer.generate(credentials)
+
+        expected = ('26dd92ea79aaa49f533d13b1055acdc'
+                    'd7d7321460d64621f96cc79c4f4d4ab2b')
+        self.assertEqual(signature, expected)
+
+    def test_generate_v4_port_strip(self):
+        """Test v4 generator with host:port format, but for an old
+        (<2.9.3) version of boto, where the port should be stripped
+        to match boto behavior.
+        """
+        # Create a new signer object with the AWS example key
+        secret = 'wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY'
+        signer = Ec2Signer(secret)
+
+        body_hash = ('b6359072c78d70ebee1e81adcbab4f0'
+                     '1bf2c23245fa365ef83fe8f1f955085e2')
+        auth_str = ('AWS4-HMAC-SHA256 '
+                    'Credential=AKIAIOSFODNN7EXAMPLE/20110909/'
+                    'us-east-1/iam/aws4_request,'
+                    'SignedHeaders=content-type;host;x-amz-date,')
+        headers = {'Content-type':
+                   'application/x-www-form-urlencoded; charset=utf-8',
+                   'X-Amz-Date': '20110909T233600Z',
+                   'Host': 'foo:8000',
+                   'Authorization': auth_str,
+                   'User-Agent': 'Boto/2.9.2 (linux2)'}
+        # Note the example in the AWS docs is inconsistent, previous
+        # examples specify no query string, but the final POST example
+        # does, apparently incorrectly since an empty parameter list
+        # aligns all steps and the final signature with the examples
+        params = {}
+        credentials = {'host': 'foo:8000',
+                       'verb': 'POST',
+                       'path': '/',
+                       'params': params,
+                       'headers': headers,
+                       'body_hash': body_hash}
+        signature = signer.generate(credentials)
+
+        expected = ('9a4b2276a5039ada3b90f72ea8ec1745'
+                    '14b92b909fb106b22ad910c5d75a54f4')
+        self.assertEqual(expected, signature)
+
+    def test_generate_v4_port_nostrip(self):
+        """Test v4 generator with host:port format, but for an new
+        (>=2.9.3) version of boto, where the port should not be stripped.
+        """
+        # Create a new signer object with the AWS example key
+        secret = 'wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY'
+        signer = Ec2Signer(secret)
+
+        body_hash = ('b6359072c78d70ebee1e81adcbab4f0'
+                     '1bf2c23245fa365ef83fe8f1f955085e2')
+        auth_str = ('AWS4-HMAC-SHA256 '
+                    'Credential=AKIAIOSFODNN7EXAMPLE/20110909/'
+                    'us-east-1/iam/aws4_request,'
+                    'SignedHeaders=content-type;host;x-amz-date,')
+        headers = {'Content-type':
+                   'application/x-www-form-urlencoded; charset=utf-8',
+                   'X-Amz-Date': '20110909T233600Z',
+                   'Host': 'foo:8000',
+                   'Authorization': auth_str,
+                   'User-Agent': 'Boto/2.9.3 (linux2)'}
+        # Note the example in the AWS docs is inconsistent, previous
+        # examples specify no query string, but the final POST example
+        # does, apparently incorrectly since an empty parameter list
+        # aligns all steps and the final signature with the examples
+        params = {}
+        credentials = {'host': 'foo:8000',
+                       'verb': 'POST',
+                       'path': '/',
+                       'params': params,
+                       'headers': headers,
+                       'body_hash': body_hash}
+        signature = signer.generate(credentials)
+
+        expected = ('26dd92ea79aaa49f533d13b1055acdc'
+                    'd7d7321460d64621f96cc79c4f4d4ab2b')
+        self.assertEqual(expected, signature)

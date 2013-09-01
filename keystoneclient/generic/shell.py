@@ -15,8 +15,10 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-from keystoneclient import utils
 from keystoneclient.generic import client
+from keystoneclient import utils
+
+import six
 
 CLIENT_CLASS = client.Client
 
@@ -44,16 +46,16 @@ def do_discover(cs, args):
         versions = cs.discover()
     if versions:
         if 'message' in versions:
-            print versions['message']
-        for key, version in versions.iteritems():
+            print(versions['message'])
+        for key, version in six.iteritems(versions):
             if key != 'message':
                 print ("    - supports version %s (%s) here %s" %
                        (version['id'], version['status'], version['url']))
                 extensions = cs.discover_extensions(version['url'])
                 if extensions:
-                    for key, extension in extensions.iteritems():
+                    for key, extension in six.iteritems(extensions):
                         if key != 'message':
                             print ("        - and %s: %s" %
                                    (key, extension))
     else:
-        print "No Keystone-compatible endpoint found"
+        print("No Keystone-compatible endpoint found")

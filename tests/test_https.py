@@ -3,7 +3,7 @@ import mock
 
 import requests
 
-from keystoneclient import client
+from keystoneclient import httpclient
 from tests import utils
 
 
@@ -15,9 +15,9 @@ MOCK_REQUEST = mock.Mock(return_value=(FAKE_RESPONSE))
 
 
 def get_client():
-    cl = client.HTTPClient(username="username", password="password",
-                           tenant_id="tenant", auth_url="auth_test",
-                           cacert="ca.pem", key="key.pem", cert="cert.pem")
+    cl = httpclient.HTTPClient(username="username", password="password",
+                               tenant_id="tenant", auth_url="auth_test",
+                               cacert="ca.pem", key="key.pem", cert="cert.pem")
     return cl
 
 
@@ -37,7 +37,7 @@ class ClientTest(utils.TestCase):
             with mock.patch('time.time', mock.Mock(return_value=1234)):
                 resp, body = cl.get("/hi")
                 headers = {"X-Auth-Token": "token",
-                           "User-Agent": cl.USER_AGENT}
+                           "User-Agent": httpclient.USER_AGENT}
                 kwargs = copy.copy(self.TEST_REQUEST_BASE)
                 kwargs['cert'] = ('cert.pem', 'key.pem')
                 kwargs['verify'] = 'ca.pem'
@@ -57,7 +57,31 @@ class ClientTest(utils.TestCase):
             headers = {
                 "X-Auth-Token": "token",
                 "Content-Type": "application/json",
-                "User-Agent": cl.USER_AGENT
+                "User-Agent": httpclient.USER_AGENT
+            }
+            kwargs = copy.copy(self.TEST_REQUEST_BASE)
+            kwargs['cert'] = ('cert.pem', 'key.pem')
+            kwargs['verify'] = 'ca.pem'
+            MOCK_REQUEST.assert_called_with(
+                "POST",
+                "https://127.0.0.1:5000/hi",
+                headers=headers,
+                data='[1, 2, 3]',
+                **kwargs)
+
+    def test_post_auth(self):
+        with mock.patch.object(requests, "request", MOCK_REQUEST):
+            cl = httpclient.HTTPClient(
+                username="username", password="password", tenant_id="tenant",
+                auth_url="auth_test", cacert="ca.pem", key="key.pem",
+                cert="cert.pem")
+            cl.management_url = "https://127.0.0.1:5000"
+            cl.auth_token = "token"
+            cl.post("/hi", body=[1, 2, 3])
+            headers = {
+                "X-Auth-Token": "token",
+                "Content-Type": "application/json",
+                "User-Agent": httpclient.USER_AGENT
             }
             kwargs = copy.copy(self.TEST_REQUEST_BASE)
             kwargs['cert'] = ('cert.pem', 'key.pem')

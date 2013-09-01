@@ -25,8 +25,9 @@ def _ensure_subprocess():
 
 
 def cms_verify(formatted, signing_cert_file_name, ca_file_name):
-    """
-        verifies the signature of the contents IAW CMS syntax
+    """Verifies the signature of the contents IAW CMS syntax.
+
+    :raises: subprocess.CalledProcessError
     """
     _ensure_subprocess()
     process = subprocess.Popen(["openssl", "cms", "-verify",
@@ -41,7 +42,8 @@ def cms_verify(formatted, signing_cert_file_name, ca_file_name):
     output, err = process.communicate(formatted)
     retcode = process.poll()
     if retcode:
-        LOG.error('Verify error: %s' % err)
+        # Do not log errors, as some happen in the positive thread
+        # instead, catch them in the calling code and log them there.
         # NOTE(dmllr): Python 2.6 compatibility:
         # CalledProcessError did not have output keyword argument
         e = subprocess.CalledProcessError(retcode, "openssl")
@@ -76,7 +78,8 @@ def verify_token(token, signing_cert_file_name, ca_file_name):
 
 
 def is_ans1_token(token):
-    '''
+    """Determine if a token appears to be PKI-based.
+
     thx to ayoung for sorting this out.
 
     base64 decoded hex representation of MII is 3082
@@ -113,12 +116,13 @@ def is_ans1_token(token):
     Max length of the content using 2 octets is 7FFF or 32767
     It's not practical to support a token of this length or greater in http
     therefore, we will check for MII only and ignore the case of larger tokens
-    '''
+    """
     return token[:3] == PKI_ANS1_PREFIX
 
 
 def cms_sign_text(text, signing_cert_file_name, signing_key_file_name):
-    """ Uses OpenSSL to sign a document
+    """Uses OpenSSL to sign a document.
+
     Produces a Base64 encoding of a DER formatted CMS Document
     http://en.wikipedia.org/wiki/Cryptographic_Message_Syntax
     """
@@ -159,7 +163,8 @@ def cms_to_token(cms_text):
 
 
 def cms_hash_token(token_id):
-    """
+    """Hash PKI tokens.
+
     return: for ans1_token, returns the hash of the passed in token
             otherwise, returns what it was passed in.
     """

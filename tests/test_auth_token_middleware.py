@@ -17,214 +17,26 @@
 import datetime
 import iso8601
 import os
-import string
+import shutil
+import stat
 import sys
 import tempfile
 import testtools
+import uuid
 
 import fixtures
 import webob
 
 from keystoneclient.common import cms
-from keystoneclient import utils
 from keystoneclient.middleware import auth_token
-from keystoneclient.middleware import memcache_crypt
-from keystoneclient.openstack.common import memorycache
 from keystoneclient.openstack.common import jsonutils
+from keystoneclient.openstack.common import memorycache
 from keystoneclient.openstack.common import timeutils
 
+import client_fixtures
 
-ROOTDIR = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-
-CERTDIR = os.path.join(ROOTDIR, "examples/pki/certs")
-KEYDIR = os.path.join(ROOTDIR, "examples/pki/private")
-CMSDIR = os.path.join(ROOTDIR, "examples/pki/cms")
-SIGNING_CERT = os.path.join(CERTDIR, 'signing_cert.pem')
-SIGNING_KEY = os.path.join(KEYDIR, 'signing_key.pem')
-CA = os.path.join(CERTDIR, 'ca.pem')
-
-REVOCATION_LIST = None
-REVOKED_TOKEN = None
-REVOKED_TOKEN_HASH = None
-REVOKED_v3_TOKEN = None
-REVOKED_v3_TOKEN_HASH = None
 SIGNED_REVOCATION_LIST = None
-SIGNED_TOKEN_SCOPED = None
-SIGNED_TOKEN_UNSCOPED = None
-SIGNED_v3_TOKEN_SCOPED = None
-SIGNED_v3_TOKEN_UNSCOPED = None
-SIGNED_TOKEN_SCOPED_KEY = None
-SIGNED_TOKEN_UNSCOPED_KEY = None
-SIGNED_v3_TOKEN_SCOPED_KEY = None
-
-VALID_SIGNED_REVOCATION_LIST = None
-
-UUID_TOKEN_DEFAULT = "ec6c0710ec2f471498484c1b53ab4f9d"
-UUID_TOKEN_NO_SERVICE_CATALOG = '8286720fbe4941e69fa8241723bb02df'
-UUID_TOKEN_UNSCOPED = '731f903721c14827be7b2dc912af7776'
-VALID_DIABLO_TOKEN = 'b0cf19b55dbb4f20a6ee18e6c6cf1726'
-v3_UUID_TOKEN_DEFAULT = '5603457654b346fdbb93437bfe76f2f1'
-v3_UUID_TOKEN_UNSCOPED = 'd34835fdaec447e695a0a024d84f8d79'
-v3_UUID_TOKEN_DOMAIN_SCOPED = 'e8a7b63aaa4449f38f0c5c05c3581792'
-
-INVALID_SIGNED_TOKEN = string.replace(
-    """AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
-BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB
-CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
-DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD
-EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE
-FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
-0000000000000000000000000000000000000000000000000000000000000000
-1111111111111111111111111111111111111111111111111111111111111111
-2222222222222222222222222222222222222222222222222222222222222222
-3333333333333333333333333333333333333333333333333333333333333333
-4444444444444444444444444444444444444444444444444444444444444444
-5555555555555555555555555555555555555555555555555555555555555555
-6666666666666666666666666666666666666666666666666666666666666666
-7777777777777777777777777777777777777777777777777777777777777777
-8888888888888888888888888888888888888888888888888888888888888888
-9999999999999999999999999999999999999999999999999999999999999999
-0000000000000000000000000000000000000000000000000000000000000000
-xg==""", "\n", "")
-
-# JSON responses keyed by token ID
-TOKEN_RESPONSES = {
-    UUID_TOKEN_DEFAULT: {
-        'access': {
-            'token': {
-                'id': UUID_TOKEN_DEFAULT,
-                'expires': '2020-01-01T00:00:10.000123Z',
-                'tenant': {
-                    'id': 'tenant_id1',
-                    'name': 'tenant_name1',
-                },
-            },
-            'user': {
-                'id': 'user_id1',
-                'name': 'user_name1',
-                'roles': [
-                    {'name': 'role1'},
-                    {'name': 'role2'},
-                ],
-            },
-            'serviceCatalog': {}
-        },
-    },
-    VALID_DIABLO_TOKEN: {
-        'access': {
-            'token': {
-                'id': VALID_DIABLO_TOKEN,
-                'expires': '2020-01-01T00:00:10.000123Z',
-                'tenantId': 'tenant_id1',
-            },
-            'user': {
-                'id': 'user_id1',
-                'name': 'user_name1',
-                'roles': [
-                    {'name': 'role1'},
-                    {'name': 'role2'},
-                ],
-            },
-        },
-    },
-    UUID_TOKEN_UNSCOPED: {
-        'access': {
-            'token': {
-                'id': UUID_TOKEN_UNSCOPED,
-                'expires': '2020-01-01T00:00:10.000123Z',
-            },
-            'user': {
-                'id': 'user_id1',
-                'name': 'user_name1',
-                'roles': [
-                    {'name': 'role1'},
-                    {'name': 'role2'},
-                ],
-            },
-        },
-    },
-    UUID_TOKEN_NO_SERVICE_CATALOG: {
-        'access': {
-            'token': {
-                'id': 'valid-token',
-                'expires': '2020-01-01T00:00:10.000123Z',
-                'tenant': {
-                    'id': 'tenant_id1',
-                    'name': 'tenant_name1',
-                },
-            },
-            'user': {
-                'id': 'user_id1',
-                'name': 'user_name1',
-                'roles': [
-                    {'name': 'role1'},
-                    {'name': 'role2'},
-                ],
-            }
-        },
-    },
-    v3_UUID_TOKEN_DEFAULT: {
-        'token': {
-            'expires_at': '2020-01-01T00:00:10.000123Z',
-            'user': {
-                'id': 'user_id1',
-                'name': 'user_name1',
-                'domain': {
-                    'id': 'domain_id1',
-                    'name': 'domain_name1'
-                }
-            },
-            'project': {
-                'id': 'tenant_id1',
-                'name': 'tenant_name1',
-                'domain': {
-                    'id': 'domain_id1',
-                    'name': 'domain_name1'
-                }
-            },
-            'roles': [
-                {'name': 'role1', 'id': 'Role1'},
-                {'name': 'role2', 'id': 'Role2'},
-            ],
-            'catalog': {}
-        }
-    },
-    v3_UUID_TOKEN_UNSCOPED: {
-        'token': {
-            'expires_at': '2020-01-01T00:00:10.000123Z',
-            'user': {
-                'id': 'user_id1',
-                'name': 'user_name1',
-                'domain': {
-                    'id': 'domain_id1',
-                    'name': 'domain_name1'
-                }
-            }
-        }
-    },
-    v3_UUID_TOKEN_DOMAIN_SCOPED: {
-        'token': {
-            'expires_at': '2020-01-01T00:00:10.000123Z',
-            'user': {
-                'id': 'user_id1',
-                'name': 'user_name1',
-                'domain': {
-                    'id': 'domain_id1',
-                    'name': 'domain_name1'
-                }
-            },
-            'domain': {
-                'id': 'domain_id1',
-                'name': 'domain_name1',
-            },
-            'roles': [
-                {'name': 'role1', 'id': 'Role1'},
-                {'name': 'role2', 'id': 'Role2'},
-            ],
-            'catalog': {}
-        }
-    }
-}
+VALID_SIGNED_REVOCATION_LIST = client_fixtures.SIGNED_REVOCATION_LIST
 
 EXPECTED_V2_DEFAULT_ENV_RESPONSE = {
     'HTTP_X_IDENTITY_STATUS': 'Confirmed',
@@ -239,101 +51,6 @@ EXPECTED_V2_DEFAULT_ENV_RESPONSE = {
 }
 
 FAKE_RESPONSE_STACK = []
-
-
-# @TODO(mordred) This should become a testresources resource attached to the
-#                class
-# The data for these tests are signed using openssl and are stored in files
-# in the signing subdirectory.  In order to keep the values consistent between
-# the tests and the signed documents, we read them in for use in the tests.
-signing_path = CMSDIR
-with open(os.path.join(signing_path, 'auth_token_scoped.pem')) as f:
-    SIGNED_TOKEN_SCOPED = cms.cms_to_token(f.read())
-with open(os.path.join(signing_path, 'auth_token_unscoped.pem')) as f:
-    SIGNED_TOKEN_UNSCOPED = cms.cms_to_token(f.read())
-with open(os.path.join(signing_path, 'auth_v3_token_scoped.pem')) as f:
-    SIGNED_v3_TOKEN_SCOPED = cms.cms_to_token(f.read())
-with open(os.path.join(signing_path, 'auth_token_revoked.pem')) as f:
-    REVOKED_TOKEN = cms.cms_to_token(f.read())
-with open(os.path.join(signing_path,
-          'auth_token_scoped_expired.pem')) as f:
-    SIGNED_TOKEN_SCOPED_EXPIRED = cms.cms_to_token(f.read())
-REVOKED_TOKEN_HASH = utils.hash_signed_token(REVOKED_TOKEN)
-with open(os.path.join(signing_path, 'auth_v3_token_revoked.pem')) as f:
-    REVOKED_v3_TOKEN = cms.cms_to_token(f.read())
-REVOKED_v3_TOKEN_HASH = utils.hash_signed_token(REVOKED_v3_TOKEN)
-with open(os.path.join(signing_path, 'revocation_list.json')) as f:
-    REVOCATION_LIST = jsonutils.loads(f.read())
-with open(os.path.join(signing_path, 'revocation_list.pem')) as f:
-    VALID_SIGNED_REVOCATION_LIST = jsonutils.dumps(
-        {'signed': f.read()})
-SIGNED_TOKEN_SCOPED_KEY =\
-    cms.cms_hash_token(SIGNED_TOKEN_SCOPED)
-SIGNED_TOKEN_UNSCOPED_KEY =\
-    cms.cms_hash_token(SIGNED_TOKEN_UNSCOPED)
-SIGNED_v3_TOKEN_SCOPED_KEY = (
-    cms.cms_hash_token(SIGNED_v3_TOKEN_SCOPED))
-
-TOKEN_RESPONSES[SIGNED_TOKEN_SCOPED_KEY] = {
-    'access': {
-        'token': {
-            'id': SIGNED_TOKEN_SCOPED_KEY,
-        },
-        'user': {
-            'id': 'user_id1',
-            'name': 'user_name1',
-            'tenantId': 'tenant_id1',
-            'tenantName': 'tenant_name1',
-            'roles': [
-                {'name': 'role1'},
-                {'name': 'role2'},
-            ],
-        },
-    },
-}
-
-TOKEN_RESPONSES[SIGNED_TOKEN_UNSCOPED_KEY] = {
-    'access': {
-        'token': {
-            'id': SIGNED_TOKEN_UNSCOPED_KEY,
-        },
-        'user': {
-            'id': 'user_id1',
-            'name': 'user_name1',
-            'roles': [
-                {'name': 'role1'},
-                {'name': 'role2'},
-            ],
-        },
-    },
-}
-
-TOKEN_RESPONSES[SIGNED_v3_TOKEN_SCOPED_KEY] = {
-    'token': {
-        'expires': '2020-01-01T00:00:10.000123Z',
-        'user': {
-            'id': 'user_id1',
-            'name': 'user_name1',
-            'domain': {
-                'id': 'domain_id1',
-                'name': 'domain_name1'
-            }
-        },
-        'project': {
-            'id': 'tenant_id1',
-            'name': 'tenant_name1',
-            'domain': {
-                'id': 'domain_id1',
-                'name': 'domain_name1'
-            }
-        },
-        'roles': [
-            {'name': 'role1'},
-            {'name': 'role2'}
-        ],
-        'catalog': {}
-    }
-}
 
 VERSION_LIST_v3 = {
     "versions": {
@@ -369,7 +86,7 @@ VERSION_LIST_v2 = {
 
 
 class NoModuleFinder(object):
-    """ Disallow further imports of 'module' """
+    """Disallow further imports of 'module'."""
 
     def __init__(self, module):
         self.module = module
@@ -415,10 +132,10 @@ class DisableModuleFixture(fixtures.Fixture):
         sys.meta_path.insert(0, finder)
 
 
-class FakeSwiftMemcacheRing(memorycache.Client):
-    # NOTE(vish): swift memcache uses param timeout instead of time
+class FakeSwiftOldMemcacheClient(memorycache.Client):
+    # NOTE(vish,chmou): old swift memcache uses param timeout instead of time
     def set(self, key, value, timeout=0, min_compress_len=0):
-        sup = super(FakeSwiftMemcacheRing, self)
+        sup = super(FakeSwiftOldMemcacheClient, self)
         sup.set(key, value, timeout, min_compress_len)
 
 
@@ -434,7 +151,7 @@ class FakeHTTPResponse(object):
 class BaseFakeHTTPConnection(object):
 
     def _user_token_responses(self, token_id):
-        """ Emulate user token responses.
+        """Emulate user token responses.
 
         Return success if the token is in the list we know
         about. If the request is for revoked tokens, then return
@@ -442,9 +159,9 @@ class BaseFakeHTTPConnection(object):
         return 404 indicating an unknown (therefore unauthorized) token.
 
         """
-        if token_id in TOKEN_RESPONSES.keys():
+        if token_id in client_fixtures.JSON_TOKEN_RESPONSES.keys():
             status = 200
-            body = jsonutils.dumps(TOKEN_RESPONSES[token_id])
+            body = client_fixtures.JSON_TOKEN_RESPONSES[token_id]
         elif token_id == "revoked":
             status = 200
             body = SIGNED_REVOCATION_LIST
@@ -473,8 +190,33 @@ class BaseFakeHTTPConnection(object):
         return status, body
 
 
+class CertificateHTTPConnection(BaseFakeHTTPConnection):
+
+    signing_cert_data = 'SIGNING CERT'
+    ca_cert_data = 'SIGNING CA'
+
+    def __init__(self, *args, **kwargs):
+        self.response = None
+
+    def request(self, method, path, **kwargs):
+        CertificateHTTPConnection.last_requested_url = path
+
+        if method == 'GET' and path == '/testadmin/v2.0/certificates/signing':
+            self.response = FakeHTTPResponse(200, self.signing_cert_data)
+        elif method == 'GET' and path == '/testadmin/v2.0/certificates/ca':
+            self.response = FakeHTTPResponse(200, self.ca_cert_data)
+        else:
+            self.response = FakeHTTPResponse(404, '')
+
+    def getresponse(self):
+        return self.response
+
+    def close(self):
+        pass
+
+
 class FakeHTTPConnection(BaseFakeHTTPConnection):
-    """ Emulate a fake Keystone v2 server """
+    """Emulate a fake Keystone v2 server."""
 
     def __init__(self, *args, **kwargs):
         self.send_valid_revocation_list = True
@@ -520,7 +262,7 @@ class FakeHTTPConnection(BaseFakeHTTPConnection):
 
 
 class v3FakeHTTPConnection(FakeHTTPConnection):
-    """ Emulate a fake Keystone v3 server """
+    """Emulate a fake Keystone v3 server."""
 
     def request(self, method, path, **kwargs):
         """Fakes out several http responses.
@@ -550,10 +292,17 @@ class v3FakeHTTPConnection(FakeHTTPConnection):
 
 
 class RaisingHTTPConnection(FakeHTTPConnection):
-    """ An HTTPConnection that always raises."""
+    """An HTTPConnection that always raises."""
 
     def request(self, method, path, **kwargs):
         raise AssertionError("HTTP request was called.")
+
+
+class RaisingHTTPNetworkError(FakeHTTPConnection):
+    """An HTTPConnection that always raises network error."""
+
+    def request(self, method, path, **kwargs):
+        raise auth_token.NetworkError("Network connection error.")
 
 
 class FakeApp(object):
@@ -600,7 +349,7 @@ class v3FakeApp(object):
 
 
 class BaseAuthTokenMiddlewareTest(testtools.TestCase):
-    """ Base test class for auth_token middleware.
+    """Base test class for auth_token middleware.
 
     All the tests allow for running with auth_token
     configured for receiving v2 or v3 tokens, with the
@@ -621,19 +370,20 @@ class BaseAuthTokenMiddlewareTest(testtools.TestCase):
             self.token_dict = token_dict
         else:
             self.token_dict = {
-                'uuid_token_default': UUID_TOKEN_DEFAULT,
-                'uuid_token_unscoped': UUID_TOKEN_UNSCOPED,
-                'signed_token_scoped': SIGNED_TOKEN_SCOPED,
-                'signed_token_scoped_expired': SIGNED_TOKEN_SCOPED_EXPIRED,
-                'revoked_token': REVOKED_TOKEN,
-                'revoked_token_hash': REVOKED_TOKEN_HASH
+                'uuid_token_default': client_fixtures.UUID_TOKEN_DEFAULT,
+                'uuid_token_unscoped': client_fixtures.UUID_TOKEN_UNSCOPED,
+                'signed_token_scoped': client_fixtures.SIGNED_TOKEN_SCOPED,
+                'signed_token_scoped_expired':
+                client_fixtures.SIGNED_TOKEN_SCOPED_EXPIRED,
+                'revoked_token': client_fixtures.REVOKED_TOKEN,
+                'revoked_token_hash': client_fixtures.REVOKED_TOKEN_HASH
             }
 
         self.conf = {
             'auth_host': 'keystone.example.com',
             'auth_port': 1234,
             'auth_admin_prefix': '/testadmin',
-            'signing_dir': CERTDIR,
+            'signing_dir': client_fixtures.CERTDIR,
             'auth_version': auth_version
         }
 
@@ -643,6 +393,12 @@ class BaseAuthTokenMiddlewareTest(testtools.TestCase):
         self.fake_http = fake_http or FakeHTTPConnection
         self.set_middleware(self.fake_app, self.fake_http,
                             expected_env, self.conf)
+        # self.middleware.verify_signed_token will call
+        # _ensure_subprocess, but we need
+        # cms.subprocess.CalledProcessError to be imported first.
+        # Explicitly call _ensure_subprocess to make sure the import
+        # happens before we need it regardless of test order.
+        cms._ensure_subprocess()
 
         self.response_status = None
         self.response_headers = None
@@ -652,7 +408,7 @@ class BaseAuthTokenMiddlewareTest(testtools.TestCase):
         globals()[signed_list] = globals()[valid_signed_list]
 
     def set_fake_http(self, http_handler):
-        """ Configure the http handler for the auth_token middleware.
+        """Configure the http handler for the auth_token middleware.
 
         Allows tests to override the default handler on specific tests,
         e.g. to use v2 for those parts of auth_token that still use v2
@@ -664,7 +420,7 @@ class BaseAuthTokenMiddlewareTest(testtools.TestCase):
 
     def set_middleware(self, fake_app=None, fake_http=None,
                        expected_env=None, conf=None):
-        """ Configure the class ready to call the auth_token middleware.
+        """Configure the class ready to call the auth_token middleware.
 
         Set up the various fake items needed to run the middleware.
         Individual tests that need to further refine these can call this
@@ -672,8 +428,7 @@ class BaseAuthTokenMiddlewareTest(testtools.TestCase):
 
         """
         conf = conf or self.conf
-        if 'http_handler' not in conf:
-            fake_http = fake_http or self.fake_http
+        if fake_http:
             conf['http_handler'] = fake_http
         fake_app = fake_app or self.fake_app
         self.middleware = auth_token.AuthProtocol(fake_app(expected_env), conf)
@@ -700,7 +455,8 @@ if tuple(sys.version_info)[0:2] < (2, 7):
     class AdjustedBaseAuthTokenMiddlewareTest(BaseAuthTokenMiddlewareTest):
         def assertIsInstance(self, obj, cls, msg=None):
             """Same as self.assertTrue(isinstance(obj, cls)), with a nicer
-            default message."""
+            default message.
+            """
             if not isinstance(obj, cls):
                 standardMsg = '%s is not an instance of %r' % (obj, cls)
                 self.fail(self._formatMessage(msg, standardMsg))
@@ -771,7 +527,7 @@ class StackResponseAuthTokenMiddlewareTest(BaseAuthTokenMiddlewareTest):
         FAKE_RESPONSE_STACK.append(resp4)
 
         fetched_list = jsonutils.loads(self.middleware.fetch_revocation_list())
-        self.assertEqual(fetched_list, REVOCATION_LIST)
+        self.assertEqual(fetched_list, client_fixtures.REVOCATION_LIST)
 
 
 class DiabloAuthTokenMiddlewareTest(BaseAuthTokenMiddlewareTest):
@@ -789,7 +545,7 @@ class DiabloAuthTokenMiddlewareTest(BaseAuthTokenMiddlewareTest):
 
     def test_valid_diablo_response(self):
         req = webob.Request.blank('/')
-        req.headers['X-Auth-Token'] = VALID_DIABLO_TOKEN
+        req.headers['X-Auth-Token'] = client_fixtures.VALID_DIABLO_TOKEN
         self.middleware(req.environ, self.start_fake_response)
         self.assertEqual(self.response_status, 200)
         self.assertTrue('keystone.token_info' in req.environ)
@@ -806,7 +562,7 @@ class NoMemcacheAuthToken(BaseAuthTokenMiddlewareTest):
             'admin_token': 'admin_token1',
             'auth_host': 'keystone.example.com',
             'auth_port': 1234,
-            'memcache_servers': 'localhost:11211',
+            'memcached_servers': 'localhost:11211',
         }
 
         auth_token.AuthProtocol(FakeApp(), conf)
@@ -817,7 +573,7 @@ class NoMemcacheAuthToken(BaseAuthTokenMiddlewareTest):
             'auth_host': 'keystone.example.com',
             'auth_port': 1234,
             'auth_admin_prefix': '/testadmin',
-            'memcache_servers': 'localhost:11211'
+            'memcached_servers': 'localhost:11211'
         }
         self.set_middleware(conf=conf)
         self.middleware._init_cache(env)
@@ -904,6 +660,23 @@ class AuthTokenMiddlewareTest(BaseAuthTokenMiddlewareTest):
         self.middleware.verify_signed_token(
             self.token_dict['signed_token_scoped'])
 
+    def test_verify_signing_dir_create_while_missing(self):
+        tmp_name = uuid.uuid4().hex
+        test_parent_signing_dir = "/tmp/%s" % tmp_name
+        self.middleware.signing_dirname = "/tmp/%s/%s" % ((tmp_name,) * 2)
+        self.middleware.signing_cert_file_name = "%s/test.pem" %\
+            self.middleware.signing_dirname
+        self.middleware.verify_signing_dir()
+        # NOTE(wu_wenxiang): Verify if the signing dir was created as expected.
+        self.assertTrue(os.path.isdir(self.middleware.signing_dirname))
+        self.assertTrue(os.access(self.middleware.signing_dirname, os.W_OK))
+        self.assertEqual(os.stat(self.middleware.signing_dirname).st_uid,
+                         os.getuid())
+        self.assertEqual(
+            stat.S_IMODE(os.stat(self.middleware.signing_dirname).st_mode),
+            stat.S_IRWXU)
+        shutil.rmtree(test_parent_signing_dir)
+
     def test_cert_file_missing(self):
         self.assertFalse(self.middleware.cert_file_missing(
                          "openstack: /tmp/haystack: No such file or directory",
@@ -937,7 +710,7 @@ class AuthTokenMiddlewareTest(BaseAuthTokenMiddlewareTest):
         self.middleware.token_revocation_list_fetched_time = None
         os.remove(self.middleware.revoked_file_name)
         self.assertEqual(self.middleware.token_revocation_list,
-                         REVOCATION_LIST)
+                         client_fixtures.REVOCATION_LIST)
 
     def test_get_revocation_list_returns_current_list_from_memory(self):
         self.assertEqual(self.middleware.token_revocation_list,
@@ -958,7 +731,7 @@ class AuthTokenMiddlewareTest(BaseAuthTokenMiddlewareTest):
         # tests to override the fake http connection
         self.set_fake_http(FakeHTTPConnection)
         fetched_list = jsonutils.loads(self.middleware.fetch_revocation_list())
-        self.assertEqual(fetched_list, REVOCATION_LIST)
+        self.assertEqual(fetched_list, client_fixtures.REVOCATION_LIST)
 
     def test_request_invalid_uuid_token(self):
         req = webob.Request.blank('/')
@@ -970,7 +743,7 @@ class AuthTokenMiddlewareTest(BaseAuthTokenMiddlewareTest):
 
     def test_request_invalid_signed_token(self):
         req = webob.Request.blank('/')
-        req.headers['X-Auth-Token'] = INVALID_SIGNED_TOKEN
+        req.headers['X-Auth-Token'] = client_fixtures.INVALID_SIGNED_TOKEN
         self.middleware(req.environ, self.start_fake_response)
         self.assertEqual(self.response_status, 401)
         self.assertEqual(self.response_headers['WWW-Authenticate'],
@@ -1002,6 +775,15 @@ class AuthTokenMiddlewareTest(BaseAuthTokenMiddlewareTest):
         self.assertIsNotNone(self.middleware.LOG.msg)
         self.assertIsNotNone(self.middleware.LOG.debugmsg)
 
+    def test_request_no_token_http(self):
+        req = webob.Request.blank('/', environ={'REQUEST_METHOD': 'HEAD'})
+        self.set_middleware()
+        body = self.middleware(req.environ, self.start_fake_response)
+        self.assertEqual(self.response_status, 401)
+        self.assertEqual(self.response_headers['WWW-Authenticate'],
+                         "Keystone uri='https://keystone.example.com:1234'")
+        self.assertEqual(body, [''])
+
     def test_request_blank_token(self):
         req = webob.Request.blank('/')
         req.headers['X-Auth-Token'] = ''
@@ -1013,9 +795,7 @@ class AuthTokenMiddlewareTest(BaseAuthTokenMiddlewareTest):
     def _get_cached_token(self, token):
         token_id = cms.cms_hash_token(token)
         # NOTE(vish): example tokens are expired so skip the expiration check.
-        key = self.middleware._get_cache_key(token_id)
-        cached = self.middleware._cache.get(key)
-        return self.middleware._unprotect_cache_value(token, cached)
+        return self.middleware._cache_get(token_id, ignore_expires=True)
 
     def test_memcache(self):
         req = webob.Request.blank('/')
@@ -1036,18 +816,21 @@ class AuthTokenMiddlewareTest(BaseAuthTokenMiddlewareTest):
         token = 'invalid-token'
         req.headers['X-Auth-Token'] = token
         self.middleware(req.environ, self.start_fake_response)
-        self.assertEqual(self._get_cached_token(token), "invalid")
+        self.assertRaises(auth_token.InvalidUserToken,
+                          self._get_cached_token, token)
 
-    def test_memcache_set_expired(self):
+    def test_memcache_set_expired(self, extra_conf={}, extra_environ={}):
         token_cache_time = 10
         conf = {
             'token_cache_time': token_cache_time,
-            'signing_dir': CERTDIR,
+            'signing_dir': client_fixtures.CERTDIR,
         }
+        conf.update(extra_conf)
         self.set_middleware(conf=conf)
         req = webob.Request.blank('/')
         token = self.token_dict['signed_token_scoped']
         req.headers['X-Auth-Token'] = token
+        req.environ.update(extra_environ)
         try:
             now = datetime.datetime.utcnow()
             timeutils.set_time_override(now)
@@ -1059,11 +842,15 @@ class AuthTokenMiddlewareTest(BaseAuthTokenMiddlewareTest):
         finally:
             timeutils.clear_time_override()
 
+    def test_old_swift_memcache_set_expired(self):
+        extra_conf = {'cache': 'swift.cache'}
+        extra_environ = {'swift.cache': FakeSwiftOldMemcacheClient()}
+        self.test_memcache_set_expired(extra_conf, extra_environ)
+
     def test_swift_memcache_set_expired(self):
-        self.middleware._cache = FakeSwiftMemcacheRing()
-        self.middleware._use_keystone_cache = False
-        self.middleware._cache_initialized = True
-        self.test_memcache_set_expired()
+        extra_conf = {'cache': 'swift.cache'}
+        extra_environ = {'swift.cache': memorycache.Client()}
+        self.test_memcache_set_expired(extra_conf, extra_environ)
 
     def test_use_cache_from_env(self):
         env = {'swift.cache': 'CACHE_TEST'}
@@ -1072,7 +859,7 @@ class AuthTokenMiddlewareTest(BaseAuthTokenMiddlewareTest):
             'auth_port': 1234,
             'auth_admin_prefix': '/testadmin',
             'cache': 'swift.cache',
-            'memcache_servers': ['localhost:11211']
+            'memcached_servers': ['localhost:11211']
         }
         self.set_middleware(conf=conf)
         self.middleware._init_cache(env)
@@ -1091,98 +878,47 @@ class AuthTokenMiddlewareTest(BaseAuthTokenMiddlewareTest):
             'auth_host': 'keystone.example.com',
             'auth_port': 1234,
             'auth_admin_prefix': '/testadmin',
-            'memcache_servers': ['localhost:11211'],
+            'memcached_servers': ['localhost:11211'],
             'memcache_security_strategy': 'encrypt',
             'memcache_secret_key': 'mysecret'
         }
         self.set_middleware(conf=conf)
-        encrypted_data = self.middleware._protect_cache_value(
-            'token', TOKEN_RESPONSES[self.token_dict['uuid_token_default']])
-        self.assertEqual('{ENCRYPT:AES256}', encrypted_data[:16])
-        self.assertEqual(
-            TOKEN_RESPONSES[self.token_dict['uuid_token_default']],
-            self.middleware._unprotect_cache_value('token', encrypted_data))
-        # should return None if unable to decrypt
-        self.assertIsNone(
-            self.middleware._unprotect_cache_value(
-                'token', '{ENCRYPT:AES256}corrupted'))
-        self.assertIsNone(
-            self.middleware._unprotect_cache_value('mykey', encrypted_data))
+        token = 'my_token'
+        data = ('this_data', 10e100)
+        self.middleware._init_cache({})
+        self.middleware._cache_store(token, data)
+        self.assertEqual(self.middleware._cache_get(token), data[0])
 
     def test_sign_cache_data(self):
         conf = {
             'auth_host': 'keystone.example.com',
             'auth_port': 1234,
             'auth_admin_prefix': '/testadmin',
-            'memcache_servers': ['localhost:11211'],
+            'memcached_servers': ['localhost:11211'],
             'memcache_security_strategy': 'mac',
             'memcache_secret_key': 'mysecret'
         }
         self.set_middleware(conf=conf)
-        signed_data = self.middleware._protect_cache_value(
-            'mykey', TOKEN_RESPONSES[self.token_dict['uuid_token_default']])
-        expected = '{MAC:SHA1}'
-        self.assertEqual(
-            signed_data[:10],
-            expected)
-        self.assertEqual(
-            TOKEN_RESPONSES[self.token_dict['uuid_token_default']],
-            self.middleware._unprotect_cache_value('mykey', signed_data))
-        # should return None on corrupted data
-        self.assertIsNone(
-            self.middleware._unprotect_cache_value('mykey',
-                                                   '{MAC:SHA1}corrupted'))
+        token = 'my_token'
+        data = ('this_data', 10e100)
+        self.middleware._init_cache({})
+        self.middleware._cache_store(token, data)
+        self.assertEqual(self.middleware._cache_get(token), data[0])
 
     def test_no_memcache_protection(self):
         conf = {
             'auth_host': 'keystone.example.com',
             'auth_port': 1234,
             'auth_admin_prefix': '/testadmin',
-            'memcache_servers': ['localhost:11211'],
+            'memcached_servers': ['localhost:11211'],
             'memcache_secret_key': 'mysecret'
         }
         self.set_middleware(conf=conf)
-        data = self.middleware._protect_cache_value('mykey',
-                                                    'This is a test!')
-        self.assertEqual(data, 'This is a test!')
-        self.assertEqual(
-            'This is a test!',
-            self.middleware._unprotect_cache_value('mykey', data))
-
-    def test_get_cache_key(self):
-        conf = {
-            'auth_host': 'keystone.example.com',
-            'auth_port': 1234,
-            'auth_admin_prefix': '/testadmin',
-            'memcache_servers': ['localhost:11211'],
-            'memcache_secret_key': 'mysecret'
-        }
-        self.set_middleware(conf=conf)
-        self.assertEqual(
-            'tokens/mytoken',
-            self.middleware._get_cache_key('mytoken'))
-        conf = {
-            'auth_host': 'keystone.example.com',
-            'auth_port': 1234,
-            'auth_admin_prefix': '/testadmin',
-            'memcache_servers': ['localhost:11211'],
-            'memcache_security_strategy': 'mac',
-            'memcache_secret_key': 'mysecret'
-        }
-        self.set_middleware(conf=conf)
-        expected = 'tokens/' + memcache_crypt.hash_data('mytoken' + 'mysecret')
-        self.assertEqual(self.middleware._get_cache_key('mytoken'), expected)
-        conf = {
-            'auth_host': 'keystone.example.com',
-            'auth_port': 1234,
-            'auth_admin_prefix': '/testadmin',
-            'memcache_servers': ['localhost:11211'],
-            'memcache_security_strategy': 'Encrypt',
-            'memcache_secret_key': 'abc!'
-        }
-        self.set_middleware(conf=conf)
-        expected = 'tokens/' + memcache_crypt.hash_data('mytoken' + 'abc!')
-        self.assertEqual(self.middleware._get_cache_key('mytoken'), expected)
+        token = 'my_token'
+        data = ('this_data', 10e100)
+        self.middleware._init_cache({})
+        self.middleware._cache_store(token, data)
+        self.assertEqual(self.middleware._cache_get(token), data[0])
 
     def test_assert_valid_memcache_protection_config(self):
         # test missing memcache_secret_key
@@ -1190,7 +926,7 @@ class AuthTokenMiddlewareTest(BaseAuthTokenMiddlewareTest):
             'auth_host': 'keystone.example.com',
             'auth_port': 1234,
             'auth_admin_prefix': '/testadmin',
-            'memcache_servers': ['localhost:11211'],
+            'memcached_servers': ['localhost:11211'],
             'memcache_security_strategy': 'Encrypt'
         }
         self.assertRaises(Exception, self.set_middleware, conf)
@@ -1199,7 +935,7 @@ class AuthTokenMiddlewareTest(BaseAuthTokenMiddlewareTest):
             'auth_host': 'keystone.example.com',
             'auth_port': 1234,
             'auth_admin_prefix': '/testadmin',
-            'memcache_servers': ['localhost:11211'],
+            'memcached_servers': ['localhost:11211'],
             'memcache_security_strategy': 'whatever'
         }
         self.assertRaises(Exception, self.set_middleware, conf)
@@ -1208,7 +944,7 @@ class AuthTokenMiddlewareTest(BaseAuthTokenMiddlewareTest):
             'auth_host': 'keystone.example.com',
             'auth_port': 1234,
             'auth_admin_prefix': '/testadmin',
-            'memcache_servers': ['localhost:11211'],
+            'memcached_servers': ['localhost:11211'],
             'memcache_security_strategy': 'mac'
         }
         self.assertRaises(Exception, self.set_middleware, conf)
@@ -1216,7 +952,7 @@ class AuthTokenMiddlewareTest(BaseAuthTokenMiddlewareTest):
             'auth_host': 'keystone.example.com',
             'auth_port': 1234,
             'auth_admin_prefix': '/testadmin',
-            'memcache_servers': ['localhost:11211'],
+            'memcached_servers': ['localhost:11211'],
             'memcache_security_strategy': 'Encrypt',
             'memcache_secret_key': ''
         }
@@ -1225,7 +961,7 @@ class AuthTokenMiddlewareTest(BaseAuthTokenMiddlewareTest):
             'auth_host': 'keystone.example.com',
             'auth_port': 1234,
             'auth_admin_prefix': '/testadmin',
-            'memcache_servers': ['localhost:11211'],
+            'memcached_servers': ['localhost:11211'],
             'memcache_security_strategy': 'mAc',
             'memcache_secret_key': ''
         }
@@ -1242,9 +978,112 @@ class AuthTokenMiddlewareTest(BaseAuthTokenMiddlewareTest):
         self.assertEquals(middleware.token_revocation_list_cache_timeout,
                           datetime.timedelta(seconds=24))
 
+    def test_http_error_not_cached_token(self):
+        """Test to don't cache token as invalid on network errors.
+
+        We use UUID tokens since they are the easiest one to reach
+        get_http_connection.
+        """
+        req = webob.Request.blank('/')
+        token = self.token_dict['uuid_token_default']
+        req.headers['X-Auth-Token'] = token
+        self.set_fake_http(RaisingHTTPNetworkError)
+        self.middleware.http_request_max_retries = 0
+        self.middleware(req.environ, self.start_fake_response)
+        self.assertEqual(self._get_cached_token(token), None)
+
+
+class CertDownloadMiddlewareTest(BaseAuthTokenMiddlewareTest):
+    def setUp(self):
+        super(CertDownloadMiddlewareTest, self).setUp()
+        self.base_dir = tempfile.mkdtemp()
+        self.cert_dir = os.path.join(self.base_dir, 'certs')
+        os.mkdir(self.cert_dir)
+
+        self.conf = {
+            'auth_host': 'keystone.example.com',
+            'auth_port': 1234,
+            'auth_protocol': 'http',
+            'auth_admin_prefix': '/testadmin',
+            'signing_dir': self.cert_dir,
+        }
+
+    def tearDown(self):
+        shutil.rmtree(self.base_dir)
+        super(CertDownloadMiddlewareTest, self).tearDown()
+
+    # Usually we supply a signed_dir with pre-installed certificates,
+    # so invocation of /usr/bin/openssl succeeds. This time we give it
+    # an empty directory, so it fails.
+    def test_request_no_token_dummy(self):
+        self.set_middleware(fake_http=self.fake_http, conf=self.conf)
+        self.assertRaises(cms.subprocess.CalledProcessError,
+                          self.middleware.verify_signed_token,
+                          self.token_dict['signed_token_scoped'])
+
+    def test_fetch_signing_cert(self):
+        self.set_middleware(fake_http=CertificateHTTPConnection,
+                            conf=self.conf)
+
+        self.middleware.fetch_signing_cert()
+
+        with open(self.middleware.signing_cert_file_name, 'r') as f:
+            self.assertEqual(f.read(),
+                             CertificateHTTPConnection.signing_cert_data)
+
+        self.assertEqual('/testadmin/v2.0/certificates/signing',
+                         self.middleware.http_client_class.last_requested_url)
+
+    def test_fetch_signing_ca(self):
+        self.set_middleware(fake_http=CertificateHTTPConnection,
+                            conf=self.conf)
+
+        self.middleware.fetch_ca_cert()
+
+        with open(self.middleware.ca_file_name, 'r') as f:
+            self.assertEqual(f.read(), CertificateHTTPConnection.ca_cert_data)
+
+        self.assertEqual('/testadmin/v2.0/certificates/ca',
+                         self.middleware.http_client_class.last_requested_url)
+
+    def test_prefix_trailing_slash(self):
+        self.conf['auth_admin_prefix'] = '/newadmin/'
+        self.set_middleware(fake_http=CertificateHTTPConnection,
+                            conf=self.conf)
+
+        # the requests will return a 404, but it doesn't matter
+
+        self.middleware.fetch_ca_cert()
+
+        self.assertEqual('/newadmin/v2.0/certificates/ca',
+                         self.middleware.http_client_class.last_requested_url)
+
+        self.middleware.fetch_signing_cert()
+
+        self.assertEqual('/newadmin/v2.0/certificates/signing',
+                         self.middleware.http_client_class.last_requested_url)
+
+    def test_without_prefix(self):
+        self.conf['auth_admin_prefix'] = ''
+
+        self.set_middleware(fake_http=CertificateHTTPConnection,
+                            conf=self.conf)
+
+        # the requests will return a 404, but it doesn't matter
+
+        self.middleware.fetch_ca_cert()
+
+        self.assertEqual('/v2.0/certificates/ca',
+                         self.middleware.http_client_class.last_requested_url)
+
+        self.middleware.fetch_signing_cert()
+
+        self.assertEqual('/v2.0/certificates/signing',
+                         self.middleware.http_client_class.last_requested_url)
+
 
 class v2AuthTokenMiddlewareTest(BaseAuthTokenMiddlewareTest):
-    """ v2 token specific tests.
+    """v2 token specific tests.
 
     There are some differences between how the auth-token middleware handles
     v2 and v3 tokens over and above the token formats, namely:
@@ -1273,10 +1112,12 @@ class v2AuthTokenMiddlewareTest(BaseAuthTokenMiddlewareTest):
         self.assertTrue('keystone.token_info' in req.environ)
 
     def test_default_tenant_uuid_token(self):
-        self.assert_unscoped_default_tenant_auto_scopes(UUID_TOKEN_DEFAULT)
+        self.assert_unscoped_default_tenant_auto_scopes(
+            client_fixtures.UUID_TOKEN_DEFAULT)
 
     def test_default_tenant_signed_token(self):
-        self.assert_unscoped_default_tenant_auto_scopes(SIGNED_TOKEN_SCOPED)
+        self.assert_unscoped_default_tenant_auto_scopes(
+            client_fixtures.SIGNED_TOKEN_SCOPED)
 
     def assert_unscoped_token_receives_401(self, token):
         """Unscoped requests with no default tenant ID should be rejected."""
@@ -1288,22 +1129,25 @@ class v2AuthTokenMiddlewareTest(BaseAuthTokenMiddlewareTest):
                          "Keystone uri='https://keystone.example.com:1234'")
 
     def test_unscoped_uuid_token_receives_401(self):
-        self.assert_unscoped_token_receives_401(UUID_TOKEN_UNSCOPED)
+        self.assert_unscoped_token_receives_401(
+            client_fixtures.UUID_TOKEN_UNSCOPED)
 
     def test_unscoped_pki_token_receives_401(self):
-        self.assert_unscoped_token_receives_401(SIGNED_TOKEN_UNSCOPED)
+        self.assert_unscoped_token_receives_401(
+            client_fixtures.SIGNED_TOKEN_UNSCOPED)
 
     def test_request_prevent_service_catalog_injection(self):
         req = webob.Request.blank('/')
         req.headers['X-Service-Catalog'] = '[]'
-        req.headers['X-Auth-Token'] = UUID_TOKEN_NO_SERVICE_CATALOG
+        req.headers['X-Auth-Token'] = \
+            client_fixtures.UUID_TOKEN_NO_SERVICE_CATALOG
         body = self.middleware(req.environ, self.start_fake_response)
         self.assertEqual(self.response_status, 200)
         self.assertFalse(req.headers.get('X-Service-Catalog'))
         self.assertEqual(body, ['SUCCESS'])
 
     def test_valid_uuid_request_forced_to_2_0(self):
-        """ Test forcing auth_token to use lower api version.
+        """Test forcing auth_token to use lower api version.
 
         By installing the v3 http hander, auth_token will be get
         a version list that looks like a v3 server - from which it
@@ -1316,17 +1160,18 @@ class v2AuthTokenMiddlewareTest(BaseAuthTokenMiddlewareTest):
             'auth_host': 'keystone.example.com',
             'auth_port': 1234,
             'auth_admin_prefix': '/testadmin',
-            'signing_dir': CERTDIR,
+            'signing_dir': client_fixtures.CERTDIR,
             'auth_version': 'v2.0'
         }
         self.set_middleware(fake_http=v3FakeHTTPConnection, conf=conf)
         # This tests will only work is auth_token has chosen to use the
         # lower, v2, api version
         req = webob.Request.blank('/')
-        req.headers['X-Auth-Token'] = UUID_TOKEN_DEFAULT
+        req.headers['X-Auth-Token'] = client_fixtures.UUID_TOKEN_DEFAULT
         body = self.middleware(req.environ, self.start_fake_response)
         self.assertEqual(self.response_status, 200)
-        self.assertEqual("/testadmin/v2.0/tokens/%s" % UUID_TOKEN_DEFAULT,
+        self.assertEqual("/testadmin/v2.0/tokens/%s" %
+                         client_fixtures.UUID_TOKEN_DEFAULT,
                          v3FakeHTTPConnection.last_requested_url)
 
     def test_invalid_auth_version_request(self):
@@ -1334,14 +1179,14 @@ class v2AuthTokenMiddlewareTest(BaseAuthTokenMiddlewareTest):
             'auth_host': 'keystone.example.com',
             'auth_port': 1234,
             'auth_admin_prefix': '/testadmin',
-            'signing_dir': CERTDIR,
+            'signing_dir': client_fixtures.CERTDIR,
             'auth_version': 'v1.0'      # v1.0 is no longer supported
         }
         self.assertRaises(Exception, self.set_middleware, conf)
 
 
 class v3AuthTokenMiddlewareTest(AuthTokenMiddlewareTest):
-    """ Test auth_token middleware with v3 tokens.
+    """Test auth_token middleware with v3 tokens.
 
     Re-execute the AuthTokenMiddlewareTest class tests, but with the
     the auth_token middleware configured to expect v3 tokens back from
@@ -1366,12 +1211,13 @@ class v3AuthTokenMiddlewareTest(AuthTokenMiddlewareTest):
     """
     def setUp(self):
         token_dict = {
-            'uuid_token_default': v3_UUID_TOKEN_DEFAULT,
-            'uuid_token_unscoped': v3_UUID_TOKEN_UNSCOPED,
-            'signed_token_scoped': SIGNED_v3_TOKEN_SCOPED,
-            'signed_token_scoped_expired': SIGNED_TOKEN_SCOPED_EXPIRED,
-            'revoked_token': REVOKED_v3_TOKEN,
-            'revoked_token_hash': REVOKED_v3_TOKEN_HASH
+            'uuid_token_default': client_fixtures.v3_UUID_TOKEN_DEFAULT,
+            'uuid_token_unscoped': client_fixtures.v3_UUID_TOKEN_UNSCOPED,
+            'signed_token_scoped': client_fixtures.SIGNED_v3_TOKEN_SCOPED,
+            'signed_token_scoped_expired':
+            client_fixtures.SIGNED_TOKEN_SCOPED_EXPIRED,
+            'revoked_token': client_fixtures.REVOKED_v3_TOKEN,
+            'revoked_token_hash': client_fixtures.REVOKED_v3_TOKEN_HASH
         }
         super(v3AuthTokenMiddlewareTest, self).setUp(
             auth_version='v3.0',
@@ -1399,7 +1245,7 @@ class v3AuthTokenMiddlewareTest(AuthTokenMiddlewareTest):
             'HTTP_X_ROLE': '',
         }
         self.set_middleware(expected_env=delta_expected_env)
-        self.assert_valid_request_200(v3_UUID_TOKEN_UNSCOPED,
+        self.assert_valid_request_200(client_fixtures.v3_UUID_TOKEN_UNSCOPED,
                                       with_catalog=False)
         self.assertEqual('/testadmin/v3/auth/tokens',
                          v3FakeHTTPConnection.last_requested_url)
@@ -1418,7 +1264,8 @@ class v3AuthTokenMiddlewareTest(AuthTokenMiddlewareTest):
             'HTTP_X_TENANT': None
         }
         self.set_middleware(expected_env=delta_expected_env)
-        self.assert_valid_request_200(v3_UUID_TOKEN_DOMAIN_SCOPED)
+        self.assert_valid_request_200(
+            client_fixtures.v3_UUID_TOKEN_DOMAIN_SCOPED)
         self.assertEqual('/testadmin/v3/auth/tokens',
                          v3FakeHTTPConnection.last_requested_url)
 
