@@ -1,7 +1,20 @@
+# vim: tabstop=4 shiftwidth=4 softtabstop=4
+
+#    Licensed under the Apache License, Version 2.0 (the "License"); you may
+#    not use this file except in compliance with the License. You may obtain
+#    a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+#    Unless required by applicable law or agreed to in writing, software
+#    distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+#    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+#    License for the specific language governing permissions and limitations
+#    under the License.
+
 import getpass
 import hashlib
 import sys
-import uuid
 
 import prettytable
 
@@ -78,15 +91,16 @@ def find_resource(manager, name_or_id):
     except exceptions.NotFound:
         pass
 
-    # now try to get entity as uuid
+    # now try the entity as a string
     try:
-        uuid.UUID(str(name_or_id))
         return manager.get(name_or_id)
-    except (ValueError, exceptions.NotFound):
+    except (exceptions.NotFound):
         pass
 
     # finally try to find entity by name
     try:
+        if isinstance(name_or_id, str):
+            name_or_id = name_or_id.decode('utf-8', 'strict')
         return manager.find(name=name_or_id)
     except exceptions.NotFound:
         msg = ("No %s with a name or ID of '%s' exists." %
@@ -96,7 +110,7 @@ def find_resource(manager, name_or_id):
         msg = ("Multiple %s matches found for '%s', use an ID to be more"
                " specific." % (manager.resource_class.__name__.lower(),
                                name_or_id))
-        raise exc.CommandError(msg)
+        raise exceptions.CommandError(msg)
 
 
 def unauthenticated(f):

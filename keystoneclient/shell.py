@@ -15,7 +15,11 @@
 #    under the License.
 
 """
-Command-line interface to the OpenStack Identity API.
+Pending deprecation: Command-line interface to the OpenStack Identity API.
+
+This CLI is pending deprecation in favor of python-openstackclient. For a
+Python library, continue using python-keystoneclient.
+
 """
 
 from __future__ import print_function

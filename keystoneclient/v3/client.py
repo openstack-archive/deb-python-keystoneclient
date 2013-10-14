@@ -12,11 +12,11 @@
 #    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 #    License for the specific language governing permissions and limitations
 #    under the License.
-import json
 import logging
 
 from keystoneclient import exceptions
 from keystoneclient import httpclient
+from keystoneclient.openstack.common import jsonutils
 from keystoneclient.v3.contrib import trusts
 from keystoneclient.v3 import credentials
 from keystoneclient.v3 import domains
@@ -104,7 +104,7 @@ class Client(httpclient.HTTPClient):
             self.authenticate()
 
     def serialize(self, entity):
-        return json.dumps(entity, sort_keys=True)
+        return jsonutils.dumps(entity, sort_keys=True)
 
     def process_token(self):
         """Extract and process information from the new auth_ref.
@@ -170,6 +170,8 @@ class Client(httpclient.HTTPClient):
                  project_id=None, project_name=None, project_domain_id=None,
                  project_domain_name=None, token=None, trust_id=None):
         headers = {}
+        if auth_url is None:
+            raise ValueError("Cannot authenticate without a valid auth_url")
         url = auth_url + "/auth/tokens"
         body = {'auth': {'identity': {}}}
         ident = body['auth']['identity']

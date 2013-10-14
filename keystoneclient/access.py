@@ -61,9 +61,6 @@ class AccessInfo(dict):
         self.service_catalog = service_catalog.ServiceCatalog.factory(
             resource_dict=self, region_name=self.get('region_name'))
 
-    def has_service_catalog(self):
-        return 'serviceCatalog' in self
-
     def will_expire_soon(self, stale_duration=None):
         """Determines if expiration is about to occur.
 
@@ -134,10 +131,23 @@ class AccessInfo(dict):
     @property
     def user_domain_id(self):
         """Returns the domain id of the user associated with the authentication
-           request.
+        request.
 
-           For v2, it always returns 'default' which maybe different from the
-           Keystone configuration.
+        For v2, it always returns 'default' which may be different from the
+        Keystone configuration.
+
+        :returns: str
+        """
+        raise NotImplementedError()
+
+    @property
+    def user_domain_name(self):
+        """Returns the domain name of the user associated with the
+        authentication request.
+
+        For v2, it always returns 'Default' which may be different from the
+        Keystone configuration.
+
         :returns: str
         """
         raise NotImplementedError()
@@ -222,7 +232,7 @@ class AccessInfo(dict):
         request, or None if the authentication request wasn't scoped to a
         project.
 
-        :returns: str or None ((if no project associated with the token)
+        :returns: str or None (if no project associated with the token)
         """
         raise NotImplementedError()
 
@@ -234,10 +244,23 @@ class AccessInfo(dict):
     @property
     def project_domain_id(self):
         """Returns the domain id of the project associated with the
-           authentication request.
+        authentication request.
 
-           For v2, it always returns 'default' which maybe different from the
-           keystone configuration.
+        For v2, it returns 'default' if a project is scoped or None which may
+        be different from the keystone configuration.
+
+        :returns: str
+        """
+        raise NotImplementedError()
+
+    @property
+    def project_domain_name(self):
+        """Returns the domain name of the project associated with the
+        authentication request.
+
+        For v2, it returns 'Default' if a project is scoped or None  which may
+        be different from the keystone configuration.
+
         :returns: str
         """
         raise NotImplementedError()
@@ -318,6 +341,10 @@ class AccessInfoV2(AccessInfo):
         return 'default'
 
     @property
+    def user_domain_name(self):
+        return 'Default'
+
+    @property
     def domain_name(self):
         return None
 
@@ -327,9 +354,24 @@ class AccessInfoV2(AccessInfo):
 
     @property
     def project_name(self):
-        tenant_dict = self['token'].get('tenant', None)
-        if tenant_dict:
-            return tenant_dict.get('name', None)
+        try:
+            tenant_dict = self['token']['tenant']
+        except KeyError:
+            pass
+        else:
+            return tenant_dict.get('name')
+
+        # pre grizzly
+        try:
+            return self['user']['tenantName']
+        except KeyError:
+            pass
+
+        # pre diablo, keystone only provided a tenantId
+        try:
+            return self['token']['tenantId']
+        except KeyError:
+            pass
 
     @property
     def scoped(self):
@@ -357,15 +399,34 @@ class AccessInfoV2(AccessInfo):
 
     @property
     def project_id(self):
-        tenant_dict = self['token'].get('tenant', None)
-        if tenant_dict:
-            return tenant_dict.get('id', None)
-        return None
+        try:
+            tenant_dict = self['token']['tenant']
+        except KeyError:
+            pass
+        else:
+            return tenant_dict.get('id')
+
+        # pre grizzly
+        try:
+            return self['user']['tenantId']
+        except KeyError:
+            pass
+
+        # pre diablo
+        try:
+            return self['token']['tenantId']
+        except KeyError:
+            pass
 
     @property
     def project_domain_id(self):
         if self.project_id:
             return 'default'
+
+    @property
+    def project_domain_name(self):
+        if self.project_id:
+            return 'Default'
 
     @property
     def auth_url(self):
@@ -428,6 +489,10 @@ class AccessInfoV3(AccessInfo):
         return self['user']['domain']['id']
 
     @property
+    def user_domain_name(self):
+        return self['user']['domain']['name']
+
+    @property
     def username(self):
         return self['user']['name']
 
@@ -454,6 +519,12 @@ class AccessInfoV3(AccessInfo):
         project = self.get('project')
         if project:
             return project['domain']['id']
+
+    @property
+    def project_domain_name(self):
+        project = self.get('project')
+        if project:
+            return project['domain']['name']
 
     @property
     def project_name(self):

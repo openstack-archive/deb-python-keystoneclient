@@ -1,9 +1,22 @@
+# vim: tabstop=4 shiftwidth=4 softtabstop=4
+
 # Copyright 2010 Jacob Kaplan-Moss
 # Copyright 2011 OpenStack LLC.
 # Copyright 2011 Piston Cloud Computing, Inc.
 # Copyright 2011 Nebula, Inc.
-
 # All Rights Reserved.
+#
+#    Licensed under the Apache License, Version 2.0 (the "License"); you may
+#    not use this file except in compliance with the License. You may obtain
+#    a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+#    Unless required by applicable law or agreed to in writing, software
+#    distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+#    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+#    License for the specific language governing permissions and limitations
+#    under the License.
 """
 OpenStack Client interface. Handles the REST calls and responses.
 """
@@ -21,11 +34,6 @@ except ImportError:
     keyring = None
     pickle = None
 
-try:
-    import json
-except ImportError:
-    import simplejson as json
-
 # Python 2.5 compat fix
 if not hasattr(urlparse, 'parse_qsl'):
     import cgi
@@ -34,6 +42,7 @@ if not hasattr(urlparse, 'parse_qsl'):
 
 from keystoneclient import access
 from keystoneclient import exceptions
+from keystoneclient.openstack.common import jsonutils
 
 
 _logger = logging.getLogger(__name__)
@@ -111,7 +120,7 @@ def request(url, method='GET', headers=None, original_ip=None, debug=False,
     if resp.status_code >= 400:
         logger.debug("Request returned failure status: %s",
                      resp.status_code)
-        raise exceptions.from_response(resp)
+        raise exceptions.from_response(resp, method, url)
 
     return resp
 
@@ -574,16 +583,7 @@ class HTTPClient(object):
         raise NotImplementedError
 
     def serialize(self, entity):
-        return json.dumps(entity)
-
-    @property
-    def service_catalog(self):
-        """Returns this client's service catalog."""
-        return self.auth_ref.service_catalog
-
-    def has_service_catalog(self):
-        """Returns True if this client provides a service catalog."""
-        return self.auth_ref.has_service_catalog()
+        return jsonutils.dumps(entity)
 
     def request(self, url, method, body=None, **kwargs):
         """Send an http request with the specified characteristics.
@@ -610,7 +610,7 @@ class HTTPClient(object):
 
         if resp.text:
             try:
-                body_resp = json.loads(resp.text)
+                body_resp = jsonutils.loads(resp.text)
             except (ValueError, TypeError):
                 body_resp = None
                 _logger.debug("Could not decode JSON from body: %s"

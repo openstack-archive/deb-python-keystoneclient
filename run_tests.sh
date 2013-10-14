@@ -72,11 +72,6 @@ if [ $no_site_packages -eq 1 ]; then
   installvenvopts="--no-site-packages"
 fi
 
-function init_testr {
-  if [ ! -d .testrepository ]; then
-    ${wrapper} testr init
-  fi
-}
 
 function run_tests {
   # Cleanup *.pyc
@@ -86,7 +81,7 @@ function run_tests {
     if [ "$testropts" = "" ] && [ "$testrargs" = "" ]; then
       # Default to running all tests if specific test is not
       # provided.
-      testrargs="discover ./tests"
+      testrargs="discover ./keystoneclient/tests"
     fi
     ${wrapper} python -m testtools.run $testropts $testrargs
 
@@ -117,7 +112,7 @@ function run_tests {
     echo "Generating coverage report in covhtml/"
     # Don't compute coverage for common code, which is tested elsewhere
     ${wrapper} coverage combine
-    ${wrapper} coverage html --include='keystoneclient/*' --omit='keystoneclient/openstack/common/*' -d covhtml -i
+    ${wrapper} coverage html -d covhtml -i
   fi
 
   return $RESULT
@@ -132,12 +127,9 @@ function copy_subunit_log {
 
 function run_flake8 {
   echo "Running flake8 ..."
-  srcfiles="keystoneclient tests"
+  srcfiles="keystoneclient"
   # Just run Flake8 in current environment
-  ${wrapper} flake8 --show-pep8 --show-source \
-    --ignore=F811,F821,F841,H201,H202,H302,H304,H404,H802 \
-    --exclude=.venv,.tox,dist,doc,*egg,build \
-    ${srcfiles}
+  ${wrapper} flake8 ${srcfiles}
 }
 
 TESTRTESTS="python setup.py testr"
@@ -182,7 +174,6 @@ if [ $just_flake8 -eq 1 ]; then
     exit
 fi
 
-init_testr
 run_tests
 
 # NOTE(sirp): we only want to run flake8 when we're running the full-test suite,
