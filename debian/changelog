@@ -1,6 +1,8 @@
-python-keystoneclient (1:0.3.2-2) UNRELEASED; urgency=low
+python-keystoneclient (1:0.4.0-1) unstable; urgency=low
 
-  * Added missing (build-)depends: python-iso8601
+  * New upstream release.
+  * Added missing (build-)depends: python-iso8601, and many others for this new
+    release.
 
  -- Thomas Goirand <zigo@debian.org>  Tue, 01 Oct 2013 15:26:43 +0800
 
