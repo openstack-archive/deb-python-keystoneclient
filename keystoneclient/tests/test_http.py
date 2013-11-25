@@ -1,6 +1,6 @@
 # vim: tabstop=4 shiftwidth=4 softtabstop=4
 
-# Copyright 2013 OpenStack LLC
+# Copyright 2013 OpenStack Foundation
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may
 # not use this file except in compliance with the License. You may obtain
@@ -15,7 +15,7 @@
 # under the License.
 
 import httpretty
-import testtools
+import six
 from testtools import matchers
 
 from keystoneclient import exceptions
@@ -71,11 +71,8 @@ class ClientTest(utils.TestCase):
         self.assertEqual(httpretty.last_request().method, 'GET')
         self.assertEqual(httpretty.last_request().path, '/hi')
 
-        req_headers = httpretty.last_request().headers
-
-        self.assertEqual(req_headers.getheader('X-Auth-Token'), 'token')
-        self.assertEqual(req_headers.getheader('User-Agent'),
-                         httpclient.USER_AGENT)
+        self.assertRequestHeaderEqual('X-Auth-Token', 'token')
+        self.assertRequestHeaderEqual('User-Agent', httpclient.USER_AGENT)
 
         # Automatic JSON parsing
         self.assertEqual(body, {"hi": "there"})
@@ -117,13 +114,9 @@ class ClientTest(utils.TestCase):
         self.assertEqual(httpretty.last_request().method, 'POST')
         self.assertEqual(httpretty.last_request().body, '[1, 2, 3]')
 
-        req_headers = httpretty.last_request().headers
-
-        self.assertEqual(req_headers.getheader('X-Auth-Token'), 'token')
-        self.assertEqual(req_headers.getheader('Content-Type'),
-                         'application/json')
-        self.assertEqual(req_headers.getheader('User-Agent'),
-                         httpclient.USER_AGENT)
+        self.assertRequestHeaderEqual('X-Auth-Token', 'token')
+        self.assertRequestHeaderEqual('Content-Type', 'application/json')
+        self.assertRequestHeaderEqual('User-Agent', httpclient.USER_AGENT)
 
     @httpretty.activate
     def test_forwarded_for(self):
@@ -135,8 +128,8 @@ class ClientTest(utils.TestCase):
         self.stub_url(httpretty.GET)
 
         cl.request(self.TEST_URL, 'GET')
-        self.assertEqual(httpretty.last_request().headers['Forwarded'],
-                         "for=%s;by=%s" % (ORIGINAL_IP, httpclient.USER_AGENT))
+        forwarded = "for=%s;by=%s" % (ORIGINAL_IP, httpclient.USER_AGENT)
+        self.assertRequestHeaderEqual('Forwarded', forwarded)
 
     def test_client_deprecated(self):
         # Can resolve symbols from the keystoneclient.client module.
@@ -152,7 +145,7 @@ class ClientTest(utils.TestCase):
         client.HTTPClient
 
 
-class BasicRequestTests(testtools.TestCase):
+class BasicRequestTests(utils.TestCase):
 
     url = 'http://keystone.test.com/'
 
@@ -194,10 +187,10 @@ class BasicRequestTests(testtools.TestCase):
 
         self.request(headers=headers)
 
-        for k, v in headers.iteritems():
-            self.assertEqual(httpretty.last_request().headers[k], v)
+        for k, v in six.iteritems(headers):
+            self.assertRequestHeaderEqual(k, v)
 
-        for header in headers.iteritems():
+        for header in six.iteritems(headers):
             self.assertThat(self.logger.debug_log,
                             matchers.Contains('-H "%s: %s"' % header))
 

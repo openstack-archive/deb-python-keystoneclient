@@ -1,6 +1,6 @@
 # vim: tabstop=4 shiftwidth=4 softtabstop=4
 
-# Copyright 2012 OpenStack LLC
+# Copyright 2012 OpenStack Foundation
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may
 # not use this file except in compliance with the License. You may obtain
@@ -815,8 +815,8 @@ class CommonAuthTokenMiddlewareTest(object):
             'auth_uri': 'https://keystone.example.com:1234',
         }
         middleware = auth_token.AuthProtocol(self.fake_app, conf)
-        self.assertEquals(middleware.token_revocation_list_cache_timeout,
-                          datetime.timedelta(seconds=24))
+        self.assertEqual(middleware.token_revocation_list_cache_timeout,
+                         datetime.timedelta(seconds=24))
 
     def test_http_error_not_cached_token(self):
         """Test to don't cache token as invalid on network errors.

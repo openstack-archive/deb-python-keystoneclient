@@ -1,6 +1,6 @@
 # vim: tabstop=4 shiftwidth=4 softtabstop=4
 
-# Copyright 2013 OpenStack LLC
+# Copyright 2013 OpenStack Foundation
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may
 # not use this file except in compliance with the License. You may obtain
@@ -15,6 +15,8 @@
 # under the License.
 
 import os
+
+import six
 
 from keystoneclient.common import cms
 from keystoneclient.openstack.common import jsonutils
@@ -295,4 +297,4 @@ TOKEN_RESPONSES = {
 
 
 JSON_TOKEN_RESPONSES = dict([(k, jsonutils.dumps(v)) for k, v in
-                             TOKEN_RESPONSES.iteritems()])
+                             six.iteritems(TOKEN_RESPONSES)])
