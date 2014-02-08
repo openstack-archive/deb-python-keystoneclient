@@ -12,11 +12,11 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-import cStringIO
 import os
 import sys
 
 from mox3 import stubout
+import six
 from testtools import matchers
 
 from keystoneclient import httpclient
@@ -69,7 +69,7 @@ class ShellTests(utils.TestCase):
     def run_command(self, cmd):
         orig = sys.stdout
         try:
-            sys.stdout = cStringIO.StringIO()
+            sys.stdout = six.StringIO()
             if isinstance(cmd, list):
                 self.shell.main(cmd)
             else:
@@ -332,7 +332,8 @@ class ShellTests(utils.TestCase):
                  'password': 'newpass'}})
 
     def test_endpoint_create(self):
-        self.run_command('endpoint-create --service-id 1')
+        self.run_command('endpoint-create --service-id 1 '
+                         '--publicurl=http://example.com:1234/go')
         self.fake_client.assert_called_anytime(
             'POST', '/endpoints',
             {'endpoint':
@@ -340,7 +341,7 @@ class ShellTests(utils.TestCase):
                  'service_id': '1',
                  'region': 'regionOne',
                  'internalurl': None,
-                 'publicurl': None}})
+                 'publicurl': "http://example.com:1234/go"}})
 
     def test_endpoint_list(self):
         self.run_command('endpoint-list')

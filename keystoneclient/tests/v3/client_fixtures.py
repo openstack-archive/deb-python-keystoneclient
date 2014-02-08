@@ -38,7 +38,88 @@ DOMAIN_SCOPED_TOKEN = {
         'methods': [
             'password'
         ],
-        'catalog': {},
+        'catalog': [{
+            'endpoints': [{
+                'url':
+                'http://public.com:8776/v1/None',
+                'region': 'RegionOne',
+                'interface': 'public'
+            }, {
+                'url':
+                'http://internal:8776/v1/None',
+                'region': 'RegionOne',
+                'interface': 'internal'
+            }, {
+                'url':
+                'http://admin:8776/v1/None',
+                'region': 'RegionOne',
+                'interface': 'admin'
+            }],
+            'type': 'volume'
+        }, {
+            'endpoints': [{
+                'url': 'http://public.com:9292/v1',
+                'region': 'RegionOne',
+                'interface': 'public'
+            }, {
+                'url': 'http://internal:9292/v1',
+                'region': 'RegionOne',
+                'interface': 'internal'
+            }, {
+                'url': 'http://admin:9292/v1',
+                'region': 'RegionOne',
+                'interface': 'admin'
+            }],
+            'type': 'image'
+        }, {
+            'endpoints': [{
+                'url':
+                'http://public.com:8774/v1.1/None',
+                'region': 'RegionOne',
+                'interface': 'public'
+            }, {
+                'url':
+                'http://internal:8774/v1.1/None',
+                'region': 'RegionOne',
+                'interface': 'internal'
+            }, {
+                'url':
+                'http://admin:8774/v1.1/None',
+                'region': 'RegionOne',
+                'interface': 'admin'
+            }],
+            'type': 'compute'
+        }, {
+            'endpoints': [{
+                'url': 'http://public.com:8773/services/Cloud',
+                'region': 'RegionOne',
+                'interface': 'public'
+            }, {
+                'url': 'http://internal:8773/services/Cloud',
+                'region': 'RegionOne',
+                'interface': 'internal'
+            }, {
+                'url': 'http://admin:8773/services/Admin',
+                'region': 'RegionOne',
+                'interface': 'admin'
+            }],
+            'type': 'ec2'
+        }, {
+            'endpoints': [{
+                'url': 'http://public.com:5000/v3',
+                'region': 'RegionOne',
+                'interface': 'public'
+            }, {
+                'url': 'http://internal:5000/v3',
+                'region': 'RegionOne',
+                'interface': 'internal'
+            }, {
+                'url': 'http://admin:35357/v3',
+                'region': 'RegionOne',
+                'interface': 'admin'
+            }],
+            'type': 'identity'
+        }],
         'expires_at': '2010-11-01T03:32:15-05:00',
         'user': {
             'domain': {
@@ -47,6 +128,22 @@ DOMAIN_SCOPED_TOKEN = {
             },
             'id': 'c4da488862bd435c9e6c0275a0d0e49a',
             'name': 'exampleuser',
+            'roles': [
+                {
+                    "id": "76e72a",
+                    "links": {
+                        "self": "http://identity:35357/v3/roles/76e72a"
+                    },
+                    "name": "admin"
+                },
+                {
+                    "id": "f4f392",
+                    "links": {
+                        "self": "http://identity:35357/v3/roles/f4f392"
+                    },
+                    "name": "member"
+                }
+            ],
         },
         'domain': {
             'id': '8e9283b7ba0b1038840c3842058b86ab',
@@ -150,6 +247,22 @@ PROJECT_SCOPED_TOKEN = {
             },
             'id': 'c4da488862bd435c9e6c0275a0d0e49a',
             'name': 'exampleuser',
+            'roles': [
+                {
+                    "id": "76e72a",
+                    "links": {
+                        "self": "http://identity:35357/v3/roles/76e72a"
+                    },
+                    "name": "admin"
+                },
+                {
+                    "id": "f4f392",
+                    "links": {
+                        "self": "http://identity:35357/v3/roles/f4f392"
+                    },
+                    "name": "member"
+                }
+            ],
         },
         'project': {
             'domain': {
@@ -188,7 +301,23 @@ AUTH_RESPONSE_BODY = {
                 'name': 'aDomain'
             },
             'id': '567',
-            'name': 'test'
+            'name': 'test',
+            'roles': [
+                {
+                    "id": "76e72a",
+                    "links": {
+                        "self": "http://identity:35357/v3/roles/76e72a"
+                    },
+                    "name": "admin"
+                },
+                {
+                    "id": "f4f392",
+                    "links": {
+                        "self": "http://identity:35357/v3/roles/f4f392"
+                    },
+                    "name": "member"
+                }
+            ],
         },
         'issued_at': '2010-10-31T03:32:15-05:00',
         'catalog': [{

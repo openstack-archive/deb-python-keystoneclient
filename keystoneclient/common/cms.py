@@ -12,9 +12,20 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-import hashlib
+"""Certificate signing functions.
 
+Call set_subprocess() with the subprocess module. Either Python's
+subprocess or eventlet.green.subprocess can be used.
+
+If set_subprocess() is not called, this module will pick Python's subprocess
+or eventlet.green.subprocess based on if os module is patched by eventlet.
+"""
+
+import errno
+import hashlib
 import logging
+
+from keystoneclient import exceptions
 
 
 subprocess = None
@@ -38,10 +49,60 @@ def _ensure_subprocess():
             import subprocess  # noqa
 
 
+def set_subprocess(_subprocess=None):
+    """Set subprocess module to use.
+    The subprocess could be eventlet.green.subprocess if using eventlet,
+    or Python's subprocess otherwise.
+    """
+    global subprocess
+    subprocess = _subprocess
+
+
+def _check_files_accessible(files):
+    err = None
+    try:
+        for try_file in files:
+            with open(try_file, 'r'):
+                pass
+    except IOError as e:
+        # Catching IOError means there is an issue with
+        # the given file.
+        err = ('Hit OSError in _process_communicate_handle_oserror()\n'
+               'Likely due to %s: %s') % (try_file, e.strerror)
+
+    return err
+
+
+def _process_communicate_handle_oserror(process, text, files):
+    """Wrapper around process.communicate that checks for OSError."""
+
+    try:
+        output, err = process.communicate(text)
+    except OSError as e:
+        if e.errno != errno.EPIPE:
+            raise
+        # OSError with EPIPE only occurs with Python 2.6.x/old 2.7.x
+        # http://bugs.python.org/issue10963
+
+        # The quick exit is typically caused by the openssl command not being
+        # able to read an input file, so check ourselves if can't read a file.
+        err = _check_files_accessible(files)
+        if process.stderr:
+            err += process.stderr.read()
+
+        output = ""
+        retcode = -1
+    else:
+        retcode = process.poll()
+
+    return output, err, retcode
+
+
 def cms_verify(formatted, signing_cert_file_name, ca_file_name):
     """Verifies the signature of the contents IAW CMS syntax.
 
     :raises: subprocess.CalledProcessError
+    :raises: CertificateConfigError if certificate is not configured properly.
     """
     _ensure_subprocess()
     process = subprocess.Popen(["openssl", "cms", "-verify",
@@ -53,11 +114,25 @@ def cms_verify(formatted, signing_cert_file_name, ca_file_name):
                                stdin=subprocess.PIPE,
                                stdout=subprocess.PIPE,
                                stderr=subprocess.PIPE)
-    output, err = process.communicate(formatted)
-    retcode = process.poll()
-    if retcode:
-        # Do not log errors, as some happen in the positive thread
-        # instead, catch them in the calling code and log them there.
+    output, err, retcode = _process_communicate_handle_oserror(
+        process, formatted, (signing_cert_file_name, ca_file_name))
+
+    # Do not log errors, as some happen in the positive thread
+    # instead, catch them in the calling code and log them there.
+
+    # When invoke the openssl with not exist file, return code 2
+    # and error msg will be returned.
+    # You can get more from
+    # http://www.openssl.org/docs/apps/cms.html#EXIT_CODES
+    #
+    # $ openssl cms -verify -certfile not_exist_file -CAfile \
+    #       not_exist_file -inform PEM -nosmimecap -nodetach \
+    #       -nocerts -noattr
+    # Error opening certificate file not_exist_file
+    #
+    if retcode == 2:
+        raise exceptions.CertificateConfigError(err)
+    elif retcode:
         # NOTE(dmllr): Python 2.6 compatibility:
         # CalledProcessError did not have output keyword argument
         e = subprocess.CalledProcessError(retcode, "openssl")
@@ -150,8 +225,10 @@ def cms_sign_text(text, signing_cert_file_name, signing_key_file_name):
                                stdin=subprocess.PIPE,
                                stdout=subprocess.PIPE,
                                stderr=subprocess.PIPE)
-    output, err = process.communicate(text)
-    retcode = process.poll()
+
+    output, err, retcode = _process_communicate_handle_oserror(
+        process, text, (signing_cert_file_name, signing_key_file_name))
+
     if retcode or "Error" in err:
         LOG.error('Signing error: %s' % err)
         raise subprocess.CalledProcessError(retcode, "openssl")

@@ -20,3 +20,32 @@ Exception definitions.
 
 #flake8: noqa
 from keystoneclient.apiclient.exceptions import *
+
+
+class CertificateConfigError(Exception):
+    """Error reading the certificate"""
+    def __init__(self, output):
+        self.output = output
+        msg = ("Unable to load certificate. "
+               "Ensure your system is configured properly.")
+        super(CertificateConfigError, self).__init__(msg)
+
+
+class ConnectionError(ClientException):
+    """Something went wrong trying to connect to a server"""
+
+
+class SSLError(ConnectionError):
+    """An SSL error occurred."""
+
+
+class Timeout(ClientException):
+    """The request timed out."""
+
+
+class DiscoveryFailure(ClientException):
+    """Discovery of client versions failed."""
+
+
+class VersionNotAvailable(DiscoveryFailure):
+    """Discovery failed as the version you requested is not available."""

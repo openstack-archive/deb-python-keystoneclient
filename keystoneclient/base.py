@@ -23,9 +23,9 @@ Base utilities to build API operation managers and objects on top of.
 
 import abc
 import functools
-import urllib
 
 import six
+from six.moves import urllib
 
 from keystoneclient import exceptions
 from keystoneclient.openstack.common import strutils
@@ -51,23 +51,21 @@ def getid(obj):
 def filter_kwargs(f):
     @functools.wraps(f)
     def func(*args, **kwargs):
-        for key, ref in kwargs.items():
+        new_kwargs = {}
+        for key, ref in six.iteritems(kwargs):
             if ref is None:
                 # drop null values
-                del kwargs[key]
                 continue
 
             id_value = getid(ref)
-            if id_value == ref:
-                continue
+            if id_value != ref:
+                # If an object with an id was passed, then use the id, e.g:
+                #     user: user(id=1) becomes user_id: 1
+                key = '%s_id' % key
 
-            # if an object with an id was passed remove the object
-            # from params and replace it with just the id.
-            # e.g user: User(id=1) becomes user_id: 1
-            del kwargs[key]
-            kwargs['%s_id' % key] = id_value
+            new_kwargs[key] = id_value
 
-        return f(*args, **kwargs)
+        return f(*args, **new_kwargs)
     return func
 
 
@@ -216,10 +214,9 @@ class Manager(object):
             return self.resource_class(self, body[response_key])
 
 
+@six.add_metaclass(abc.ABCMeta)
 class ManagerWithFind(Manager):
     """Manager with additional `find()`/`findall()` methods."""
-
-    __metaclass__ = abc.ABCMeta
 
     @abc.abstractmethod
     def list(self):
@@ -332,10 +329,14 @@ class CrudManager(Manager):
     def list(self, **kwargs):
         url = self.build_url(dict_args_in_out=kwargs)
 
+        if kwargs:
+            query = '?%s' % urllib.parse.urlencode(kwargs)
+        else:
+            query = ''
         return self._list(
             '%(url)s%(query)s' % {
                 'url': url,
-                'query': '?%s' % urllib.urlencode(kwargs) if kwargs else '',
+                'query': query,
             },
             self.collection_key)
 
@@ -365,10 +366,14 @@ class CrudManager(Manager):
         """Find a single item with attributes matching ``**kwargs``."""
         url = self.build_url(dict_args_in_out=kwargs)
 
+        if kwargs:
+            query = '?%s' % urllib.parse.urlencode(kwargs)
+        else:
+            query = ''
         rl = self._list(
             '%(url)s%(query)s' % {
                 'url': url,
-                'query': '?%s' % urllib.urlencode(kwargs) if kwargs else '',
+                'query': query,
             },
             self.collection_key)
         num = len(rl)
@@ -428,7 +433,7 @@ class Resource(object):
             return self.__dict__[k]
 
     def __repr__(self):
-        reprkeys = sorted(k for k in self.__dict__.keys() if k[0] != '_' and
+        reprkeys = sorted(k for k in self.__dict__ if k[0] != '_' and
                           k != 'manager')
         info = ", ".join("%s=%s" % (k, getattr(self, k)) for k in reprkeys)
         return "<%s %s>" % (self.__class__.__name__, info)

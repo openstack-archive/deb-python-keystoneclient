@@ -70,10 +70,44 @@ class UserTests(utils.TestCase):
                                         req_body['user']['email'],
                                         tenant_id=req_body['user']['tenantId'],
                                         enabled=req_body['user']['enabled'])
-        self.assertTrue(isinstance(user, users.User))
+        self.assertIsInstance(user, users.User)
         self.assertEqual(user.id, 3)
         self.assertEqual(user.name, "gabriel")
         self.assertEqual(user.email, "test@example.com")
+        self.assertRequestBodyIs(json=req_body)
+
+    @httpretty.activate
+    def test_create_user_without_email(self):
+        req_body = {
+            "user": {
+                "name": "gabriel",
+                "password": "test",
+                "tenantId": 2,
+                "enabled": True,
+                "email": None,
+            }
+        }
+
+        resp_body = {
+            "user": {
+                "name": "gabriel",
+                "enabled": True,
+                "tenantId": 2,
+                "id": 3,
+                "password": "test",
+            }
+        }
+
+        self.stub_url(httpretty.POST, ['users'], json=resp_body)
+
+        user = self.client.users.create(
+            req_body['user']['name'],
+            req_body['user']['password'],
+            tenant_id=req_body['user']['tenantId'],
+            enabled=req_body['user']['enabled'])
+        self.assertIsInstance(user, users.User)
+        self.assertEqual(user.id, 3)
+        self.assertEqual(user.name, "gabriel")
         self.assertRequestBodyIs(json=req_body)
 
     @httpretty.activate
@@ -87,7 +121,7 @@ class UserTests(utils.TestCase):
                       json={'user': self.TEST_USERS['users']['values'][0]})
 
         u = self.client.users.get(1)
-        self.assertTrue(isinstance(u, users.User))
+        self.assertIsInstance(u, users.User)
         self.assertEqual(u.id, 1)
         self.assertEqual(u.name, 'admin')
 
@@ -96,7 +130,7 @@ class UserTests(utils.TestCase):
         self.stub_url(httpretty.GET, ['users'], json=self.TEST_USERS)
 
         user_list = self.client.users.list()
-        [self.assertTrue(isinstance(u, users.User)) for u in user_list]
+        [self.assertIsInstance(u, users.User) for u in user_list]
 
     @httpretty.activate
     def test_list_limit(self):
@@ -105,7 +139,7 @@ class UserTests(utils.TestCase):
         user_list = self.client.users.list(limit=1)
         self.assertEqual(httpretty.last_request().querystring,
                          {'limit': ['1']})
-        [self.assertTrue(isinstance(u, users.User)) for u in user_list]
+        [self.assertIsInstance(u, users.User) for u in user_list]
 
     @httpretty.activate
     def test_list_marker(self):
@@ -114,7 +148,7 @@ class UserTests(utils.TestCase):
         user_list = self.client.users.list(marker='foo')
         self.assertDictEqual(httpretty.last_request().querystring,
                              {'marker': ['foo']})
-        [self.assertTrue(isinstance(u, users.User)) for u in user_list]
+        [self.assertIsInstance(u, users.User) for u in user_list]
 
     @httpretty.activate
     def test_list_limit_marker(self):
@@ -124,7 +158,7 @@ class UserTests(utils.TestCase):
 
         self.assertDictEqual(httpretty.last_request().querystring,
                              {'marker': ['foo'], 'limit': ['1']})
-        [self.assertTrue(isinstance(u, users.User)) for u in user_list]
+        [self.assertIsInstance(u, users.User) for u in user_list]
 
     @httpretty.activate
     def test_update(self):

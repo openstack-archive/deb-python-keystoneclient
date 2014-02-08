@@ -57,18 +57,25 @@ class RoleManager(base.CrudManager):
         return base_url % params
 
     def _require_domain_xor_project(self, domain, project):
-        if (domain and project) or (not domain and not project):
+        if domain and project:
             msg = 'Specify either a domain or project, not both'
+            raise exceptions.ValidationError(msg)
+        elif not (domain or project):
+            msg = 'Must specify either a domain or project'
             raise exceptions.ValidationError(msg)
 
     def _require_user_xor_group(self, user, group):
-        if (user and group) or (not user and not group):
+        if user and group:
             msg = 'Specify either a user or group, not both'
             raise exceptions.ValidationError(msg)
+        elif not (user or group):
+            msg = 'Must specify either a user or group'
+            raise exceptions.ValidationError(msg)
 
-    def create(self, name):
+    def create(self, name, **kwargs):
         return super(RoleManager, self).create(
-            name=name)
+            name=name,
+            **kwargs)
 
     def get(self, role):
         return super(RoleManager, self).get(
@@ -95,12 +102,13 @@ class RoleManager(base.CrudManager):
                                                     domain, project),
                 **kwargs)
 
-        return super(RoleManager, self).list()
+        return super(RoleManager, self).list(**kwargs)
 
-    def update(self, role, name=None):
+    def update(self, role, name=None, **kwargs):
         return super(RoleManager, self).update(
             role_id=base.getid(role),
-            name=name)
+            name=name,
+            **kwargs)
 
     def delete(self, role):
         return super(RoleManager, self).delete(

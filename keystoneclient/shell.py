@@ -26,12 +26,13 @@ from __future__ import print_function
 
 import argparse
 import getpass
+import logging
 import os
-import six
 import sys
 
-import keystoneclient
+import six
 
+import keystoneclient
 from keystoneclient import access
 from keystoneclient.contrib.bootstrap import shell as shell_bootstrap
 from keystoneclient import exceptions as exc
@@ -240,22 +241,8 @@ class OpenStackIdentityShell(object):
                                  "determine whether a token has expired "
                                  "when retrieving it from keyring. This "
                                  "is useful in mitigating process or "
-                                 "network delays. Default is %s seconds." % (
-                            access.STALE_TOKEN_DURATION))
-
-        #FIXME(heckj):
-        # deprecated command line options for essex compatibility. To be
-        # removed in Grizzly release cycle.
-        parser.add_argument('--token',
-                            metavar='<service-token>',
-                            dest='os_token',
-                            default=env('SERVICE_TOKEN'),
-                            help=argparse.SUPPRESS)
-        parser.add_argument('--endpoint',
-                            dest='os_endpoint',
-                            metavar='<service-endpoint>',
-                            default=env('SERVICE_ENDPOINT'),
-                            help=argparse.SUPPRESS)
+                                 "network delays. Default is %s seconds." %
+                                 access.STALE_TOKEN_DURATION)
 
         return parser
 
@@ -291,7 +278,7 @@ class OpenStackIdentityShell(object):
 
     def _find_actions(self, subparsers, actions_module):
         for attr in (a for a in dir(actions_module) if a.startswith('do_')):
-            # I prefer to be hypen-separated instead of underscores.
+            # I prefer to be hyphen-separated instead of underscores.
             command = attr[3:].replace('_', '-')
             callback = getattr(actions_module, attr)
             desc = callback.__doc__ or ''
@@ -351,7 +338,7 @@ class OpenStackIdentityShell(object):
                             args.os_password = getpass.getpass('OS Password: ')
                         except EOFError:
                             pass
-                    # No password because we did't have a tty or the
+                    # No password because we didn't have a tty or the
                     # user Ctl-D when prompted?
                     if not args.os_password:
                         raise exc.CommandError(
@@ -393,6 +380,9 @@ class OpenStackIdentityShell(object):
             self.do_bash_completion(args)
             return 0
 
+        if args.debug:
+            logging.basicConfig(level=logging.DEBUG)
+
         # TODO(heckj): supporting backwards compatibility with environment
         # variables. To be removed after DEVSTACK is updated, ideally in
         # the Grizzly release cycle.
@@ -405,7 +395,6 @@ class OpenStackIdentityShell(object):
                                                  key=args.os_key,
                                                  cert=args.os_cert,
                                                  insecure=args.insecure,
-                                                 debug=args.debug,
                                                  timeout=args.timeout)
         else:
             self.auth_check(args)
@@ -445,6 +434,10 @@ class OpenStackIdentityShell(object):
                 "2.0": shell_v2_0.CLIENT_CLASS,
             }[version]
         except KeyError:
+            if version:
+                msg = ('WARNING: unsupported identity-api-version %s, '
+                       'falling back to 2.0' % version)
+                print(msg)
             return shell_v2_0.CLIENT_CLASS
 
     def do_bash_completion(self, args):
@@ -456,7 +449,7 @@ class OpenStackIdentityShell(object):
         options = set()
         for sc_str, sc in self.subcommands.items():
             commands.add(sc_str)
-            for option in sc._optionals._option_string_actions.keys():
+            for option in list(sc._optionals._option_string_actions):
                 options.add(option)
 
         commands.remove('bash-completion')

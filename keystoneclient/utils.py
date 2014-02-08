@@ -20,12 +20,13 @@ import prettytable
 import six
 
 from keystoneclient import exceptions
+from keystoneclient.openstack.common import strutils
 
 
 # Decorator for cli-args
 def arg(*args, **kwargs):
     def _decorator(func):
-        # Because of the sematics of decorator composition if we just append
+        # Because of the semantics of decorator composition if we just append
         # to the options list positional options will appear to be backwards.
         func.__dict__.setdefault('arguments', []).insert(0, (args, kwargs))
         return func
@@ -56,7 +57,7 @@ def print_list(objs, fields, formatters={}, order_by=None):
 
     if order_by is None:
         order_by = fields[0]
-    print(pt.get_string(sortby=order_by))
+    print(strutils.safe_encode(pt.get_string(sortby=order_by)))
 
 
 def _word_wrap(string, max_length=0):
@@ -80,7 +81,7 @@ def print_dict(d, wrap=0):
             value = ''
         value = _word_wrap(value, max_length=wrap)
         pt.add_row([prop, value])
-    print(pt.get_string(sortby='Property'))
+    print(strutils.safe_encode(pt.get_string(sortby='Property')))
 
 
 def find_resource(manager, name_or_id):
@@ -100,7 +101,7 @@ def find_resource(manager, name_or_id):
 
     # finally try to find entity by name
     try:
-        if isinstance(name_or_id, str):
+        if isinstance(name_or_id, six.binary_type):
             name_or_id = name_or_id.decode('utf-8', 'strict')
         return manager.find(name=name_or_id)
     except exceptions.NotFound:

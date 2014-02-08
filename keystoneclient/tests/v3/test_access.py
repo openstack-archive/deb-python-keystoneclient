@@ -19,6 +19,7 @@ from keystoneclient.openstack.common import timeutils
 from keystoneclient.tests.v3 import client_fixtures
 from keystoneclient.tests.v3 import utils
 
+
 TOKEN_RESPONSE = utils.TestResponse({
     "headers": client_fixtures.AUTH_RESPONSE_HEADERS
 })
@@ -42,11 +43,13 @@ class AccessInfoTest(utils.TestCase):
         self.assertEqual(auth_ref.username, 'exampleuser')
         self.assertEqual(auth_ref.user_id, 'c4da488862bd435c9e6c0275a0d0e49a')
 
-        self.assertEqual(auth_ref.project_name, None)
-        self.assertEqual(auth_ref.project_id, None)
+        self.assertEqual(auth_ref.role_names, [])
 
-        self.assertEqual(auth_ref.auth_url, None)
-        self.assertEqual(auth_ref.management_url, None)
+        self.assertIsNone(auth_ref.project_name)
+        self.assertIsNone(auth_ref.project_id)
+
+        self.assertIsNone(auth_ref.auth_url)
+        self.assertIsNone(auth_ref.management_url)
 
         self.assertFalse(auth_ref.domain_scoped)
         self.assertFalse(auth_ref.project_scoped)
@@ -77,19 +80,21 @@ class AccessInfoTest(utils.TestCase):
         self.assertTrue(auth_ref)
         self.assertIn('methods', auth_ref)
         self.assertIn('catalog', auth_ref)
-        self.assertFalse(auth_ref['catalog'])
+        self.assertTrue(auth_ref['catalog'])
 
         self.assertEqual(auth_ref.auth_token,
                          '3e2813b7ba0b4006840c3825860b86ed')
         self.assertEqual(auth_ref.username, 'exampleuser')
         self.assertEqual(auth_ref.user_id, 'c4da488862bd435c9e6c0275a0d0e49a')
 
+        self.assertEqual(auth_ref.role_names, ['admin', 'member'])
+
         self.assertEqual(auth_ref.domain_name, 'anotherdomain')
         self.assertEqual(auth_ref.domain_id,
                          '8e9283b7ba0b1038840c3842058b86ab')
 
-        self.assertEqual(auth_ref.project_name, None)
-        self.assertEqual(auth_ref.project_id, None)
+        self.assertIsNone(auth_ref.project_name)
+        self.assertIsNone(auth_ref.project_id)
 
         self.assertEqual(auth_ref.user_domain_id,
                          '4e6893b7ba0b4006840c3845660b86ed')
@@ -115,8 +120,10 @@ class AccessInfoTest(utils.TestCase):
         self.assertEqual(auth_ref.username, 'exampleuser')
         self.assertEqual(auth_ref.user_id, 'c4da488862bd435c9e6c0275a0d0e49a')
 
-        self.assertEqual(auth_ref.domain_name, None)
-        self.assertEqual(auth_ref.domain_id, None)
+        self.assertEqual(auth_ref.role_names, ['admin', 'member'])
+
+        self.assertIsNone(auth_ref.domain_name)
+        self.assertIsNone(auth_ref.domain_id)
 
         self.assertEqual(auth_ref.project_name, 'exampleproject')
         self.assertEqual(auth_ref.project_id,

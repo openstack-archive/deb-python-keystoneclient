@@ -12,6 +12,7 @@
 #    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 #    License for the specific language governing permissions and limitations
 #    under the License.
+
 import logging
 
 from keystoneclient import exceptions
@@ -121,10 +122,11 @@ class Client(httpclient.HTTPClient):
 
     """
 
+    version = 'v2.0'
+
     def __init__(self, **kwargs):
         """Initialize a new client for the Keystone v2.0 API."""
         super(Client, self).__init__(**kwargs)
-        self.version = 'v2.0'
         self.endpoints = endpoints.EndpointManager(self)
         self.roles = roles.RoleManager(self)
         self.services = services.ServiceManager(self)

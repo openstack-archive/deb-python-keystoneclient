@@ -12,6 +12,7 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+import copy
 import json
 
 import httpretty
@@ -134,3 +135,69 @@ class KeystoneClientTest(utils.TestCase):
                           client.Client,
                           username='exampleuser',
                           password='password')
+
+    def _management_url_is_updated(self, fixture, **kwargs):
+        second = copy.deepcopy(fixture)
+        first_url = 'http://admin:35357/v3'
+        second_url = "http://secondurl:%d/v3'"
+
+        for entry in second['token']['catalog']:
+            if entry['type'] == 'identity':
+                entry['endpoints'] = [{
+                    'url': second_url % 5000,
+                    'region': 'RegionOne',
+                    'interface': 'public'
+                }, {
+                    'url': second_url % 5000,
+                    'region': 'RegionOne',
+                    'interface': 'internal'
+                }, {
+                    'url': second_url % 35357,
+                    'region': 'RegionOne',
+                    'interface': 'admin'
+                }]
+
+        self.stub_auth(json=fixture)
+        cl = client.Client(username='exampleuser',
+                           password='password',
+                           auth_url=self.TEST_URL,
+                           **kwargs)
+
+        self.assertEqual(cl.management_url, first_url)
+
+        self.stub_auth(json=second)
+        cl.authenticate()
+        self.assertEqual(cl.management_url, second_url % 35357)
+
+    @httpretty.activate
+    def test_management_url_is_updated_with_project(self):
+        self._management_url_is_updated(client_fixtures.PROJECT_SCOPED_TOKEN,
+                                        project_name='exampleproject')
+
+    @httpretty.activate
+    def test_management_url_is_updated_with_domain(self):
+        self._management_url_is_updated(client_fixtures.DOMAIN_SCOPED_TOKEN,
+                                        domain_name='exampledomain')
+
+    @httpretty.activate
+    def test_client_with_region_name_passes_to_service_catalog(self):
+        # NOTE(jamielennox): this is deprecated behaviour that should be
+        # removed ASAP, however must remain compatible.
+
+        self.stub_auth(json=client_fixtures.AUTH_RESPONSE_BODY)
+
+        cl = client.Client(username='exampleuser',
+                           password='password',
+                           tenant_name='exampleproject',
+                           auth_url=self.TEST_URL,
+                           region_name='North')
+        self.assertEqual(cl.service_catalog.url_for(service_type='image'),
+                         'http://glance.north.host/glanceapi/public')
+
+        cl = client.Client(username='exampleuser',
+                           password='password',
+                           tenant_name='exampleproject',
+                           auth_url=self.TEST_URL,
+                           region_name='South')
+        self.assertEqual(cl.service_catalog.url_for(service_type='image'),
+                         'http://glance.south.host/glanceapi/public')

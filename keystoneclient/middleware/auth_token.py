@@ -151,17 +151,19 @@ import requests
 import stat
 import tempfile
 import time
-import urllib
 
 import netaddr
 import six
+from six.moves import urllib
 
 from keystoneclient.common import cms
+from keystoneclient import exceptions
 from keystoneclient.middleware import memcache_crypt
 from keystoneclient.openstack.common import jsonutils
 from keystoneclient.openstack.common import memorycache
 from keystoneclient.openstack.common import timeutils
 from keystoneclient import utils
+
 
 CONF = None
 # to pass gate before oslo-config is deployed everywhere,
@@ -291,12 +293,36 @@ opts = [
                default=None,
                secret=True,
                help='(optional, mandatory if memcache_security_strategy is'
-               ' defined) this string is used for key derivation.')
+               ' defined) this string is used for key derivation.'),
+    cfg.BoolOpt('include_service_catalog',
+                default=True,
+                help='(optional) indicate whether to set the X-Service-Catalog'
+                ' header. If False, middleware will not ask for service'
+                ' catalog on token validation and will not set the'
+                ' X-Service-Catalog header.'),
+    cfg.StrOpt('enforce_token_bind',
+               default='permissive',
+               help='Used to control the use and type of token binding. Can'
+               ' be set to: "disabled" to not check token binding.'
+               ' "permissive" (default) to validate binding information if the'
+               ' bind type is of a form known to the server and ignore it if'
+               ' not. "strict" like "permissive" but if the bind type is'
+               ' unknown the token will be rejected. "required" any form of'
+               ' token binding is needed to be allowed. Finally the name of a'
+               ' binding method that must be present in tokens.'),
 ]
 CONF.register_opts(opts, group='keystone_authtoken')
 
 LIST_OF_VERSIONS_TO_ATTEMPT = ['v2.0', 'v3.0']
 CACHE_KEY_TEMPLATE = 'tokens/%s'
+
+
+class BIND_MODE:
+    DISABLED = 'disabled'
+    PERMISSIVE = 'permissive'
+    STRICT = 'strict'
+    REQUIRED = 'required'
+    KERBEROS = 'kerberos'
 
 
 def will_expire_soon(expiry):
@@ -336,7 +362,7 @@ def confirm_token_not_expired(data):
 
 def safe_quote(s):
     """URL-encode strings that are not already URL-encoded."""
-    return urllib.quote(s) if s == urllib.unquote(s) else s
+    return urllib.parse.quote(s) if s == urllib.parse.unquote(s) else s
 
 
 class InvalidUserToken(Exception):
@@ -417,7 +443,7 @@ class AuthProtocol(object):
         self.signing_dirname = self._conf_get('signing_dir')
         if self.signing_dirname is None:
             self.signing_dirname = tempfile.mkdtemp(prefix='keystone-signing-')
-        self.LOG.info('Using %s as cache directory for signing certificate' %
+        self.LOG.info('Using %s as cache directory for signing certificate',
                       self.signing_dirname)
         self.verify_signing_dir()
 
@@ -438,7 +464,7 @@ class AuthProtocol(object):
 
         # Token caching via memcache
         self._cache = None
-        self._cache_initialized = False    # cache already initialzied?
+        self._cache_initialized = False    # cache already initialized?
         # memcache value treatment, ENCRYPT or MAC
         self._memcache_security_strategy = \
             self._conf_get('memcache_security_strategy')
@@ -460,6 +486,9 @@ class AuthProtocol(object):
         self.auth_version = None
         self.http_request_max_retries = \
             self._conf_get('http_request_max_retries')
+
+        self.include_service_catalog = self._conf_get(
+            'include_service_catalog')
 
     def _assert_valid_memcache_protection_config(self):
         if self._memcache_security_strategy:
@@ -531,7 +560,7 @@ class AuthProtocol(object):
             self.LOG.warning("Old keystone installation found...assuming v2.0")
             versions.append("v2.0")
         elif response.status_code != 300:
-            self.LOG.error('Unable to get version info from keystone: %s' %
+            self.LOG.error('Unable to get version info from keystone: %s',
                            response.status_code)
             raise ServiceError('Unable to get version info from keystone')
         else:
@@ -564,7 +593,7 @@ class AuthProtocol(object):
         try:
             self._remove_auth_headers(env)
             user_token = self._get_user_token_from_header(env)
-            token_info = self._validate_user_token(user_token)
+            token_info = self._validate_user_token(user_token, env)
             env['keystone.token_info'] = token_info
             user_headers = self._build_user_headers(token_info)
             self._add_headers(env, user_headers)
@@ -581,7 +610,7 @@ class AuthProtocol(object):
                 return self._reject_request(env, start_response)
 
         except ServiceError as e:
-            self.LOG.critical('Unable to obtain admin token: %s' % e)
+            self.LOG.critical('Unable to obtain admin token: %s', e)
             resp = MiniResp('Service unavailable', env)
             start_response('503 Service Unavailable', resp.headers)
             return resp.body
@@ -613,7 +642,7 @@ class AuthProtocol(object):
             'X-Tenant',
             'X-Role',
         )
-        self.LOG.debug('Removing headers from request environment: %s' %
+        self.LOG.debug('Removing headers from request environment: %s',
                        ','.join(auth_headers))
         self._remove_headers(env, auth_headers)
 
@@ -703,7 +732,7 @@ class AuthProtocol(object):
                     self.LOG.error('HTTP connection exception: %s', e)
                     raise NetworkError('Unable to communicate with keystone')
                 # NOTE(vish): sleep 0.5, 1, 2
-                self.LOG.warn('Retrying on HTTP connection exception: %s' % e)
+                self.LOG.warn('Retrying on HTTP connection exception: %s', e)
                 time.sleep(2.0 ** retry / 2)
                 retry += 1
 
@@ -787,7 +816,7 @@ class AuthProtocol(object):
                 "Unable to parse expiration time from token: %s", data)
             raise ServiceError('invalid json response')
 
-    def _validate_user_token(self, user_token, retry=True):
+    def _validate_user_token(self, user_token, env, retry=True):
         """Authenticate user using PKI
 
         :param user_token: user's token id
@@ -810,6 +839,7 @@ class AuthProtocol(object):
             else:
                 data = self.verify_uuid_token(user_token, retry)
             expires = confirm_token_not_expired(data)
+            self._confirm_token_bind(data, env)
             self._cache_put(token_id, data, expires)
             return data
         except NetworkError:
@@ -921,11 +951,9 @@ class AuthProtocol(object):
         self.LOG.debug("Received request from user: %s with project_id : %s"
                        " and roles: %s ", user_id, project_id, roles)
 
-        try:
+        if self.include_service_catalog and catalog_key in catalog_root:
             catalog = catalog_root[catalog_key]
             rval['X-Service-Catalog'] = jsonutils.dumps(catalog)
-        except KeyError:
-            pass
 
         return rval
 
@@ -1036,7 +1064,7 @@ class AuthProtocol(object):
             cache_key = CACHE_KEY_TEMPLATE % memcache_crypt.get_cache_key(keys)
             data_to_store = memcache_crypt.protect_data(keys, serialized_data)
 
-        # Historically the swift cache conection used the argument
+        # Historically the swift cache connection used the argument
         # timeout= for the cache timeout, but this has been unified
         # with the official python memcache client with time= since
         # grizzly, we still need to handle folsom for a while until
@@ -1049,6 +1077,77 @@ class AuthProtocol(object):
             self._cache.set(cache_key,
                             data_to_store,
                             timeout=self.token_cache_time)
+
+    def _invalid_user_token(self, msg=False):
+        # NOTE(jamielennox): use False as the default so that None is valid
+        if msg is False:
+            msg = 'Token authorization failed'
+
+        raise InvalidUserToken(msg)
+
+    def _confirm_token_bind(self, data, env):
+        bind_mode = self._conf_get('enforce_token_bind')
+
+        if bind_mode == BIND_MODE.DISABLED:
+            return
+
+        try:
+            if _token_is_v2(data):
+                bind = data['access']['token']['bind']
+            elif _token_is_v3(data):
+                bind = data['token']['bind']
+            else:
+                self._invalid_user_token()
+        except KeyError:
+            bind = {}
+
+        # permissive and strict modes don't require there to be a bind
+        permissive = bind_mode in (BIND_MODE.PERMISSIVE, BIND_MODE.STRICT)
+
+        if not bind:
+            if permissive:
+                # no bind provided and none required
+                return
+            else:
+                self.LOG.info("No bind information present in token.")
+                self._invalid_user_token()
+
+        # get the named mode if bind_mode is not one of the predefined
+        if permissive or bind_mode == BIND_MODE.REQUIRED:
+            name = None
+        else:
+            name = bind_mode
+
+        if name and name not in bind:
+            self.LOG.info("Named bind mode %s not in bind information", name)
+            self._invalid_user_token()
+
+        for bind_type, identifier in six.iteritems(bind):
+            if bind_type == BIND_MODE.KERBEROS:
+                if not env.get('AUTH_TYPE', '').lower() == 'negotiate':
+                    self.LOG.info("Kerberos credentials required and "
+                                  "not present.")
+                    self._invalid_user_token()
+
+                if not env.get('REMOTE_USER') == identifier:
+                    self.LOG.info("Kerberos credentials do not match "
+                                  "those in bind.")
+                    self._invalid_user_token()
+
+                self.LOG.debug("Kerberos bind authentication successful.")
+
+            elif bind_mode == BIND_MODE.PERMISSIVE:
+                self.LOG.debug("Ignoring Unknown bind for permissive mode: "
+                               "%(bind_type)s: %(identifier)s.",
+                               {'bind_type': bind_type,
+                                'identifier': identifier})
+
+            else:
+                self.LOG.info("Couldn't verify unknown bind: %(bind_type)s: "
+                              "%(identifier)s.",
+                              {'bind_type': bind_type,
+                               'identifier': identifier})
+                self._invalid_user_token()
 
     def _cache_put(self, token_id, data, expires):
         """Put token data into the cache.
@@ -1090,9 +1189,13 @@ class AuthProtocol(object):
         if self.auth_version == 'v3.0':
             headers = {'X-Auth-Token': self.get_admin_token(),
                        'X-Subject-Token': safe_quote(user_token)}
+            path = '/v3/auth/tokens'
+            if not self.include_service_catalog:
+                # NOTE(gyee): only v3 API support this option
+                path = path + '?nocatalog'
             response, data = self._json_request(
                 'GET',
-                '/v3/auth/tokens',
+                path,
                 additional_headers=headers)
         else:
             headers = {'X-Auth-Token': self.get_admin_token()}
@@ -1111,11 +1214,11 @@ class AuthProtocol(object):
                 'Keystone rejected admin token %s, resetting', headers)
             self.admin_token = None
         else:
-            self.LOG.error('Bad response code while validating token: %s' %
+            self.LOG.error('Bad response code while validating token: %s',
                            response.status_code)
         if retry:
             self.LOG.info('Retrying validation')
-            return self._validate_user_token(user_token, False)
+            return self._validate_user_token(user_token, env, False)
         else:
             self.LOG.warn("Invalid user token: %s. Keystone response: %s.",
                           user_token, data)
@@ -1147,7 +1250,7 @@ class AuthProtocol(object):
             try:
                 output = cms.cms_verify(data, self.signing_cert_file_name,
                                         self.signing_ca_file_name)
-            except cms.subprocess.CalledProcessError as err:
+            except exceptions.CertificateConfigError as err:
                 if self.cert_file_missing(err.output,
                                           self.signing_cert_file_name):
                     self.fetch_signing_cert()
@@ -1156,8 +1259,10 @@ class AuthProtocol(object):
                                           self.signing_ca_file_name):
                     self.fetch_ca_cert()
                     continue
-                self.LOG.warning('Verify error: %s' % err)
-                raise err
+                raise
+            except cms.subprocess.CalledProcessError as err:
+                self.LOG.warning('Verify error: %s', err)
+                raise
             return output
 
     def verify_signed_token(self, signed_text):
@@ -1173,14 +1278,15 @@ class AuthProtocol(object):
             if not os.access(self.signing_dirname, os.W_OK):
                 raise ConfigurationError(
                     'unable to access signing_dir %s' % self.signing_dirname)
-            if os.stat(self.signing_dirname).st_uid != os.getuid():
+            uid = os.getuid()
+            if os.stat(self.signing_dirname).st_uid != uid:
                 self.LOG.warning(
-                    'signing_dir is not owned by %s' % os.getuid())
+                    'signing_dir is not owned by %s', uid)
             current_mode = stat.S_IMODE(os.stat(self.signing_dirname).st_mode)
             if current_mode != stat.S_IRWXU:
                 self.LOG.warning(
-                    'signing_dir mode is %s instead of %s' %
-                    (oct(current_mode), oct(stat.S_IRWXU)))
+                    'signing_dir mode is %s instead of %s',
+                    oct(current_mode), oct(stat.S_IRWXU))
         else:
             os.makedirs(self.signing_dirname, stat.S_IRWXU)
 
@@ -1191,7 +1297,7 @@ class AuthProtocol(object):
             # modification time.
             if os.path.exists(self.revoked_file_name):
                 mtime = os.path.getmtime(self.revoked_file_name)
-                fetched_time = datetime.datetime.fromtimestamp(mtime)
+                fetched_time = datetime.datetime.utcfromtimestamp(mtime)
             # Otherwise the list will need to be fetched.
             else:
                 fetched_time = datetime.datetime.min
@@ -1211,7 +1317,8 @@ class AuthProtocol(object):
         if list_is_current:
             # Load the list from disk if required
             if not self._token_revocation_list:
-                with open(self.revoked_file_name, 'r') as f:
+                open_kwargs = {'encoding': 'utf-8'} if six.PY3 else {}
+                with open(self.revoked_file_name, 'r', **open_kwargs) as f:
                     self._token_revocation_list = jsonutils.loads(f.read())
         else:
             self.token_revocation_list = self.fetch_revocation_list()
@@ -1226,8 +1333,15 @@ class AuthProtocol(object):
         """
         self._token_revocation_list = jsonutils.loads(value)
         self.token_revocation_list_fetched_time = timeutils.utcnow()
-        with open(self.revoked_file_name, 'w') as f:
+
+        with tempfile.NamedTemporaryFile(dir=self.signing_dirname,
+                                         delete=False) as f:
+            # In Python2, encoding is slow so the following check avoids it if
+            # it is not absolutely necessary.
+            if isinstance(value, six.text_type):
+                value = value.encode('utf-8')
             f.write(value)
+        os.rename(f.name, self.revoked_file_name)
 
     def fetch_revocation_list(self, retry=True):
         headers = {'X-Auth-Token': self.get_admin_token()}
@@ -1255,8 +1369,10 @@ class AuthProtocol(object):
             with open(self.signing_cert_file_name, 'w') as certfile:
                 certfile.write(data)
 
+        if response.status_code != 200:
+            raise exceptions.CertificateConfigError(response.text)
+
         try:
-            #todo check response
             try:
                 write_cert_file(response.text)
             except IOError:
@@ -1271,8 +1387,10 @@ class AuthProtocol(object):
         path = self.auth_admin_prefix.rstrip('/') + '/v2.0/certificates/ca'
         response = self._http_request('GET', path)
 
+        if response.status_code != 200:
+            raise exceptions.CertificateConfigError(response.text)
+
         try:
-            #todo check response
             with open(self.signing_ca_file_name, 'w') as certfile:
                 certfile.write(response.text)
         except (AssertionError, KeyError):

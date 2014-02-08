@@ -6,7 +6,7 @@ subunit.log
 cover
 *.pyc
 .idea
-*.swp
+*.sw?
 *.egg
 *~
 .tox
@@ -17,3 +17,8 @@ dist
 python_keystoneclient.egg-info
 keystoneclient/versioninfo
 doc/source/api
+# Development environment files
+.project
+.pydevproject
+# Temporary files created during test, but not removed
+examples/pki/certs/tmp*

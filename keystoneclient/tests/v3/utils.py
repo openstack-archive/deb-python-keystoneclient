@@ -12,14 +12,15 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-import urlparse
 import uuid
 
 import httpretty
+from six.moves.urllib import parse as urlparse
 
 from keystoneclient.openstack.common import jsonutils
 from keystoneclient.tests import utils
 from keystoneclient.v3 import client
+
 
 TestResponse = utils.TestResponse
 
@@ -48,6 +49,8 @@ class UnauthenticatedTestCase(utils.TestCase):
 
 
 class TestCase(UnauthenticatedTestCase):
+
+    TEST_ADMIN_IDENTITY_ENDPOINT = "http://127.0.0.1:35357/v3"
 
     TEST_SERVICE_CATALOG = [{
         "endpoints": [{
@@ -105,7 +108,7 @@ class TestCase(UnauthenticatedTestCase):
             "region": "RegionOne",
             "interface": "internal"
         }, {
-            "url": "http://127.0.0.1:35357/v3",
+            "url": TEST_ADMIN_IDENTITY_ENDPOINT,
             "region": "RegionOne",
             "interface": "admin"
         }],
@@ -152,6 +155,7 @@ class CrudTests(object):
 
     def new_ref(self, **kwargs):
         kwargs.setdefault('id', uuid.uuid4().hex)
+        kwargs.setdefault(uuid.uuid4().hex, uuid.uuid4().hex)
         return kwargs
 
     def encode(self, entity):
@@ -193,13 +197,13 @@ class CrudTests(object):
         # signature for the request when the manager does some
         # conversion before doing the request (e.g converting
         # from datetime object to timestamp string)
-        req_ref = req_ref or ref.copy()
+        req_ref = (req_ref or ref).copy()
         req_ref.pop('id')
 
         self.stub_entity(httpretty.POST, entity=req_ref, status=201)
 
         returned = self.manager.create(**parameterize(manager_ref))
-        self.assertTrue(isinstance(returned, self.model))
+        self.assertIsInstance(returned, self.model)
         for attr in req_ref:
             self.assertEqual(
                 getattr(returned, attr),
@@ -214,17 +218,14 @@ class CrudTests(object):
         self.stub_entity(httpretty.GET, id=ref['id'], entity=ref)
 
         returned = self.manager.get(ref['id'])
-        self.assertTrue(isinstance(returned, self.model))
+        self.assertIsInstance(returned, self.model)
         for attr in ref:
             self.assertEqual(
                 getattr(returned, attr),
                 ref[attr],
                 'Expected different %s' % attr)
 
-    @httpretty.activate
-    def test_list(self, ref_list=None, expected_path=None, **filter_kwargs):
-        ref_list = ref_list or [self.new_ref(), self.new_ref()]
-
+    def _get_expected_path(self, expected_path=None):
         if not expected_path:
             if self.path_prefix:
                 expected_path = 'v3/%s/%s' % (self.path_prefix,
@@ -232,13 +233,33 @@ class CrudTests(object):
             else:
                 expected_path = 'v3/%s' % self.collection_key
 
+        return expected_path
+
+    @httpretty.activate
+    def test_list(self, ref_list=None, expected_path=None, **filter_kwargs):
+        ref_list = ref_list or [self.new_ref(), self.new_ref()]
+        expected_path = self._get_expected_path(expected_path)
+
         httpretty.register_uri(httpretty.GET,
                                urlparse.urljoin(self.TEST_URL, expected_path),
                                body=jsonutils.dumps(self.encode(ref_list)))
 
         returned_list = self.manager.list(**filter_kwargs)
-        self.assertTrue(len(returned_list))
-        [self.assertTrue(isinstance(r, self.model)) for r in returned_list]
+        self.assertEqual(len(ref_list), len(returned_list))
+        [self.assertIsInstance(r, self.model) for r in returned_list]
+
+    @httpretty.activate
+    def test_list_params(self):
+        ref_list = [self.new_ref()]
+        filter_kwargs = {uuid.uuid4().hex: uuid.uuid4().hex}
+        expected_path = self._get_expected_path()
+
+        httpretty.register_uri(httpretty.GET,
+                               urlparse.urljoin(self.TEST_URL, expected_path),
+                               body=jsonutils.dumps(self.encode(ref_list)))
+
+        self.manager.list(**filter_kwargs)
+        self.assertQueryStringContains(**filter_kwargs)
 
     @httpretty.activate
     def test_find(self, ref=None):
@@ -248,7 +269,7 @@ class CrudTests(object):
         self.stub_entity(httpretty.GET, entity=ref_list)
 
         returned = self.manager.find(name=getattr(ref, 'name', None))
-        self.assertTrue(isinstance(returned, self.model))
+        self.assertIsInstance(returned, self.model)
         for attr in ref:
             self.assertEqual(
                 getattr(returned, attr),
@@ -256,21 +277,25 @@ class CrudTests(object):
                 'Expected different %s' % attr)
 
         if hasattr(ref, 'name'):
-            self.assertQueryStringIs({'name': ref['name']})
+            self.assertQueryStringIs('name=%s' % ref['name'])
         else:
-            self.assertQueryStringIs({})
+            self.assertQueryStringIs('')
 
     @httpretty.activate
-    def test_update(self, ref=None):
+    def test_update(self, ref=None, req_ref=None):
         ref = ref or self.new_ref()
 
         self.stub_entity(httpretty.PATCH, id=ref['id'], entity=ref)
 
-        req_ref = ref.copy()
+        # req_ref argument allows you to specify a different
+        # signature for the request when the manager does some
+        # conversion before doing the request (e.g converting
+        # from datetime object to timestamp string)
+        req_ref = (req_ref or ref).copy()
         req_ref.pop('id')
 
         returned = self.manager.update(ref['id'], **parameterize(req_ref))
-        self.assertTrue(isinstance(returned, self.model))
+        self.assertIsInstance(returned, self.model)
         for attr in ref:
             self.assertEqual(
                 getattr(returned, attr),

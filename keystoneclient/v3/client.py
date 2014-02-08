@@ -12,6 +12,7 @@
 #    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 #    License for the specific language governing permissions and limitations
 #    under the License.
+
 import logging
 
 from keystoneclient import exceptions
@@ -84,11 +85,12 @@ class Client(httpclient.HTTPClient):
 
     """
 
+    version = 'v3'
+
     def __init__(self, **kwargs):
         """Initialize a new client for the Keystone v3 API."""
         super(Client, self).__init__(**kwargs)
 
-        self.version = 'v3'
         self.credentials = credentials.CredentialManager(self)
         self.endpoints = endpoints.EndpointManager(self)
         self.domains = domains.DomainManager(self)
@@ -106,18 +108,17 @@ class Client(httpclient.HTTPClient):
     def serialize(self, entity):
         return jsonutils.dumps(entity, sort_keys=True)
 
-    def process_token(self):
+    def process_token(self, **kwargs):
         """Extract and process information from the new auth_ref.
 
         And set the relevant authentication information.
         """
-        super(Client, self).process_token()
+        super(Client, self).process_token(**kwargs)
         if self.auth_ref.domain_scoped:
             if not self.auth_ref.domain_id:
                 raise exceptions.AuthorizationFailure(
                     "Token didn't provide domain_id")
-            if self.management_url is None and self.auth_ref.management_url:
-                self.management_url = self.auth_ref.management_url[0]
+            self._process_management_url(kwargs.get('region_name'))
             self.domain_name = self.auth_ref.domain_name
             self.domain_id = self.auth_ref.domain_id
 

@@ -45,8 +45,8 @@ class ProjectTests(utils.TestCase, utils.CrudTests):
                          entity=ref_list)
 
         returned_list = self.manager.list(user=user_id)
-        self.assertTrue(len(returned_list))
-        [self.assertTrue(isinstance(r, self.model)) for r in returned_list]
+        self.assertEqual(len(ref_list), len(returned_list))
+        [self.assertIsInstance(r, self.model) for r in returned_list]
 
     @httpretty.activate
     def test_list_projects_for_domain(self):
@@ -57,8 +57,8 @@ class ProjectTests(utils.TestCase, utils.CrudTests):
                          entity=ref_list)
 
         returned_list = self.manager.list(domain=domain_id)
-        self.assertTrue(len(returned_list))
-        [self.assertTrue(isinstance(r, self.model)) for r in returned_list]
+        self.assertEqual(len(ref_list), len(returned_list))
+        [self.assertIsInstance(r, self.model) for r in returned_list]
 
         self.assertEqual(httpretty.last_request().querystring,
                          {'domain_id': [domain_id]})

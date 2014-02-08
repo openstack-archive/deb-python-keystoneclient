@@ -13,18 +13,20 @@
 #    under the License.
 
 import argparse
-import cStringIO
 import json
+import logging
 import os
 import sys
 import uuid
 
 import fixtures
 import mock
+import six
 import testtools
 from testtools import matchers
 
 from keystoneclient import exceptions
+from keystoneclient import session
 from keystoneclient import shell as openstack_shell
 from keystoneclient.tests import utils
 from keystoneclient.v2_0 import shell as shell_v2_0
@@ -79,7 +81,7 @@ class ShellTest(utils.TestCase):
         clean_env = {}
         _old_env, os.environ = os.environ, clean_env.copy()
         try:
-            sys.stdout = cStringIO.StringIO()
+            sys.stdout = six.StringIO()
             _shell = openstack_shell.OpenStackIdentityShell()
             _shell.main(argstr.split())
         except SystemExit:
@@ -116,6 +118,15 @@ class ShellTest(utils.TestCase):
                 exceptions.CommandError, 'Expecting'):
             self.shell('user-list')
 
+    def test_debug(self):
+        logging_mock = mock.MagicMock()
+        with mock.patch('logging.basicConfig', logging_mock):
+            self.assertRaises(exceptions.CommandError,
+                              self.shell, '--debug user-list')
+            self.assertTrue(logging_mock.called)
+            self.assertEqual([(), {'level': logging.DEBUG}],
+                             list(logging_mock.call_args))
+
     def test_auth_password_authurl_no_username(self):
         with testtools.ExpectedException(
                 exceptions.CommandError,
@@ -132,12 +143,12 @@ class ShellTest(utils.TestCase):
     def test_token_no_endpoint(self):
         with testtools.ExpectedException(
                 exceptions.CommandError, 'Expecting an endpoint provided'):
-            self.shell('--token=%s user-list' % uuid.uuid4().hex)
+            self.shell('--os-token=%s user-list' % uuid.uuid4().hex)
 
     def test_endpoint_no_token(self):
         with testtools.ExpectedException(
                 exceptions.CommandError, 'Expecting a token provided'):
-            self.shell('--endpoint=http://10.0.0.1:5000/v2.0/ user-list')
+            self.shell('--os-endpoint=http://10.0.0.1:5000/v2.0/ user-list')
 
     def test_shell_args(self):
         do_tenant_mock = mock.MagicMock()
@@ -198,6 +209,11 @@ class ShellTest(utils.TestCase):
             expect = ('http://1.1.1.1:5000/', 'xyzpdq', '4321',
                       'wilma', 'betty', '2.0', True, '500', True)
             self.assertTrue(all([x == y for x, y in zip(actual, expect)]))
+
+            # Test os-identity-api-version fall back to 2.0
+            shell('--os-identity-api-version 3.0 user-list')
+            assert do_tenant_mock.called
+            self.assertTrue(b.os_identity_api_version, '2.0')
 
     def test_shell_user_create_args(self):
         """Test user-create args."""
@@ -423,11 +439,13 @@ class ShellTest(utils.TestCase):
             'endpoints': [],
         })
         request_mock = mock.MagicMock(return_value=response_mock)
-        with mock.patch('requests.request', request_mock):
+        with mock.patch.object(session.requests.Session, 'request',
+                               request_mock):
             shell(('--timeout 2 --os-token=blah  --os-endpoint=blah'
                    ' --os-auth-url=blah.com endpoint-list'))
             request_mock.assert_called_with(mock.ANY, mock.ANY,
                                             timeout=2,
+                                            allow_redirects=False,
                                             headers=mock.ANY,
                                             verify=mock.ANY)
 
