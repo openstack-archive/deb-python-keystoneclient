@@ -1,5 +1,3 @@
-# vim: tabstop=4 shiftwidth=4 softtabstop=4
-
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
 #    a copy of the License at
@@ -24,6 +22,7 @@ or eventlet.green.subprocess based on if os module is patched by eventlet.
 import errno
 import hashlib
 import logging
+import six
 
 from keystoneclient import exceptions
 
@@ -41,7 +40,7 @@ def _ensure_subprocess():
     if not subprocess:
         try:
             from eventlet import patcher
-            if patcher.already_patched.get('os'):
+            if patcher.already_patched:
                 from eventlet.green import subprocess
             else:
                 import subprocess
@@ -113,7 +112,8 @@ def cms_verify(formatted, signing_cert_file_name, ca_file_name):
                                 "-nocerts", "-noattr"],
                                stdin=subprocess.PIPE,
                                stdout=subprocess.PIPE,
-                               stderr=subprocess.PIPE)
+                               stderr=subprocess.PIPE,
+                               universal_newlines=True)
     output, err, retcode = _process_communicate_handle_oserror(
         process, formatted, (signing_cert_file_name, ca_file_name))
 
@@ -224,7 +224,8 @@ def cms_sign_text(text, signing_cert_file_name, signing_key_file_name):
                                 "-nocerts", "-noattr"],
                                stdin=subprocess.PIPE,
                                stdout=subprocess.PIPE,
-                               stderr=subprocess.PIPE)
+                               stderr=subprocess.PIPE,
+                               universal_newlines=True)
 
     output, err, retcode = _process_communicate_handle_oserror(
         process, text, (signing_cert_file_name, signing_key_file_name))
@@ -263,6 +264,8 @@ def cms_hash_token(token_id):
         return None
     if is_ans1_token(token_id):
         hasher = hashlib.md5()
+        if isinstance(token_id, six.text_type):
+            token_id = token_id.encode('utf-8')
         hasher.update(token_id)
         return hasher.hexdigest()
     else:

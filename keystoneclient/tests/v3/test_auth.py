@@ -1,5 +1,3 @@
-# vim: tabstop=4 shiftwidth=4 softtabstop=4
-
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
 #    a copy of the License at
@@ -13,6 +11,7 @@
 #    under the License.
 
 import httpretty
+import six
 
 from keystoneclient import exceptions
 from keystoneclient.openstack.common import jsonutils
@@ -237,7 +236,10 @@ class AuthenticateAgainstKeystoneTests(utils.TestCase):
 
         cl = client.Client(auth_url=self.TEST_URL,
                            token=fake_token)
-        body = jsonutils.loads(httpretty.last_request().body)
+        body = httpretty.last_request().body
+        if six.PY3:
+            body = body.decode('utf-8')
+        body = jsonutils.loads(body)
         self.assertEqual(body['auth']['identity']['token']['id'], fake_token)
 
         resp, body = cl.get(fake_url)

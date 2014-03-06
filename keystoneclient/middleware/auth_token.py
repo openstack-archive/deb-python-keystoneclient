@@ -1,5 +1,3 @@
-# vim: tabstop=4 shiftwidth=4 softtabstop=4
-
 # Copyright 2010-2012 OpenStack Foundation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -998,10 +996,16 @@ class AuthProtocol(object):
                 key = CACHE_KEY_TEMPLATE % token_id
                 serialized = self._cache.get(key)
             else:
+                secret_key = self._memcache_secret_key
+                if isinstance(secret_key, six.string_types):
+                    secret_key = secret_key.encode('utf-8')
+                security_strategy = self._memcache_security_strategy
+                if isinstance(security_strategy, six.string_types):
+                    security_strategy = security_strategy.encode('utf-8')
                 keys = memcache_crypt.derive_keys(
                     token_id,
-                    self._memcache_secret_key,
-                    self._memcache_security_strategy)
+                    secret_key,
+                    security_strategy)
                 cache_key = CACHE_KEY_TEMPLATE % (
                     memcache_crypt.get_cache_key(keys))
                 raw_cached = self._cache.get(cache_key)
@@ -1022,6 +1026,8 @@ class AuthProtocol(object):
             # Note that 'invalid' and (data, expires) are the only
             # valid types of serialized cache entries, so there is not
             # a collision with jsonutils.loads(serialized) == None.
+            if not isinstance(serialized, six.string_types):
+                serialized = serialized.decode('utf-8')
             cached = jsonutils.loads(serialized)
             if cached == 'invalid':
                 self.LOG.debug('Cached Token %s is marked unauthorized',
@@ -1053,30 +1059,26 @@ class AuthProtocol(object):
 
         """
         serialized_data = jsonutils.dumps(data)
+        if isinstance(serialized_data, six.text_type):
+            serialized_data = serialized_data.encode('utf-8')
         if self._memcache_security_strategy is None:
             cache_key = CACHE_KEY_TEMPLATE % token_id
             data_to_store = serialized_data
         else:
+            secret_key = self._memcache_secret_key
+            if isinstance(secret_key, six.string_types):
+                secret_key = secret_key.encode('utf-8')
+            security_strategy = self._memcache_security_strategy
+            if isinstance(security_strategy, six.string_types):
+                security_strategy = security_strategy.encode('utf-8')
             keys = memcache_crypt.derive_keys(
-                token_id,
-                self._memcache_secret_key,
-                self._memcache_security_strategy)
+                token_id, secret_key, security_strategy)
             cache_key = CACHE_KEY_TEMPLATE % memcache_crypt.get_cache_key(keys)
             data_to_store = memcache_crypt.protect_data(keys, serialized_data)
 
-        # Historically the swift cache connection used the argument
-        # timeout= for the cache timeout, but this has been unified
-        # with the official python memcache client with time= since
-        # grizzly, we still need to handle folsom for a while until
-        # this could get removed.
-        try:
-            self._cache.set(cache_key,
-                            data_to_store,
-                            time=self.token_cache_time)
-        except(TypeError):
-            self._cache.set(cache_key,
-                            data_to_store,
-                            timeout=self.token_cache_time)
+        self._cache.set(cache_key,
+                        data_to_store,
+                        time=self.token_cache_time)
 
     def _invalid_user_token(self, msg=False):
         # NOTE(jamielennox): use False as the default so that None is valid
@@ -1232,6 +1234,8 @@ class AuthProtocol(object):
         if not revoked_tokens:
             return
         revoked_ids = (x['id'] for x in revoked_tokens)
+        if isinstance(signed_text, six.text_type):
+            signed_text = signed_text.encode('utf-8')
         token_id = utils.hash_signed_token(signed_text)
         for revoked_id in revoked_ids:
             if token_id == revoked_id:

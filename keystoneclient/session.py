@@ -1,5 +1,3 @@
-# vim: tabstop=4 shiftwidth=4 softtabstop=4
-
 # Licensed under the Apache License, Version 2.0 (the "License"); you may
 # not use this file except in compliance with the License. You may obtain
 # a copy of the License at
@@ -37,21 +35,26 @@ class Session(object):
     REDIRECT_STATUSES = (301, 302, 303, 305, 307)
     DEFAULT_REDIRECT_LIMIT = 30
 
-    def __init__(self, session=None, original_ip=None, verify=True, cert=None,
-                 timeout=None, user_agent=None,
+    def __init__(self, auth=None, session=None, original_ip=None, verify=True,
+                 cert=None, timeout=None, user_agent=None,
                  redirect=DEFAULT_REDIRECT_LIMIT):
         """Maintains client communication state and common functionality.
 
         As much as possible the parameters to this class reflect and are passed
         directly to the requests library.
 
+        :param auth: An authentication plugin to authenticate the session with.
+                     (optional, defaults to None)
+        :param requests.Session session: A requests session object that can be
+                                         used for issuing requests. (optional)
         :param string original_ip: The original IP of the requesting user
                                    which will be sent to identity service in a
                                    'Forwarded' header. (optional)
         :param verify: The verification arguments to pass to requests. These
                        are of the same form as requests expects, so True or
                        False to verify (or not) against system certificates or
-                       a path to a bundle or CA certs to check against.
+                       a path to a bundle or CA certs to check against or None
+                       for requests to attempt to locate and use certificates.
                        (optional, defaults to True)
         :param cert: A client certificate to pass to requests. These are of the
                      same form as requests expects. Either a single filename
@@ -74,6 +77,7 @@ class Session(object):
         if not session:
             session = requests.Session()
 
+        self.auth = auth
         self.session = session
         self.original_ip = original_ip
         self.verify = verify
@@ -89,7 +93,8 @@ class Session(object):
             self.user_agent = user_agent
 
     def request(self, url, method, json=None, original_ip=None,
-                user_agent=None, redirect=None, **kwargs):
+                user_agent=None, redirect=None, authenticated=None,
+                **kwargs):
         """Send an HTTP request with the specified characteristics.
 
         Wrapper around `requests.Session.request` to handle tasks such as
@@ -111,6 +116,10 @@ class Session(object):
                                   can be followed by a request. Either an
                                   integer for a specific count or True/False
                                   for forever/never. (optional)
+        :param bool authenticated: True if a token should be attached to this
+                                   request, False if not or None for attach if
+                                   an auth_plugin is available.
+                                   (optional, defaults to None)
         :param kwargs: any other parameter that can be passed to
                        requests.Session.request (such as `headers`). Except:
                        'data' will be overwritten by the data in 'json' param.
@@ -124,6 +133,17 @@ class Session(object):
         """
 
         headers = kwargs.setdefault('headers', dict())
+
+        if authenticated is None:
+            authenticated = self.auth is not None
+
+        if authenticated:
+            token = self.get_token()
+
+            if not token:
+                raise exceptions.AuthorizationFailure("No token Available")
+
+            headers['X-Auth-Token'] = token
 
         if self.cert:
             kwargs.setdefault('cert', self.cert)
@@ -150,6 +170,11 @@ class Session(object):
 
         string_parts = ['curl -i']
 
+        # NOTE(jamielennox): None means let requests do its default validation
+        # so we need to actually check that this is False.
+        if self.verify is False:
+            string_parts.append('--insecure')
+
         if method:
             string_parts.extend(['-X', method])
 
@@ -159,11 +184,12 @@ class Session(object):
             for header in six.iteritems(headers):
                 string_parts.append('-H "%s: %s"' % header)
 
-        _logger.debug('REQ: %s', ' '.join(string_parts))
+        try:
+            string_parts.append("-d '%s'" % kwargs['data'])
+        except KeyError:
+            pass
 
-        data = kwargs.get('data')
-        if data:
-            _logger.debug('REQ BODY: %s', data)
+        _logger.debug('REQ: %s', ' '.join(string_parts))
 
         # Force disable requests redirect handling. We will manage this below.
         kwargs['allow_redirects'] = False
@@ -249,3 +275,47 @@ class Session(object):
 
     def patch(self, url, **kwargs):
         return self.request(url, 'PATCH', **kwargs)
+
+    @classmethod
+    def construct(cls, kwargs):
+        """Handles constructing a session from the older HTTPClient args as
+        well as the new request style arguments.
+
+        *DEPRECATED*: This function is purely for bridging the gap between
+        older client arguments and the session arguments that they relate to.
+        It is not intended to be used as a generic Session Factory.
+
+        This function purposefully modifies the input kwargs dictionary so that
+        the remaining kwargs dict can be reused and passed on to other
+        functionswithout session arguments.
+
+        """
+        verify = kwargs.pop('verify', None)
+        cacert = kwargs.pop('cacert', None)
+        cert = kwargs.pop('cert', None)
+        key = kwargs.pop('key', None)
+        insecure = kwargs.pop('insecure', False)
+
+        if verify is None:
+            if insecure:
+                verify = False
+            else:
+                verify = cacert or True
+
+        if cert and key:
+            # passing cert and key together is deprecated in favour of the
+            # requests lib form of having the cert and key as a tuple
+            cert = (cert, key)
+
+        return cls(verify=verify, cert=cert,
+                   timeout=kwargs.pop('timeout', None),
+                   session=kwargs.pop('session', None),
+                   original_ip=kwargs.pop('original_ip', None),
+                   user_agent=kwargs.pop('user_agent', None))
+
+    def get_token(self):
+        """Return a token as provided by the auth plugin."""
+        if not self.auth:
+            raise exceptions.MissingAuthPlugin("Token Required")
+
+        return self.auth.get_token(self)

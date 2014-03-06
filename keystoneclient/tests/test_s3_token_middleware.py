@@ -1,5 +1,3 @@
-# vim: tabstop=4 shiftwidth=4 softtabstop=4
-
 # Copyright 2012 OpenStack Foundation
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may
@@ -16,6 +14,8 @@
 
 import httpretty
 import mock
+import requests
+import six
 import testtools
 import webob
 
@@ -119,6 +119,27 @@ class S3TokenMiddlewareTestGood(S3TokenMiddlewareTestBase):
         req.get_response(self.middleware)
         path = req.environ['PATH_INFO']
         self.assertTrue(path.startswith('/v1/AUTH_FORCED_TENANT_ID'))
+
+    @mock.patch.object(requests, 'post')
+    def test_insecure(self, MOCK_REQUEST):
+        self.middleware = (
+            s3_token.filter_factory({'insecure': True})(FakeApp()))
+
+        text_return_value = jsonutils.dumps(GOOD_RESPONSE)
+        if six.PY3:
+            text_return_value = text_return_value.encode()
+        MOCK_REQUEST.return_value = utils.TestResponse({
+            'status_code': 201,
+            'text': text_return_value})
+
+        req = webob.Request.blank('/v1/AUTH_cfa/c/o')
+        req.headers['Authorization'] = 'access:signature'
+        req.headers['X-Storage-Token'] = 'token'
+        req.get_response(self.middleware)
+
+        self.assertTrue(MOCK_REQUEST.called)
+        mock_args, mock_kwargs = MOCK_REQUEST.call_args
+        self.assertIs(mock_kwargs['verify'], False)
 
 
 class S3TokenMiddlewareTestBad(S3TokenMiddlewareTestBase):

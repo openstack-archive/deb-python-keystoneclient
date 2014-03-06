@@ -1,5 +1,3 @@
-# vim: tabstop=4 shiftwidth=4 softtabstop=4
-
 # Copyright 2012 OpenStack Foundation
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may
@@ -176,13 +174,6 @@ class TimezoneFixture(fixtures.Fixture):
         elif 'TZ' in os.environ:
             del os.environ['TZ']
         time.tzset()
-
-
-class FakeSwiftOldMemcacheClient(memorycache.Client):
-    # NOTE(vish,chmou): old swift memcache uses param timeout instead of time
-    def set(self, key, value, timeout=0, min_compress_len=0):
-        sup = super(FakeSwiftOldMemcacheClient, self)
-        sup.set(key, value, timeout, min_compress_len)
 
 
 class FakeApp(object):
@@ -733,11 +724,6 @@ class CommonAuthTokenMiddlewareTest(object):
             mock_utcnow.return_value = expired
             self.assertIsNone(self._get_cached_token(token))
 
-    def test_old_swift_memcache_set_expired(self):
-        extra_conf = {'cache': 'swift.cache'}
-        extra_environ = {'swift.cache': FakeSwiftOldMemcacheClient()}
-        self.test_memcache_set_expired(extra_conf, extra_environ)
-
     def test_swift_memcache_set_expired(self):
         extra_conf = {'cache': 'swift.cache'}
         extra_environ = {'swift.cache': memorycache.Client()}
@@ -789,7 +775,7 @@ class CommonAuthTokenMiddlewareTest(object):
             'memcache_secret_key': 'mysecret'
         }
         self.set_middleware(conf=conf)
-        token = 'my_token'
+        token = b'my_token'
         some_time_later = timeutils.utcnow() + datetime.timedelta(hours=4)
         expires = timeutils.strtime(some_time_later)
         data = ('this_data', expires)
@@ -805,7 +791,7 @@ class CommonAuthTokenMiddlewareTest(object):
             'memcache_secret_key': 'mysecret'
         }
         self.set_middleware(conf=conf)
-        token = 'my_token'
+        token = b'my_token'
         some_time_later = timeutils.utcnow() + datetime.timedelta(hours=4)
         expires = timeutils.strtime(some_time_later)
         data = ('this_data', expires)

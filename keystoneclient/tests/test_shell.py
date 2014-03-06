@@ -1,5 +1,3 @@
-# vim: tabstop=4 shiftwidth=4 softtabstop=4
-
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
 #    a copy of the License at
@@ -62,6 +60,10 @@ class ShellTest(utils.TestCase):
     def setUp(self):
 
         super(ShellTest, self).setUp()
+        for var in os.environ:
+            if var.startswith("OS_"):
+                self.useFixture(fixtures.EnvironmentVariable(var, ""))
+
         for var in self.FAKE_ENV:
             self.useFixture(fixtures.EnvironmentVariable(var,
                             self.FAKE_ENV[var]))

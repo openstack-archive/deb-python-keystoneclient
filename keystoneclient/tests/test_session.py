@@ -1,5 +1,3 @@
-# vim: tabstop=4 shiftwidth=4 softtabstop=4
-
 # Licensed under the Apache License, Version 2.0 (the "License"); you may
 # not use this file except in compliance with the License. You may obtain
 # a copy of the License at
@@ -16,7 +14,9 @@
 import httpretty
 import mock
 import requests
+import six
 
+from keystoneclient.auth import base
 from keystoneclient import exceptions
 from keystoneclient import session as client_session
 from keystoneclient.tests import utils
@@ -140,6 +140,25 @@ class SessionTests(utils.TestCase):
         self.assertRaises(exceptions.InternalServerError,
                           session.get, self.TEST_URL)
 
+    @httpretty.activate
+    def test_session_debug_output(self):
+        session = client_session.Session(verify=False)
+        headers = {'HEADERA': 'HEADERVALB'}
+        body = 'BODYRESPONSE'
+        data = 'BODYDATA'
+        self.stub_url(httpretty.POST, body=body)
+        session.post(self.TEST_URL, headers=headers, data=data)
+
+        self.assertIn('curl', self.logger.output)
+        self.assertIn('POST', self.logger.output)
+        self.assertIn('--insecure', self.logger.output)
+        self.assertIn(body, self.logger.output)
+        self.assertIn("'%s'" % data, self.logger.output)
+
+        for k, v in six.iteritems(headers):
+            self.assertIn(k, self.logger.output)
+            self.assertIn(v, self.logger.output)
+
 
 class RedirectTests(utils.TestCase):
 
@@ -222,3 +241,77 @@ class RedirectTests(utils.TestCase):
         for r, s in zip(req_resp.history, ses_resp.history):
             self.assertEqual(r.url, s.url)
             self.assertEqual(r.status_code, s.status_code)
+
+
+class ConstructSessionFromArgsTests(utils.TestCase):
+
+    KEY = 'keyfile'
+    CERT = 'certfile'
+    CACERT = 'cacert-path'
+
+    def _s(self, k=None, **kwargs):
+        k = k or kwargs
+        return client_session.Session.construct(k)
+
+    def test_verify(self):
+        self.assertFalse(self._s(insecure=True).verify)
+        self.assertTrue(self._s(verify=True, insecure=True).verify)
+        self.assertFalse(self._s(verify=False, insecure=True).verify)
+        self.assertEqual(self._s(cacert=self.CACERT).verify, self.CACERT)
+
+    def test_cert(self):
+        tup = (self.CERT, self.KEY)
+        self.assertEqual(self._s(cert=tup).cert, tup)
+        self.assertEqual(self._s(cert=self.CERT, key=self.KEY).cert, tup)
+        self.assertIsNone(self._s(key=self.KEY).cert)
+
+    def test_pass_through(self):
+        value = 42  # only a number because timeout needs to be
+        for key in ['timeout', 'session', 'original_ip', 'user_agent']:
+            args = {key: value}
+            self.assertEqual(getattr(self._s(args), key), value)
+            self.assertNotIn(key, args)
+
+
+class AuthPlugin(base.BaseAuthPlugin):
+    """Very simple debug authentication plugin.
+
+    Takes Parameters such that it can throw exceptions at the right times.
+    """
+
+    TEST_TOKEN = 'aToken'
+
+    def __init__(self, token=TEST_TOKEN):
+        self.token = token
+
+    def get_token(self, session):
+        return self.token
+
+
+class SessionAuthTests(utils.TestCase):
+
+    TEST_URL = 'http://127.0.0.1:5000/'
+    TEST_JSON = {'hello': 'world'}
+
+    @httpretty.activate
+    def test_auth_plugin_default_with_plugin(self):
+        self.stub_url('GET', base_url=self.TEST_URL, json=self.TEST_JSON)
+
+        # if there is an auth_plugin then it should default to authenticated
+        auth = AuthPlugin()
+        sess = client_session.Session(auth=auth)
+        resp = sess.get(self.TEST_URL)
+        self.assertDictEqual(resp.json(), self.TEST_JSON)
+
+        self.assertRequestHeaderEqual('X-Auth-Token', AuthPlugin.TEST_TOKEN)
+
+    @httpretty.activate
+    def test_auth_plugin_disable(self):
+        self.stub_url('GET', base_url=self.TEST_URL, json=self.TEST_JSON)
+
+        auth = AuthPlugin()
+        sess = client_session.Session(auth=auth)
+        resp = sess.get(self.TEST_URL, authenticated=False)
+        self.assertDictEqual(resp.json(), self.TEST_JSON)
+
+        self.assertRequestHeaderEqual('X-Auth-Token', None)

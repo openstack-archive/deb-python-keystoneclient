@@ -1,5 +1,3 @@
-# vim: tabstop=4 shiftwidth=4 softtabstop=4
-
 # Copyright 2012 OpenStack Foundation
 # Copyright 2010 United States Government as represented by the
 # Administrator of the National Aeronautics and Space Administration.
@@ -33,10 +31,12 @@ This WSGI component:
 
 """
 
-import httplib
 import logging
-import urllib
 import webob
+
+import requests
+import six
+from six.moves import urllib
 
 from keystoneclient.openstack.common import jsonutils
 
@@ -76,7 +76,7 @@ def split_path(path, minsegs=1, maxsegs=None, rest_with_last=False):
         count = len(segs)
         if (segs[0] or count < minsegs or count > maxsegs or
                 '' in segs[1:minsegs]):
-            raise ValueError('Invalid path: %s' % urllib.quote(path))
+            raise ValueError('Invalid path: %s' % urllib.parse.quote(path))
     else:
         minsegs += 1
         maxsegs += 1
@@ -85,7 +85,7 @@ def split_path(path, minsegs=1, maxsegs=None, rest_with_last=False):
         if (segs[0] or count < minsegs or count > maxsegs + 1 or
                 '' in segs[1:minsegs] or
                 (count == maxsegs + 1 and segs[maxsegs])):
-            raise ValueError('Invalid path: %s' % urllib.quote(path))
+            raise ValueError('Invalid path: %s' % urllib.parse.quote(path))
     segs = segs[1:maxsegs]
     segs.extend([None] * (maxsegs - 1 - len(segs)))
     return segs
@@ -105,16 +105,26 @@ class S3Token(object):
         self.logger.debug('Starting the %s component' % PROTOCOL_NAME)
         self.reseller_prefix = conf.get('reseller_prefix', 'AUTH_')
         # where to find the auth service (we use this to validate tokens)
-        self.auth_host = conf.get('auth_host')
-        self.auth_port = int(conf.get('auth_port', 35357))
-        self.auth_protocol = conf.get('auth_protocol', 'https')
-        if self.auth_protocol == 'http':
-            self.http_client_class = httplib.HTTPConnection
-        else:
-            self.http_client_class = httplib.HTTPSConnection
+
+        auth_host = conf.get('auth_host')
+        auth_port = int(conf.get('auth_port', 35357))
+        auth_protocol = conf.get('auth_protocol', 'https')
+
+        self.request_uri = '%s://%s:%s' % (auth_protocol, auth_host, auth_port)
+
         # SSL
-        self.cert_file = conf.get('certfile')
-        self.key_file = conf.get('keyfile')
+        insecure = conf.get('insecure', False)
+        cert_file = conf.get('certfile')
+        key_file = conf.get('keyfile')
+
+        if insecure:
+            self.verify = False
+        elif cert_file and key_file:
+            self.verify = (cert_file, key_file)
+        elif cert_file:
+            self.verify = cert_file
+        else:
+            self.verify = None
 
     def deny_request(self, code):
         error_table = {
@@ -123,42 +133,33 @@ class S3Token(object):
         }
         resp = webob.Response(content_type='text/xml')
         resp.status = error_table[code][0]
-        resp.body = error_table[code][1]
-        resp.body = ('<?xml version="1.0" encoding="UTF-8"?>\r\n'
+        error_msg = ('<?xml version="1.0" encoding="UTF-8"?>\r\n'
                      '<Error>\r\n  <Code>%s</Code>\r\n  '
                      '<Message>%s</Message>\r\n</Error>\r\n' %
                      (code, error_table[code][1]))
+        if six.PY3:
+            error_msg = error_msg.encode()
+        resp.body = error_msg
         return resp
 
     def _json_request(self, creds_json):
         headers = {'Content-Type': 'application/json'}
-        if self.auth_protocol == 'http':
-            conn = self.http_client_class(self.auth_host, self.auth_port)
-        else:
-            conn = self.http_client_class(self.auth_host,
-                                          self.auth_port,
-                                          self.key_file,
-                                          self.cert_file)
         try:
-            conn.request('POST', '/v2.0/s3tokens',
-                         body=creds_json,
-                         headers=headers)
-            response = conn.getresponse()
-            output = response.read()
-        except Exception as e:
+            response = requests.post('%s/v2.0/s3tokens' % self.request_uri,
+                                     headers=headers, data=creds_json,
+                                     verify=self.verify)
+        except requests.exceptions.RequestException as e:
             self.logger.info('HTTP connection exception: %s' % e)
             resp = self.deny_request('InvalidURI')
             raise ServiceError(resp)
-        finally:
-            conn.close()
 
-        if response.status < 200 or response.status >= 300:
+        if response.status_code < 200 or response.status_code >= 300:
             self.logger.debug('Keystone reply error: status=%s reason=%s' %
-                              (response.status, response.reason))
+                              (response.status_code, response.reason))
             resp = self.deny_request('AccessDenied')
             raise ServiceError(resp)
 
-        return (response, output)
+        return response
 
     def __call__(self, environ, start_response):
         """Handle incoming request. authenticate and send downstream."""
@@ -225,23 +226,23 @@ class S3Token(object):
         #              identified and not doing a second query and just
         #              pass it through to swiftauth in this case.
         try:
-            resp, output = self._json_request(creds_json)
+            resp = self._json_request(creds_json)
         except ServiceError as e:
             resp = e.args[0]
             msg = 'Received error, exiting middleware with error: %s'
-            self.logger.debug(msg % (resp.status))
+            self.logger.debug(msg % (resp.status_code))
             return resp(environ, start_response)
 
         self.logger.debug('Keystone Reply: Status: %d, Output: %s' % (
-                          resp.status, output))
+                          resp.status_code, resp.content))
 
         try:
-            identity_info = jsonutils.loads(output)
+            identity_info = resp.json()
             token_id = str(identity_info['access']['token']['id'])
             tenant = identity_info['access']['token']['tenant']
         except (ValueError, KeyError):
             error = 'Error on keystone reply: %d %s'
-            self.logger.debug(error % (resp.status, str(output)))
+            self.logger.debug(error % (resp.status_code, str(resp.content)))
             return self.deny_request('InvalidURI')(environ, start_response)
 
         req.headers['X-Auth-Token'] = token_id

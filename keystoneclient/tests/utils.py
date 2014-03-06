@@ -1,5 +1,3 @@
-# vim: tabstop=4 shiftwidth=4 softtabstop=4
-
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
 #    a copy of the License at
@@ -12,9 +10,11 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+import logging
 import sys
 import time
 
+import fixtures
 import httpretty
 import mock
 from mox3 import mox
@@ -40,6 +40,7 @@ class TestCase(testtools.TestCase):
     def setUp(self):
         super(TestCase, self).setUp()
         self.mox = mox.Mox()
+        self.logger = self.useFixture(fixtures.FakeLogger(level=logging.DEBUG))
         self.time_patcher = mock.patch.object(time, 'time', lambda: 1234)
         self.time_patcher.start()
 
@@ -65,11 +66,15 @@ class TestCase(testtools.TestCase):
         httpretty.register_uri(method, url, **kwargs)
 
     def assertRequestBodyIs(self, body=None, json=None):
+        last_request_body = httpretty.last_request().body
+        if six.PY3:
+            last_request_body = last_request_body.decode('utf-8')
+
         if json:
-            val = jsonutils.loads(httpretty.last_request().body)
+            val = jsonutils.loads(last_request_body)
             self.assertEqual(json, val)
         elif body:
-            self.assertEqual(body, httpretty.last_request().body)
+            self.assertEqual(body, last_request_body)
 
     def assertQueryStringIs(self, qs=''):
         """Verify the QueryString matches what is expected.

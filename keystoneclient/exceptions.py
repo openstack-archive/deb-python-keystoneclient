@@ -1,5 +1,3 @@
-# vim: tabstop=4 shiftwidth=4 softtabstop=4
-
 # Copyright 2010 Jacob Kaplan-Moss
 # Copyright 2011 Nebula, Inc.
 #
@@ -49,3 +47,7 @@ class DiscoveryFailure(ClientException):
 
 class VersionNotAvailable(DiscoveryFailure):
     """Discovery failed as the version you requested is not available."""
+
+
+class MissingAuthPlugin(ClientException):
+    """An authenticated request is required but no plugin available."""
