@@ -2,6 +2,7 @@ python-keystoneclient (1:0.6.0-1) unstable; urgency=medium
 
   * New upstream release.
   * Build-depends on python-httpretty (>= 0.8.0) instead of 0.7.1.
+  * Standards-Version: is now 3.9.5.
 
  -- Thomas Goirand <zigo@debian.org>  Thu, 06 Mar 2014 22:11:45 +0800
 

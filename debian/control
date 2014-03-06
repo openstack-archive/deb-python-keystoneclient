@@ -36,7 +36,7 @@ Build-Depends-Indep: pep8,
                      python-unittest2,
                      python-webob (>= 1.2.3),
                      testrepository (>= 0.0.17)
-Standards-Version: 3.9.4
+Standards-Version: 3.9.5
 Homepage: https://github.com/openstack/python-keystoneclient
 Vcs-Git: git://anonscm.debian.org/openstack/python-keystoneclient.git
 Vcs-Browser: http://anonscm.debian.org/gitweb/?p=openstack/python-keystoneclient.git;a=summary
