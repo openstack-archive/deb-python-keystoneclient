@@ -1,6 +1,7 @@
-python-keystoneclient (1:0.6.0-1) unstable; urgency=medium
+python-keystoneclient (1:0.6.0-1) experimental; urgency=medium
 
   * New upstream release.
+  * Uploading to experimental due to suspect unit test failures.
   * Build-depends on python-httpretty (>= 0.8.0) instead of 0.7.1.
   * Standards-Version: is now 3.9.5.
 
