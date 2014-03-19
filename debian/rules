@@ -1,13 +1,10 @@
 #!/usr/bin/make -f
 
-#export DH_VERBOSE=1
-
 include /usr/share/openstack-pkg-tools/pkgos.make
-
 export OSLO_PACKAGE_VERSION=$(VERSION)
 
 %:
-	dh $@  --with python2
+	dh $@ --buildsystem=python_distutils --with python2,sphinxdoc
 
 override_dh_auto_test:
 ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
@@ -24,9 +21,22 @@ override_dh_clean:
 	rm -f keystoneclient/versioninfo
 
 override_dh_auto_clean:
-	rm -rf python_keystoneclient.egg-info build
+	rm -rf python_keystoneclient.egg-info build doc/man
 
 override_dh_auto_install:
 	dh_auto_install
 	install -D -m 0644 tools/keystone.bash_completion $(CURDIR)/debian/python-keystoneclient/etc/bash_completion.d/keystone.bash_completion
 	rm -rf $(CURDIR)/debian/python-keystoneclient/usr/keystoneclient
+
+override_dh_sphinxdoc:
+ifeq (,$(findstring nodocs, $(DEB_BUILD_OPTIONS)))
+	sphinx-build -b html doc/source $(CURDIR)/debian/python-keystoneclient/usr/share/doc/python-keystoneclient/html
+	dh_sphinxdoc -O--buildsystem=python_distutils
+endif
+
+
+override_dh_installman:
+ifeq (,$(findstring nodocs, $(DEB_BUILD_OPTIONS)))
+	sphinx-build -b man doc/source/ doc/man
+	dh_installman -O--buildsystem=python_distutils
+endif
