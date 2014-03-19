@@ -21,7 +21,7 @@ override_dh_clean:
 	rm -f keystoneclient/versioninfo
 
 override_dh_auto_clean:
-	rm -rf python_keystoneclient.egg-info build doc/man
+	rm -rf python_keystoneclient.egg-info build doc/man .testrepository
 
 override_dh_auto_install:
 	dh_auto_install
