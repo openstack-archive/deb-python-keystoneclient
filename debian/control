@@ -31,11 +31,13 @@ Build-Depends-Indep: pep8,
                      python-simplejson (>= 2.0.9),
                      python-six (>= 1.4.1),
                      python-sphinx,
+                     python-subunit (>= 0.0.18),
                      python-testresources (>= 0.2.4),
                      python-testtools (>= 0.9.32),
                      python-unittest2,
                      python-webob (>= 1.2.3),
-                     testrepository (>= 0.0.17)
+                     testrepository (>= 0.0.17),
+                     subunit (>= 0.0.18)
 Standards-Version: 3.9.5
 Homepage: https://github.com/openstack/python-keystoneclient
 Vcs-Git: git://anonscm.debian.org/openstack/python-keystoneclient.git

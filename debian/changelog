@@ -1,6 +1,7 @@
 python-keystoneclient (1:0.6.0-2) experimental; urgency=low
 
   * Added packaging of upstream man page and sphinxdoc.
+  * Added missing build-depends: subunit.
 
  -- Thomas Goirand <zigo@debian.org>  Thu, 20 Mar 2014 00:31:24 +0800
 
