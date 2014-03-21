@@ -2,6 +2,7 @@ python-keystoneclient (1:0.6.0-3) experimental; urgency=low
 
   * Added python-memcache *and* memcached as build-dependency. In deed, if
     python-memcache is installed, but not memcached, unit tests would fail.
+  * Fails the build on unit test failures.
 
  -- Thomas Goirand <zigo@debian.org>  Fri, 21 Mar 2014 13:39:37 +0800
 
