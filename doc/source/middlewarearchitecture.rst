@@ -23,7 +23,7 @@ Abstract
 
 The Keystone middleware architecture supports a common authentication protocol
 in use between the OpenStack projects. By using keystone as a common
-authentication and authorization mechanisms, the OpenStack project can plug in
+authentication and authorization mechanism, the OpenStack project can plug in
 to existing authentication and authorization systems in use by existing
 environments.
 
@@ -31,10 +31,8 @@ In this document, we describe the architecture and responsibilities of the
 authentication middleware which acts as the internal API mechanism for
 OpenStack projects based on the WSGI standard.
 
-For the architecture of keystone and its services, please see
-:doc:`architecture`. This documentation primarily describes the implementation
-in ``keystoneclient/middleware/auth_token.py``
-(:py:class:`keystoneclient.middleware.auth_token.AuthProtocol`)
+This documentation describes the implementation in
+:class:`keystoneclient.middleware.auth_token`
 
 Specification Overview
 ======================
@@ -57,7 +55,7 @@ of the middleware processing is:
 
   * if valid, populate additional headers representing the identity that has
     been authenticated and authorized
-  * in invalid, or not token present, reject the request (HTTPUnauthorized)
+  * if invalid, or no token present, reject the request (HTTPUnauthorized)
     or pass along a header indicating the request is unauthorized (configurable
     in the middleware)
   * if the keystone service is unavailable to validate the token, reject
@@ -75,8 +73,8 @@ Figure 1. Authentication Component
    :height: 180
    :alt: An Authentication Component
 
-The middleware may also be configured to operated in a 'delegated mode'.
-In this mode, the decision reject an unauthenticated client is delegated to
+The middleware may also be configured to operate in a 'delegated mode'.
+In this mode, the decision to reject an unauthenticated client is delegated to
 the OpenStack service, as illustrated in :ref:`authComponentDelegated`.
 
 Here, requests are forwarded to the OpenStack service with an identity status
@@ -102,7 +100,7 @@ Deployment Strategy
 ===================
 
 The middleware is intended to be used inline with OpenStack wsgi components,
-based on the openstack-common WSGI middleware class. It is typically deployed
+based on the Oslo WSGI middleware class. It is typically deployed
 as a configuration element in a paste configuration pipeline of other
 middleware components, with the pipeline terminating in the service
 application. The middleware conforms to the python WSGI standard [PEP-333]_.
@@ -122,11 +120,10 @@ a WSGI component. Example for the auth_token middleware::
     pipeline = authtoken myService
 
     [filter:authtoken]
-    paste.filter_factory = keystone.middleware.auth_token:filter_factory
+    paste.filter_factory = keystoneclient.middleware.auth_token:filter_factory
     auth_host = 127.0.0.1
     auth_port = 35357
     auth_protocol = http
-    auth_uri = http://127.0.0.1:5000/
     admin_token = Super999Sekret888Password777
     admin_user = admin
     admin_password = SuperSekretPassword
@@ -144,13 +141,13 @@ a WSGI component. Example for the auth_token middleware::
     ;Uncomment next line to opt-out of service catalog
     ;include_service_catalog = False
 
-For services which have separate paste-deploy ini file, auth_token middleware
+For services which have a separate paste-deploy ini file, auth_token middleware
 can be alternatively configured in [keystone_authtoken] section in the main
 config file. For example in Nova, all middleware parameters can be removed
 from api-paste.ini::
 
     [filter:authtoken]
-    paste.filter_factory = keystone.middleware.auth_token:filter_factory
+    paste.filter_factory = keystoneclient.middleware.auth_token:filter_factory
 
 and set in nova.conf::
 
@@ -162,7 +159,6 @@ and set in nova.conf::
     auth_host = 127.0.0.1
     auth_port = 35357
     auth_protocol = http
-    auth_uri = http://127.0.0.1:5000/
     admin_user = admin
     admin_password = SuperSekretPassword
     admin_tenant_name = service
@@ -173,8 +169,26 @@ removed to use values in [keystone_authtoken] section.
 Configuration Options
 ---------------------
 
+* ``auth_admin_prefix``: Prefix to prepend at the beginning of the path
 * ``auth_host``: (required) the host providing the keystone service API endpoint
   for validating and requesting tokens
+* ``auth_port``: (optional, default `35357`) the port used to validate tokens
+* ``auth_protocol``: (optional, default `https`)
+* ``auth_uri``: (optional, defaults to
+  `auth_protocol`://`auth_host`:`auth_port`)
+* ``auth_version``: API version of the admin Identity API endpoint
+* ``delay_auth_decision``: (optional, default `0`) (off). If on, the middleware
+  will not reject invalid auth requests, but will delegate that decision to
+  downstream WSGI components.
+* ``http_connect_timeout``: (optional) Request timeout value for communicating
+  with Identity API server.
+* ``http_request_max_retries``: (default 3) How many times are we trying to
+  reconnect when communicating with Identity API Server.
+* ``http_handler``: (optional) Allows to pass in the name of a fake
+  http_handler callback function used instead of `httplib.HTTPConnection` or
+  `httplib.HTTPSConnection`. Useful for unit testing where network is not
+  available.
+
 * ``admin_token``: either this or the following three options are required. If
   set, this is a single shared secret with the keystone configuration used to
   validate tokens.
@@ -183,15 +197,8 @@ Configuration Options
   admin_tenant_name are defined as a service account which is expected to have
   been previously configured in Keystone to validate user tokens.
 
-* ``delay_auth_decision``: (optional, default `0`) (off). If on, the middleware
-  will not reject invalid auth requests, but will delegate that decision to
-  downstream WSGI components.
-* ``http_connect_timeout``: (optional, default `python default` allow increase
-  the timeout when validating token by http).
-* ``auth_port``: (optional, default `35357`) the port used to validate tokens
-* ``auth_protocol``: (optional, default `https`)
-* ``auth_uri``: (optional, defaults to
-  `auth_protocol`://`auth_host`:`auth_port`)
+* ``cache``: (optional) Env key for the swift cache
+
 * ``certfile``: (required, if Keystone server requires client cert)
 * ``keyfile``: (required, if Keystone server requires client cert)  This can be
   the same as the certfile if the certfile includes the private key.
@@ -199,10 +206,35 @@ Configuration Options
   encoded CA file/bundle that will be used to verify HTTPS connections.
 * ``insecure``: (optional, default `False`) Don't verify HTTPS connections
   (overrides `cafile`).
+
+* ``signing_dir``: (optional) Directory used to cache files related to PKI
+  tokens
+
+* ``memcached_servers``: (optional) If defined, the memcache server(s) to use
+  for caching
+* ``token_cache_time``: (default 300) In order to prevent excessive requests
+  and validations, the middleware uses an in-memory cache for the tokens the
+  Keystone API returns. This is only valid if memcache_servers s defined. Set
+  to -1 to disable caching completely.
+* ``memcache_security_strategy``: (optional) if defined, indicate whether token
+  data should be authenticated or authenticated and encrypted. Acceptable
+  values are MAC or ENCRYPT.  If MAC, token data is authenticated (with HMAC)
+  in the cache. If ENCRYPT, token data is encrypted and authenticated in the
+  cache. If the value is not one of these options or empty, auth_token will
+  raise an exception on initialization.
+* ``memcache_secret_key``: (mandatory if memcache_security_strategy is defined)
+   this string is used for key derivation.
 * ``include_service_catalog``: (optional, default `True`) Indicate whether to
   set the X-Service-Catalog header. If False, middleware will not ask for
   service catalog on token validation and will not set the X-Service-Catalog
   header.
+* ``enforce_token_bind``: (default ``permissive``) Used to control the use and
+  type of token binding. Can be set to: "disabled" to not check token binding.
+  "permissive" (default) to validate binding information if the bind type is of
+  a form known to the server and ignore it if not. "strict" like "permissive"
+  but if the bind type is unknown the token will be rejected. "required" any
+  form of token binding is needed to be allowed. Finally the name of a binding
+  method that must be present in tokens.
 
 Caching for improved response
 -----------------------------
@@ -282,8 +314,8 @@ unsuccessful.
 Extended the request with additional User Information
 -----------------------------------------------------
 
-:py:class:`keystone.middleware.auth_token.AuthProtocol` extends the request
-with additional information if the user has been authenticated.
+:py:class:`keystoneclient.middleware.auth_token.AuthProtocol` extends the
+request with additional information if the user has been authenticated.
 
 
 X-Identity-Status

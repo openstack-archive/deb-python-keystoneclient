@@ -93,6 +93,33 @@ VERSION_LIST_v2 = jsonutils.dumps({
 })
 
 ERROR_TOKEN = '7ae290c2a06244c4b41692eb4e9225f2'
+MEMCACHED_SERVERS = ['localhost:11211']
+MEMCACHED_AVAILABLE = None
+
+
+def memcached_available():
+    """Do a sanity check against memcached.
+
+    Returns ``True`` if the following conditions are met (otherwise, returns
+    ``False``):
+
+    - ``python-memcached`` is installed
+    - a usable ``memcached`` instance is available via ``MEMCACHED_SERVERS``
+    - the client is able to set and get a key/value pair
+
+    """
+    global MEMCACHED_AVAILABLE
+
+    if MEMCACHED_AVAILABLE is None:
+        try:
+            import memcache
+            c = memcache.Client(MEMCACHED_SERVERS)
+            c.set('ping', 'pong', time=1)
+            MEMCACHED_AVAILABLE = c.get('ping') == 'pong'
+        except ImportError:
+            MEMCACHED_AVAILABLE = False
+
+    return MEMCACHED_AVAILABLE
 
 
 class NoModuleFinder(object):
@@ -158,7 +185,7 @@ class TimezoneFixture(fixtures.Fixture):
     def __init__(self, new_tz):
         super(TimezoneFixture, self).__init__()
         self.tz = new_tz
-        self.old_tz = os.environ.get('TZ', None)
+        self.old_tz = os.environ.get('TZ')
 
     def setUp(self):
         super(TimezoneFixture, self).setUp()
@@ -289,9 +316,9 @@ class BaseAuthTokenMiddlewareTest(testtools.TestCase):
 
     def assertLastPath(self, path):
         if path:
-            self.assertEqual(path, httpretty.httpretty.last_request.path)
+            self.assertEqual(path, httpretty.last_request().path)
         else:
-            self.assertIsInstance(httpretty.httpretty.last_request,
+            self.assertIsInstance(httpretty.last_request(),
                                   httpretty.core.HTTPrettyRequestEmpty)
 
 if tuple(sys.version_info)[0:2] < (2, 7):
@@ -369,7 +396,7 @@ class DiabloAuthTokenMiddlewareTest(BaseAuthTokenMiddlewareTest,
         super(DiabloAuthTokenMiddlewareTest, self).setUp(
             expected_env=expected_env)
 
-        httpretty.httpretty.reset()
+        httpretty.reset()
         httpretty.enable()
         self.addCleanup(httpretty.disable)
 
@@ -410,7 +437,7 @@ class NoMemcacheAuthToken(BaseAuthTokenMiddlewareTest):
             'admin_token': 'admin_token1',
             'auth_host': 'keystone.example.com',
             'auth_port': 1234,
-            'memcached_servers': 'localhost:11211',
+            'memcached_servers': MEMCACHED_SERVERS,
             'auth_uri': 'https://keystone.example.com:1234',
         }
 
@@ -419,11 +446,46 @@ class NoMemcacheAuthToken(BaseAuthTokenMiddlewareTest):
     def test_not_use_cache_from_env(self):
         env = {'swift.cache': 'CACHE_TEST'}
         conf = {
-            'memcached_servers': 'localhost:11211'
+            'memcached_servers': MEMCACHED_SERVERS
         }
         self.set_middleware(conf=conf)
         self.middleware._init_cache(env)
-        self.assertNotEqual(self.middleware._cache, 'CACHE_TEST')
+        with self.middleware._cache_pool.reserve() as cache:
+            self.assertNotEqual(cache, 'CACHE_TEST')
+
+    def test_multiple_context_managers_share_single_client(self):
+        env = {}
+        conf = {
+            'memcached_servers': MEMCACHED_SERVERS
+        }
+        self.set_middleware(conf=conf)
+        self.middleware._init_cache(env)
+
+        caches = []
+
+        with self.middleware._cache_pool.reserve() as cache:
+            caches.append(cache)
+
+        with self.middleware._cache_pool.reserve() as cache:
+            caches.append(cache)
+
+        self.assertIs(caches[0], caches[1])
+        self.assertEqual(set(caches), set(self.middleware._cache_pool))
+
+    def test_nested_context_managers_create_multiple_clients(self):
+        env = {}
+        conf = {
+            'memcached_servers': MEMCACHED_SERVERS
+        }
+        self.set_middleware(conf=conf)
+        self.middleware._init_cache(env)
+
+        with self.middleware._cache_pool.reserve() as outer_cache:
+            with self.middleware._cache_pool.reserve() as inner_cache:
+                self.assertNotEqual(outer_cache, inner_cache)
+
+        self.assertEqual(
+            set([inner_cache, outer_cache]), set(self.middleware._cache_pool))
 
 
 class CommonAuthTokenMiddlewareTest(object):
@@ -733,11 +795,12 @@ class CommonAuthTokenMiddlewareTest(object):
         env = {'swift.cache': 'CACHE_TEST'}
         conf = {
             'cache': 'swift.cache',
-            'memcached_servers': ['localhost:11211']
+            'memcached_servers': MEMCACHED_SERVERS
         }
         self.set_middleware(conf=conf)
         self.middleware._init_cache(env)
-        self.assertEqual(self.middleware._cache, 'CACHE_TEST')
+        with self.middleware._cache_pool.reserve() as cache:
+            self.assertEqual(cache, 'CACHE_TEST')
 
     def test_will_expire_soon(self):
         tenseconds = datetime.datetime.utcnow() + datetime.timedelta(
@@ -767,10 +830,11 @@ class CommonAuthTokenMiddlewareTest(object):
         token_response = self.examples.TOKEN_RESPONSES[token]
         self.assertTrue(auth_token._token_is_v3(token_response))
 
+    @testtools.skipUnless(memcached_available(), 'memcached not available')
     def test_encrypt_cache_data(self):
         httpretty.disable()
         conf = {
-            'memcached_servers': ['localhost:11211'],
+            'memcached_servers': MEMCACHED_SERVERS,
             'memcache_security_strategy': 'encrypt',
             'memcache_secret_key': 'mysecret'
         }
@@ -783,10 +847,11 @@ class CommonAuthTokenMiddlewareTest(object):
         self.middleware._cache_store(token, data)
         self.assertEqual(self.middleware._cache_get(token), data[0])
 
+    @testtools.skipUnless(memcached_available(), 'memcached not available')
     def test_sign_cache_data(self):
         httpretty.disable()
         conf = {
-            'memcached_servers': ['localhost:11211'],
+            'memcached_servers': MEMCACHED_SERVERS,
             'memcache_security_strategy': 'mac',
             'memcache_secret_key': 'mysecret'
         }
@@ -799,10 +864,11 @@ class CommonAuthTokenMiddlewareTest(object):
         self.middleware._cache_store(token, data)
         self.assertEqual(self.middleware._cache_get(token), data[0])
 
+    @testtools.skipUnless(memcached_available(), 'memcached not available')
     def test_no_memcache_protection(self):
         httpretty.disable()
         conf = {
-            'memcached_servers': ['localhost:11211'],
+            'memcached_servers': MEMCACHED_SERVERS,
             'memcache_secret_key': 'mysecret'
         }
         self.set_middleware(conf=conf)
@@ -817,34 +883,34 @@ class CommonAuthTokenMiddlewareTest(object):
     def test_assert_valid_memcache_protection_config(self):
         # test missing memcache_secret_key
         conf = {
-            'memcached_servers': ['localhost:11211'],
+            'memcached_servers': MEMCACHED_SERVERS,
             'memcache_security_strategy': 'Encrypt'
         }
         self.assertRaises(auth_token.ConfigurationError, self.set_middleware,
                           conf=conf)
         # test invalue memcache_security_strategy
         conf = {
-            'memcached_servers': ['localhost:11211'],
+            'memcached_servers': MEMCACHED_SERVERS,
             'memcache_security_strategy': 'whatever'
         }
         self.assertRaises(auth_token.ConfigurationError, self.set_middleware,
                           conf=conf)
         # test missing memcache_secret_key
         conf = {
-            'memcached_servers': ['localhost:11211'],
+            'memcached_servers': MEMCACHED_SERVERS,
             'memcache_security_strategy': 'mac'
         }
         self.assertRaises(auth_token.ConfigurationError, self.set_middleware,
                           conf=conf)
         conf = {
-            'memcached_servers': ['localhost:11211'],
+            'memcached_servers': MEMCACHED_SERVERS,
             'memcache_security_strategy': 'Encrypt',
             'memcache_secret_key': ''
         }
         self.assertRaises(auth_token.ConfigurationError, self.set_middleware,
                           conf=conf)
         conf = {
-            'memcached_servers': ['localhost:11211'],
+            'memcached_servers': MEMCACHED_SERVERS,
             'memcache_security_strategy': 'mAc',
             'memcache_secret_key': ''
         }
@@ -1070,7 +1136,7 @@ class CertDownloadMiddlewareTest(BaseAuthTokenMiddlewareTest,
         self.base_dir = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self.base_dir)
         self.cert_dir = os.path.join(self.base_dir, 'certs')
-        os.mkdir(self.cert_dir)
+        os.makedirs(self.cert_dir, stat.S_IRWXU)
         conf = {
             'signing_dir': self.cert_dir,
         }
@@ -1106,7 +1172,7 @@ class CertDownloadMiddlewareTest(BaseAuthTokenMiddlewareTest,
             self.assertEqual(f.read(), data)
 
         self.assertEqual("/testadmin/v2.0/certificates/signing",
-                         httpretty.httpretty.last_request.path)
+                         httpretty.last_request().path)
 
     def test_fetch_signing_ca(self):
         data = 'FAKE CA'
@@ -1119,7 +1185,7 @@ class CertDownloadMiddlewareTest(BaseAuthTokenMiddlewareTest,
             self.assertEqual(f.read(), data)
 
         self.assertEqual("/testadmin/v2.0/certificates/ca",
-                         httpretty.httpretty.last_request.path)
+                         httpretty.last_request().path)
 
     def test_prefix_trailing_slash(self):
         self.conf['auth_admin_prefix'] = '/newadmin/'
@@ -1136,12 +1202,12 @@ class CertDownloadMiddlewareTest(BaseAuthTokenMiddlewareTest,
         self.middleware.fetch_ca_cert()
 
         self.assertEqual('/newadmin/v2.0/certificates/ca',
-                         httpretty.httpretty.last_request.path)
+                         httpretty.last_request().path)
 
         self.middleware.fetch_signing_cert()
 
         self.assertEqual('/newadmin/v2.0/certificates/signing',
-                         httpretty.httpretty.last_request.path)
+                         httpretty.last_request().path)
 
     def test_without_prefix(self):
         self.conf['auth_admin_prefix'] = ''
@@ -1158,12 +1224,12 @@ class CertDownloadMiddlewareTest(BaseAuthTokenMiddlewareTest,
         self.middleware.fetch_ca_cert()
 
         self.assertEqual('/v2.0/certificates/ca',
-                         httpretty.httpretty.last_request.path)
+                         httpretty.last_request().path)
 
         self.middleware.fetch_signing_cert()
 
         self.assertEqual('/v2.0/certificates/signing',
-                         httpretty.httpretty.last_request.path)
+                         httpretty.last_request().path)
 
 
 def network_error_response(method, uri, headers):
@@ -1206,7 +1272,7 @@ class v2AuthTokenMiddlewareTest(BaseAuthTokenMiddlewareTest,
             'revoked_token_hash': self.examples.REVOKED_TOKEN_HASH
         }
 
-        httpretty.httpretty.reset()
+        httpretty.reset()
         httpretty.enable()
         self.addCleanup(httpretty.disable)
 
@@ -1338,7 +1404,7 @@ class CrossVersionAuthTokenMiddlewareTest(BaseAuthTokenMiddlewareTest,
         self.assertEqual(self.response_status, 200)
         self.assertEqual("/testadmin/v2.0/tokens/%s" %
                          self.examples.UUID_TOKEN_DEFAULT,
-                         httpretty.httpretty.last_request.path)
+                         httpretty.last_request().path)
 
 
 class v3AuthTokenMiddlewareTest(BaseAuthTokenMiddlewareTest,
@@ -1388,7 +1454,7 @@ class v3AuthTokenMiddlewareTest(BaseAuthTokenMiddlewareTest,
             'revoked_token_hash': self.examples.REVOKED_v3_TOKEN_HASH
         }
 
-        httpretty.httpretty.reset()
+        httpretty.reset()
         httpretty.enable()
         self.addCleanup(httpretty.disable)
 
@@ -1644,7 +1710,7 @@ class TokenExpirationTest(BaseAuthTokenMiddlewareTest):
         """Ensure we cannot retrieve a token from the cache.
 
         Getting a token from the cache should return None when the token data
-        in the cache stores the expires time as a *nix style timestamp.
+        in the cache stores the expires time as a \*nix style timestamp.
 
         """
         token = 'mytoken'
