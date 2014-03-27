@@ -1,6 +1,11 @@
-python-keystoneclient (1:0.6.0-4) UNRELEASED; urgency=low
+python-keystoneclient (1:0.7.0-1) unstable; urgency=high
 
-  * Removed lots of now useless build-dependencies.
+  * New upstream release.
+  * Uploading to unstable.
+  * Removed lots of now useless build-dependencies, updated (build-)depends for
+    this new upstream release.
+  * Note: this new upstream release fixes CVE-2014-0105: Potential context
+    confusion in Keystone middleware.
 
  -- Thomas Goirand <zigo@debian.org>  Tue, 25 Mar 2014 15:45:40 +0800
 
