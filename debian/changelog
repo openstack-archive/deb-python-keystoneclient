@@ -6,6 +6,7 @@ python-keystoneclient (1:0.7.0-1) unstable; urgency=high
     this new upstream release.
   * Note: this new upstream release fixes CVE-2014-0105: Potential context
     confusion in Keystone middleware.
+  * Refresh no-intersphinx.patch.
 
  -- Thomas Goirand <zigo@debian.org>  Tue, 25 Mar 2014 15:45:40 +0800
 
