@@ -1,4 +1,4 @@
-python-keystoneclient (1:0.7.0-1) unstable; urgency=high
+python-keystoneclient (1:0.7.1-1) unstable; urgency=high
 
   * New upstream release.
   * Uploading to unstable.
