@@ -1,19 +1,23 @@
 #!/usr/bin/make -f
 
+PYTHONS:=$(shell pyversions -vr)
+PYTHON3S:=$(shell py3versions -vr)
+
 include /usr/share/openstack-pkg-tools/pkgos.make
 export OSLO_PACKAGE_VERSION=$(VERSION)
 
 %:
-	dh $@ --buildsystem=python_distutils --with python2,sphinxdoc
+	dh $@ --buildsystem=python_distutils --with python2,python3,sphinxdoc
 
 override_dh_auto_test:
 ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
-	set -e && \
+	set -e && for i in $(PYTHONS) $(PYTHON3S) ; do \
+		rm -rf .testrepository ; \
 		TEMP_REZ=`mktemp -t` ; \
-		python setup.py testr --slowest --testr-args='--subunit  ' | tee $$TEMP_REZ | subunit2pyunit || true \
-		cat $$TEMP_REZ | subunit-filter -s --no-passthrough | subunit-stats || true \
-		rm -f $$TEMP_REZ ;
-#	bash run_tests.sh -N || true
+		PYTHON=python$$i python setup.py testr --slowest --testr-args='--subunit  ' | tee $$TEMP_REZ | subunit2pyunit ; \
+		cat $$TEMP_REZ | subunit-filter -s --no-passthrough | subunit-stats ; \
+		rm -f $$TEMP_REZ ; \
+	done
 endif
 
 override_dh_auto_configure:
@@ -29,7 +33,14 @@ override_dh_auto_clean:
 	rm -rf python_keystoneclient.egg-info build doc/man .testrepository
 
 override_dh_auto_install:
-	dh_auto_install
+	set -e && for pyvers in $(PYTHONS); do \
+		python$$pyvers setup.py install --install-layout=deb \
+			--root $(CURDIR)/debian/python-keystoneclient; \
+	done
+	set -e && for pyvers in $(PYTHON3S); do \
+		python$$pyvers setup.py install --install-layout=deb \
+			--root $(CURDIR)/debian/python3-keystoneclient; \
+	done
 	install -D -m 0644 tools/keystone.bash_completion $(CURDIR)/debian/python-keystoneclient/etc/bash_completion.d/keystone.bash_completion
 	rm -rf $(CURDIR)/debian/python-keystoneclient/usr/keystoneclient
 

@@ -26,7 +26,8 @@ This WSGI component:
 * Collects and forwards identity information based on a valid token
   such as user name, tenant, etc
 
-Refer to: http://keystone.openstack.org/middlewarearchitecture.html
+Refer to: http://docs.openstack.org/developer/python-keystoneclient/
+middlewarearchitecture.html
 
 HEADERS
 -------
@@ -142,6 +143,7 @@ keystone.token_info
 
 """
 
+import contextlib
 import datetime
 import logging
 import os
@@ -151,6 +153,7 @@ import tempfile
 import time
 
 import netaddr
+from oslo.config import cfg
 import six
 from six.moves import urllib
 
@@ -162,23 +165,6 @@ from keystoneclient.openstack.common import memorycache
 from keystoneclient.openstack.common import timeutils
 from keystoneclient import utils
 
-
-CONF = None
-# to pass gate before oslo-config is deployed everywhere,
-# try application copies first
-for app in 'nova', 'glance', 'quantum', 'cinder':
-    try:
-        cfg = __import__('%s.openstack.common.cfg' % app,
-                         fromlist=['%s.openstack.common' % app])
-        # test which application middleware is running in
-        if hasattr(cfg, 'CONF') and 'config_file' in cfg.CONF:
-            CONF = cfg.CONF
-            break
-    except ImportError:
-        pass
-if not CONF:
-    from oslo.config import cfg
-    CONF = cfg.CONF
 
 # alternative middleware configuration in the main application's
 # configuration file e.g. in nova.conf
@@ -196,6 +182,7 @@ if not CONF:
 # 'swift.cache' key. However it could be different, depending on deployment.
 # To use Swift memcache, you must set the 'cache' option to the environment
 # key where the Swift cache object is stored.
+
 opts = [
     cfg.StrOpt('auth_admin_prefix',
                default='',
@@ -232,12 +219,6 @@ opts = [
                default=3,
                help='How many times are we trying to reconnect when'
                ' communicating with Identity API Server.'),
-    cfg.StrOpt('http_handler',
-               default=None,
-               help='Allows to pass in the name of a fake http_handler'
-               ' callback function used instead of httplib.HTTPConnection or'
-               ' httplib.HTTPSConnection. Useful for unit testing where'
-               ' network is not available.'),
     cfg.StrOpt('admin_token',
                secret=True,
                help='Single shared secret with the Keystone configuration'
@@ -267,17 +248,21 @@ opts = [
                help='Directory used to cache files related to PKI tokens'),
     cfg.ListOpt('memcached_servers',
                 deprecated_name='memcache_servers',
-                help='If defined, the memcache server(s) to use for'
-                ' caching'),
+                help='Optionally specify a list of memcached server(s) to'
+                ' use for caching. If left undefined, tokens will instead be'
+                ' cached in-process.'),
     cfg.IntOpt('token_cache_time',
                default=300,
-               help='In order to prevent excessive requests and validations,'
-               ' the middleware uses an in-memory cache for the tokens the'
-               ' Keystone API returns. This is only valid if memcache_servers'
-               ' is defined. Set to -1 to disable caching completely.'),
+               help='In order to prevent excessive effort spent validating'
+               ' tokens, the middleware caches previously-seen tokens for a'
+               ' configurable duration (in seconds). Set to -1 to disable'
+               ' caching completely.'),
     cfg.IntOpt('revocation_cache_time',
-               default=1,
-               help='Value only used for unit testing'),
+               default=300,
+               help='Determines the frequency at which the list of revoked'
+               ' tokens is retrieved from the Identity service (in seconds). A'
+               ' high number of revocation events combined with a low cache'
+               ' duration may significantly reduce performance.'),
     cfg.StrOpt('memcache_security_strategy',
                default=None,
                help='(optional) if defined, indicate whether token data'
@@ -309,6 +294,8 @@ opts = [
                ' token binding is needed to be allowed. Finally the name of a'
                ' binding method that must be present in tokens.'),
 ]
+
+CONF = cfg.CONF
 CONF.register_opts(opts, group='keystone_authtoken')
 
 LIST_OF_VERSIONS_TO_ATTEMPT = ['v2.0', 'v3.0']
@@ -410,7 +397,7 @@ class AuthProtocol(object):
         auth_host = self._conf_get('auth_host')
         auth_port = int(self._conf_get('auth_port'))
         auth_protocol = self._conf_get('auth_protocol')
-        self.auth_admin_prefix = self._conf_get('auth_admin_prefix')
+        auth_admin_prefix = self._conf_get('auth_admin_prefix')
         self.auth_uri = self._conf_get('auth_uri')
 
         if netaddr.valid_ipv6(auth_host):
@@ -430,6 +417,10 @@ class AuthProtocol(object):
             # FIXME(dolph): drop support for this fallback behavior as
             # documented in bug 1207517
             self.auth_uri = self.request_uri
+
+        if auth_admin_prefix:
+            self.request_uri = "%s/%s" % (self.request_uri,
+                                          auth_admin_prefix.strip('/'))
 
         # SSL
         self.cert_file = self._conf_get('certfile')
@@ -460,9 +451,9 @@ class AuthProtocol(object):
         self.admin_password = self._conf_get('admin_password')
         self.admin_tenant_name = self._conf_get('admin_tenant_name')
 
-        # Token caching via memcache
-        self._cache = None
-        self._cache_initialized = False    # cache already initialized?
+        # Token caching
+        self._cache_pool = None
+        self._cache_initialized = False
         # memcache value treatment, ENCRYPT or MAC
         self._memcache_security_strategy = \
             self._conf_get('memcache_security_strategy')
@@ -494,21 +485,14 @@ class AuthProtocol(object):
                 raise ConfigurationError('memcache_security_strategy must be '
                                          'ENCRYPT or MAC')
             if not self._memcache_secret_key:
-                raise ConfigurationError('mecmache_secret_key must be defined '
+                raise ConfigurationError('memcache_secret_key must be defined '
                                          'when a memcache_security_strategy '
                                          'is defined')
 
     def _init_cache(self, env):
-        cache = self._conf_get('cache')
-        memcache_servers = self._conf_get('memcached_servers')
-
-        if cache and env.get(cache, None) is not None:
-            # use the cache from the upstream filter
-            self.LOG.info('Using %s memcache for caching token', cache)
-            self._cache = env.get(cache)
-        else:
-            # use Keystone memcache
-            self._cache = memorycache.get_client(memcache_servers)
+        self._cache_pool = CachePool(
+            env.get(self._conf_get('cache')),
+            self._conf_get('memcached_servers'))
         self._cache_initialized = True
 
     def _conf_get(self, name):
@@ -567,7 +551,7 @@ class AuthProtocol(object):
                     versions.append(version['id'])
             except KeyError:
                 self.LOG.error(
-                    'Invalid version response format from server', data)
+                    'Invalid version response format from server')
                 raise ServiceError('Unable to parse version response '
                                    'from keystone')
 
@@ -761,8 +745,6 @@ class AuthProtocol(object):
         if body:
             kwargs['data'] = jsonutils.dumps(body)
 
-        path = self.auth_admin_prefix + path
-
         response = self._http_request(method, path, **kwargs)
 
         try:
@@ -810,6 +792,7 @@ class AuthProtocol(object):
                 "Unexpected response from keystone service: %s", data)
             raise ServiceError('invalid json response')
         except (ValueError):
+            data['access']['token']['id'] = '<SANITIZED>'
             self.LOG.warn(
                 "Unable to parse expiration time from token: %s", data)
             raise ServiceError('invalid json response')
@@ -842,13 +825,13 @@ class AuthProtocol(object):
             return data
         except NetworkError:
             self.LOG.debug('Token validation failure.', exc_info=True)
-            self.LOG.warn("Authorization failed for token %s", token_id)
+            self.LOG.warn("Authorization failed for token")
             raise InvalidUserToken('Token authorization failed')
         except Exception:
             self.LOG.debug('Token validation failure.', exc_info=True)
             if token_id:
                 self._cache_store_invalid(token_id)
-            self.LOG.warn("Authorization failed for token %s", token_id)
+            self.LOG.warn("Authorization failed for token")
             raise InvalidUserToken('Token authorization failed')
 
     def _build_user_headers(self, token_info):
@@ -991,10 +974,11 @@ class AuthProtocol(object):
         return token only if fresh (not expired).
         """
 
-        if self._cache and token_id:
+        if token_id:
             if self._memcache_security_strategy is None:
                 key = CACHE_KEY_TEMPLATE % token_id
-                serialized = self._cache.get(key)
+                with self._cache_pool.reserve() as cache:
+                    serialized = cache.get(key)
             else:
                 secret_key = self._memcache_secret_key
                 if isinstance(secret_key, six.string_types):
@@ -1008,7 +992,8 @@ class AuthProtocol(object):
                     security_strategy)
                 cache_key = CACHE_KEY_TEMPLATE % (
                     memcache_crypt.get_cache_key(keys))
-                raw_cached = self._cache.get(cache_key)
+                with self._cache_pool.reserve() as cache:
+                    raw_cached = cache.get(cache_key)
                 try:
                     # unprotect_data will return None if raw_cached is None
                     serialized = memcache_crypt.unprotect_data(keys,
@@ -1030,8 +1015,7 @@ class AuthProtocol(object):
                 serialized = serialized.decode('utf-8')
             cached = jsonutils.loads(serialized)
             if cached == 'invalid':
-                self.LOG.debug('Cached Token %s is marked unauthorized',
-                               token_id)
+                self.LOG.debug('Cached Token is marked unauthorized')
                 raise InvalidUserToken('Token authorization failed')
 
             data, expires = cached
@@ -1047,10 +1031,10 @@ class AuthProtocol(object):
             expires = timeutils.normalize_time(expires)
             utcnow = timeutils.utcnow()
             if ignore_expires or utcnow < expires:
-                self.LOG.debug('Returning cached token %s', token_id)
+                self.LOG.debug('Returning cached token')
                 return data
             else:
-                self.LOG.debug('Cached Token %s seems expired', token_id)
+                self.LOG.debug('Cached Token seems expired')
 
     def _cache_store(self, token_id, data):
         """Store value into memcache.
@@ -1076,9 +1060,8 @@ class AuthProtocol(object):
             cache_key = CACHE_KEY_TEMPLATE % memcache_crypt.get_cache_key(keys)
             data_to_store = memcache_crypt.protect_data(keys, serialized_data)
 
-        self._cache.set(cache_key,
-                        data_to_store,
-                        time=self.token_cache_time)
+        with self._cache_pool.reserve() as cache:
+            cache.set(cache_key, data_to_store, time=self.token_cache_time)
 
     def _invalid_user_token(self, msg=False):
         # NOTE(jamielennox): use False as the default so that None is valid
@@ -1158,16 +1141,13 @@ class AuthProtocol(object):
         quick check of token freshness on retrieval.
 
         """
-        if self._cache:
-                self.LOG.debug('Storing %s token in memcache', token_id)
-                self._cache_store(token_id, (data, expires))
+        self.LOG.debug('Storing token in cache')
+        self._cache_store(token_id, (data, expires))
 
     def _cache_store_invalid(self, token_id):
         """Store invalid token in cache."""
-        if self._cache:
-            self.LOG.debug(
-                'Marking token %s as unauthorized in memcache', token_id)
-            self._cache_store(token_id, 'invalid')
+        self.LOG.debug('Marking token as unauthorized in cache')
+        self._cache_store(token_id, 'invalid')
 
     def cert_file_missing(self, proc_output, file_name):
         return (file_name in proc_output and not os.path.exists(file_name))
@@ -1179,9 +1159,9 @@ class AuthProtocol(object):
         :param retry: flag that forces the middleware to retry
                       user authentication when an indeterminate
                       response is received. Optional.
-        :return token object received from keystone on success
-        :raise InvalidUserToken if token is rejected
-        :raise ServiceError if unable to authenticate token
+        :return: token object received from keystone on success
+        :raise InvalidUserToken: if token is rejected
+        :raise ServiceError: if unable to authenticate token
 
         """
         # Determine the highest api version we can use.
@@ -1209,21 +1189,20 @@ class AuthProtocol(object):
         if response.status_code == 200:
             return data
         if response.status_code == 404:
-            self.LOG.warn("Authorization failed for token %s", user_token)
+            self.LOG.warn("Authorization failed for token")
             raise InvalidUserToken('Token authorization failed')
         if response.status_code == 401:
             self.LOG.info(
-                'Keystone rejected admin token %s, resetting', headers)
+                'Keystone rejected admin token, resetting')
             self.admin_token = None
         else:
             self.LOG.error('Bad response code while validating token: %s',
                            response.status_code)
         if retry:
             self.LOG.info('Retrying validation')
-            return self._validate_user_token(user_token, env, False)
+            return self.verify_uuid_token(user_token, False)
         else:
-            self.LOG.warn("Invalid user token: %s. Keystone response: %s.",
-                          user_token, data)
+            self.LOG.warn("Invalid user token. Keystone response: %s", data)
 
             raise InvalidUserToken()
 
@@ -1239,8 +1218,7 @@ class AuthProtocol(object):
         token_id = utils.hash_signed_token(signed_text)
         for revoked_id in revoked_ids:
             if token_id == revoked_id:
-                self.LOG.debug('Token %s is marked as having been revoked',
-                               token_id)
+                self.LOG.debug('Token is marked as having been revoked')
                 return True
         return False
 
@@ -1263,6 +1241,7 @@ class AuthProtocol(object):
                                           self.signing_ca_file_name):
                     self.fetch_ca_cert()
                     continue
+                self.LOG.error('CMS Verify output: %s', err.output)
                 raise
             except cms.subprocess.CalledProcessError as err:
                 self.LOG.warning('Verify error: %s', err)
@@ -1328,6 +1307,24 @@ class AuthProtocol(object):
             self.token_revocation_list = self.fetch_revocation_list()
         return self._token_revocation_list
 
+    def _atomic_write_to_signing_dir(self, file_name, value):
+        # In Python2, encoding is slow so the following check avoids it if it
+        # is not absolutely necessary.
+        if isinstance(value, six.text_type):
+            value = value.encode('utf-8')
+
+        def _atomic_write(destination, data):
+            with tempfile.NamedTemporaryFile(dir=self.signing_dirname,
+                                             delete=False) as f:
+                f.write(data)
+            os.rename(f.name, destination)
+
+        try:
+            _atomic_write(file_name, value)
+        except (OSError, IOError):
+            self.verify_signing_dir()
+            _atomic_write(file_name, value)
+
     @token_revocation_list.setter
     def token_revocation_list(self, value):
         """Save a revocation list to memory and to disk.
@@ -1337,15 +1334,7 @@ class AuthProtocol(object):
         """
         self._token_revocation_list = jsonutils.loads(value)
         self.token_revocation_list_fetched_time = timeutils.utcnow()
-
-        with tempfile.NamedTemporaryFile(dir=self.signing_dirname,
-                                         delete=False) as f:
-            # In Python2, encoding is slow so the following check avoids it if
-            # it is not absolutely necessary.
-            if isinstance(value, six.text_type):
-                value = value.encode('utf-8')
-            f.write(value)
-        os.rename(f.name, self.revoked_file_name)
+        self._atomic_write_to_signing_dir(self.revoked_file_name, value)
 
     def fetch_revocation_list(self, retry=True):
         headers = {'X-Auth-Token': self.get_admin_token()}
@@ -1354,8 +1343,7 @@ class AuthProtocol(object):
         if response.status_code == 401:
             if retry:
                 self.LOG.info(
-                    'Keystone rejected admin token %s, resetting admin token',
-                    headers)
+                    'Keystone rejected admin token, resetting admin token')
                 self.admin_token = None
                 return self.fetch_revocation_list(retry=False)
         if response.status_code != 200:
@@ -1364,43 +1352,45 @@ class AuthProtocol(object):
             raise ServiceError('Revocation list improperly formatted.')
         return self.cms_verify(data['signed'])
 
-    def fetch_signing_cert(self):
-        path = self.auth_admin_prefix.rstrip('/')
-        path += '/v2.0/certificates/signing'
+    def _fetch_cert_file(self, cert_file_name, cert_type):
+        path = '/v2.0/certificates/' + cert_type
         response = self._http_request('GET', path)
-
-        def write_cert_file(data):
-            with open(self.signing_cert_file_name, 'w') as certfile:
-                certfile.write(data)
-
         if response.status_code != 200:
             raise exceptions.CertificateConfigError(response.text)
+        self._atomic_write_to_signing_dir(cert_file_name, response.text)
 
-        try:
-            try:
-                write_cert_file(response.text)
-            except IOError:
-                self.verify_signing_dir()
-                write_cert_file(response.text)
-        except (AssertionError, KeyError):
-            self.LOG.warn(
-                "Unexpected response from keystone service: %s", response.text)
-            raise ServiceError('invalid json response')
+    def fetch_signing_cert(self):
+        self._fetch_cert_file(self.signing_cert_file_name, 'signing')
 
     def fetch_ca_cert(self):
-        path = self.auth_admin_prefix.rstrip('/') + '/v2.0/certificates/ca'
-        response = self._http_request('GET', path)
+        self._fetch_cert_file(self.signing_ca_file_name, 'ca')
 
-        if response.status_code != 200:
-            raise exceptions.CertificateConfigError(response.text)
+
+class CachePool(list):
+    """A lazy pool of cache references."""
+
+    def __init__(self, cache, memcached_servers):
+        self._environment_cache = cache
+        self._memcached_servers = memcached_servers
+
+    @contextlib.contextmanager
+    def reserve(self):
+        """Context manager to manage a pooled cache reference."""
+        if self._environment_cache is not None:
+            # skip pooling and just use the cache from the upstream filter
+            yield self._environment_cache
+            return  # otherwise the context manager will continue!
 
         try:
-            with open(self.signing_ca_file_name, 'w') as certfile:
-                certfile.write(response.text)
-        except (AssertionError, KeyError):
-            self.LOG.warn(
-                "Unexpected response from keystone service: %s", response.text)
-            raise ServiceError('invalid json response')
+            c = self.pop()
+        except IndexError:
+            # the pool is empty, so we need to create a new client
+            c = memorycache.get_client(self._memcached_servers)
+
+        try:
+            yield c
+        finally:
+            self.append(c)
 
 
 def filter_factory(global_conf, **local_conf):
@@ -1417,3 +1407,30 @@ def app_factory(global_conf, **local_conf):
     conf = global_conf.copy()
     conf.update(local_conf)
     return AuthProtocol(None, conf)
+
+
+if __name__ == '__main__':
+    """Run this module directly to start a protected echo service::
+
+        $ python -m keystoneclient.middleware.auth_token
+
+    When the ``auth_token`` module authenticates a request, the echo service
+    will respond with all the environment variables presented to it by this
+    module.
+
+    """
+    def echo_app(environ, start_response):
+        """A WSGI application that echoes the CGI environment to the user."""
+        start_response('200 OK', [('Content-Type', 'application/json')])
+        environment = dict((k, v) for k, v in six.iteritems(environ)
+                           if k.startswith('HTTP_X_'))
+        yield jsonutils.dumps(environment)
+
+    from wsgiref import simple_server
+
+    # hardcode any non-default configuration here
+    conf = {'auth_protocol': 'http', 'admin_token': 'ADMIN'}
+    app = AuthProtocol(echo_app, conf)
+    server = simple_server.make_server('', 8000, app)
+    print('Serving on port 8000 (Ctrl+C to end)...')
+    server.serve_forever()

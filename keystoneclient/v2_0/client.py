@@ -15,6 +15,7 @@
 
 import logging
 
+from keystoneclient.auth.identity import v2 as v2_auth
 from keystoneclient import exceptions
 from keystoneclient import httpclient
 from keystoneclient.v2_0 import ec2
@@ -56,7 +57,7 @@ class Client(httpclient.HTTPClient):
     :param string key: Path to the Privacy Enhanced Mail (PEM) file which
                        contains the unencrypted client private key needed
                        to established two-way SSL connection with the
-                      identity service. (optional)
+                       identity service. (optional)
     :param string cacert: Path to the Privacy Enhanced Mail (PEM) file which
                           contains the trusted authority X.509 certificates
                           needed to established SSL connection with the
@@ -72,8 +73,8 @@ class Client(httpclient.HTTPClient):
 
     .. warning::
 
-    If debug is enabled, it may show passwords in plain text as a part of its
-    output.
+        If debug is enabled, it may show passwords in plain text as a part of
+        its output.
 
 
     The client can be created and used like a user or in a strictly
@@ -137,7 +138,9 @@ class Client(httpclient.HTTPClient):
         # extensions
         self.ec2 = ec2.CredentialsManager(self)
 
-        if self.management_url is None:
+        # DEPRECATED: if session is passed then we go to the new behaviour of
+        # authenticating on the first required call.
+        if not kwargs.get('session') and self.management_url is None:
             self.authenticate()
 
     def get_raw_token_from_identity_service(self, auth_url, username=None,
@@ -148,53 +151,29 @@ class Client(httpclient.HTTPClient):
                                             **kwargs):
         """Authenticate against the v2 Identity API.
 
-        :returns: (``resp``, ``body``) if authentication was successful.
+        :returns: access.AccessInfo if authentication was successful.
         :raises: AuthorizationFailure if unable to authenticate or validate
                  the existing authorization token
-        :raises: ValueError if insufficient parameters are used.
-
         """
         try:
-            return self._base_authN(auth_url,
-                                    username=username,
-                                    tenant_id=project_id or tenant_id,
-                                    tenant_name=project_name or tenant_name,
-                                    password=password,
-                                    trust_id=trust_id,
-                                    token=token)
+            if auth_url is None:
+                raise ValueError("Cannot authenticate without an auth_url")
+
+            a = v2_auth.Auth._factory(auth_url,
+                                      username=username,
+                                      password=password,
+                                      token=token,
+                                      trust_id=trust_id,
+                                      tenant_id=project_id or tenant_id,
+                                      tenant_name=project_name or tenant_name)
+
+            return a.get_auth_ref(self.session)
         except (exceptions.AuthorizationFailure, exceptions.Unauthorized):
             _logger.debug("Authorization Failed.")
             raise
+        except exceptions.EndpointNotFound:
+            msg = 'There was no suitable authentication url for this request'
+            raise exceptions.AuthorizationFailure(msg)
         except Exception as e:
             raise exceptions.AuthorizationFailure("Authorization Failed: "
                                                   "%s" % e)
-
-    def _base_authN(self, auth_url, username=None, password=None,
-                    tenant_name=None, tenant_id=None, trust_id=None,
-                    token=None):
-        """Takes a username, password, and optionally a tenant_id or
-        tenant_name to get an authentication token from keystone.
-        May also take a token and a tenant_id to re-scope a token
-        to a tenant, or a token, tenant_id and trust_id and re-scope
-        the token to the trust
-        """
-        headers = {}
-        if auth_url is None:
-            raise ValueError("Cannot authenticate without a valid auth_url")
-        url = auth_url + "/tokens"
-        if token:
-            headers['X-Auth-Token'] = token
-            params = {"auth": {"token": {"id": token}}}
-        elif username and password:
-            params = {"auth": {"passwordCredentials": {"username": username,
-                                                       "password": password}}}
-        else:
-            raise ValueError('A username and password or token is required.')
-        if tenant_id:
-            params['auth']['tenantId'] = tenant_id
-        elif tenant_name:
-            params['auth']['tenantName'] = tenant_name
-        if trust_id:
-            params['auth']['trust_id'] = trust_id
-        resp, body = self.request(url, 'POST', body=params, headers=headers)
-        return resp, body
