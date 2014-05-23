@@ -157,6 +157,7 @@ from oslo.config import cfg
 import six
 from six.moves import urllib
 
+from keystoneclient import access
 from keystoneclient.common import cms
 from keystoneclient import exceptions
 from keystoneclient.middleware import memcache_crypt
@@ -183,26 +184,44 @@ from keystoneclient import utils
 # To use Swift memcache, you must set the 'cache' option to the environment
 # key where the Swift cache object is stored.
 
+
+# NOTE(jamielennox): A number of options below are deprecated however are left
+# in the list and only mentioned as deprecated in the help string. This is
+# because we have to provide the same deprecation functionality for arguments
+# passed in via the conf in __init__ (from paste) and there is no way to test
+# that the default value was set or not in CONF.
+# Also if we were to remove the options from the CONF list (as typical CONF
+# deprecation works) then other projects will not be able to override the
+# options via CONF.
+
 opts = [
     cfg.StrOpt('auth_admin_prefix',
                default='',
-               help='Prefix to prepend at the beginning of the path'),
+               help='Prefix to prepend at the beginning of the path. '
+                    'Deprecated, use identity_uri.'),
     cfg.StrOpt('auth_host',
                default='127.0.0.1',
-               help='Host providing the admin Identity API endpoint'),
+               help='Host providing the admin Identity API endpoint. '
+                    'Deprecated, use identity_uri.'),
     cfg.IntOpt('auth_port',
                default=35357,
-               help='Port of the admin Identity API endpoint'),
+               help='Port of the admin Identity API endpoint. '
+                    'Deprecated, use identity_uri.'),
     cfg.StrOpt('auth_protocol',
                default='https',
-               help='Protocol of the admin Identity API endpoint'
-               '(http or https)'),
+               help='Protocol of the admin Identity API endpoint '
+                    '(http or https). Deprecated, use identity_uri.'),
     cfg.StrOpt('auth_uri',
                default=None,
                # FIXME(dolph): should be default='http://127.0.0.1:5000/v2.0/',
                # or (depending on client support) an unversioned, publicly
                # accessible identity endpoint (see bug 1207517)
                help='Complete public Identity API endpoint'),
+    cfg.StrOpt('identity_uri',
+               default=None,
+               help='Complete admin Identity API endpoint. This should '
+                    'specify the unversioned root endpoint '
+                    'eg. https://localhost:35357/'),
     cfg.StrOpt('auth_version',
                default=None,
                help='API version of the admin Identity API endpoint'),
@@ -394,19 +413,34 @@ class AuthProtocol(object):
                                     (True, 'true', 't', '1', 'on', 'yes', 'y'))
 
         # where to find the auth service (we use this to validate tokens)
-        auth_host = self._conf_get('auth_host')
-        auth_port = int(self._conf_get('auth_port'))
-        auth_protocol = self._conf_get('auth_protocol')
-        auth_admin_prefix = self._conf_get('auth_admin_prefix')
+        self.identity_uri = self._conf_get('identity_uri')
         self.auth_uri = self._conf_get('auth_uri')
 
-        if netaddr.valid_ipv6(auth_host):
-            # Note(dzyu) it is an IPv6 address, so it needs to be wrapped
-            # with '[]' to generate a valid IPv6 URL, based on
-            # http://www.ietf.org/rfc/rfc2732.txt
-            auth_host = '[%s]' % auth_host
+        # NOTE(jamielennox): it does appear here that our defaults arguments
+        # are backwards. We need to do it this way so that we can handle the
+        # same deprecation strategy for CONF and the conf variable.
+        if not self.identity_uri:
+            self.LOG.warning("Configuring admin URI using auth fragments. "
+                             "This is deprecated, use 'identity_uri' instead.")
 
-        self.request_uri = '%s://%s:%s' % (auth_protocol, auth_host, auth_port)
+            auth_host = self._conf_get('auth_host')
+            auth_port = int(self._conf_get('auth_port'))
+            auth_protocol = self._conf_get('auth_protocol')
+            auth_admin_prefix = self._conf_get('auth_admin_prefix')
+
+            if netaddr.valid_ipv6(auth_host):
+                # Note(dzyu) it is an IPv6 address, so it needs to be wrapped
+                # with '[]' to generate a valid IPv6 URL, based on
+                # http://www.ietf.org/rfc/rfc2732.txt
+                auth_host = '[%s]' % auth_host
+
+            self.identity_uri = '%s://%s:%s' % (auth_protocol, auth_host,
+                                                auth_port)
+            if auth_admin_prefix:
+                self.identity_uri = '%s/%s' % (self.identity_uri,
+                                               auth_admin_prefix.strip('/'))
+        else:
+            self.identity_uri = self.identity_uri.rstrip('/')
 
         if self.auth_uri is None:
             self.LOG.warning(
@@ -415,12 +449,11 @@ class AuthProtocol(object):
                 'authenticate against an admin endpoint')
 
             # FIXME(dolph): drop support for this fallback behavior as
-            # documented in bug 1207517
-            self.auth_uri = self.request_uri
-
-        if auth_admin_prefix:
-            self.request_uri = "%s/%s" % (self.request_uri,
-                                          auth_admin_prefix.strip('/'))
+            # documented in bug 1207517.
+            # NOTE(jamielennox): we urljoin '/' to get just the base URI as
+            # this is the original behaviour.
+            self.auth_uri = urllib.parse.urljoin(self.identity_uri, '/')
+            self.auth_uri = self.auth_uri.rstrip('/')
 
         # SSL
         self.cert_file = self._conf_get('certfile')
@@ -455,13 +488,13 @@ class AuthProtocol(object):
         self._cache_pool = None
         self._cache_initialized = False
         # memcache value treatment, ENCRYPT or MAC
-        self._memcache_security_strategy = \
-            self._conf_get('memcache_security_strategy')
+        self._memcache_security_strategy = (
+            self._conf_get('memcache_security_strategy'))
         if self._memcache_security_strategy is not None:
-            self._memcache_security_strategy = \
-                self._memcache_security_strategy.upper()
-        self._memcache_secret_key = \
-            self._conf_get('memcache_secret_key')
+            self._memcache_security_strategy = (
+                self._memcache_security_strategy.upper())
+        self._memcache_secret_key = (
+            self._conf_get('memcache_secret_key'))
         self._assert_valid_memcache_protection_config()
         # By default the token will be cached for 5 minutes
         self.token_cache_time = int(self._conf_get('token_cache_time'))
@@ -473,8 +506,8 @@ class AuthProtocol(object):
         self.http_connect_timeout = (http_connect_timeout_cfg and
                                      int(http_connect_timeout_cfg))
         self.auth_version = None
-        self.http_request_max_retries = \
-            self._conf_get('http_request_max_retries')
+        self.http_request_max_retries = (
+            self._conf_get('http_request_max_retries'))
 
         self.include_service_catalog = self._conf_get(
             'include_service_catalog')
@@ -690,7 +723,7 @@ class AuthProtocol(object):
         :raise ServerError when unable to communicate with keystone
 
         """
-        url = "%s/%s" % (self.request_uri, path.lstrip('/'))
+        url = "%s/%s" % (self.identity_uri, path.lstrip('/'))
 
         kwargs.setdefault('timeout', self.http_connect_timeout)
         if self.cert_file and self.key_file:
@@ -814,7 +847,7 @@ class AuthProtocol(object):
             cached = self._cache_get(token_id)
             if cached:
                 return cached
-            if cms.is_ans1_token(user_token):
+            if cms.is_asn1_token(user_token):
                 verified = self.verify_signed_token(user_token)
                 data = jsonutils.loads(verified)
             else:
@@ -844,96 +877,39 @@ class AuthProtocol(object):
         :raise InvalidUserToken when unable to parse token object
 
         """
-        def get_tenant_info():
-            """Returns a (tenant_id, tenant_name) tuple from context."""
-            def essex():
-                """Essex puts the tenant ID and name on the token."""
-                return (token['tenant']['id'], token['tenant']['name'])
+        auth_ref = access.AccessInfo.factory(body=token_info)
+        roles = ",".join(auth_ref.role_names)
 
-            def pre_diablo():
-                """Pre-diablo, Keystone only provided tenantId."""
-                return (token['tenantId'], token['tenantId'])
-
-            def default_tenant():
-                """Pre-grizzly, assume the user's default tenant."""
-                return (user['tenantId'], user['tenantName'])
-
-            for method in [essex, pre_diablo, default_tenant]:
-                try:
-                    return method()
-                except KeyError:
-                    pass
-
+        if _token_is_v2(token_info) and not auth_ref.project_id:
             raise InvalidUserToken('Unable to determine tenancy.')
-
-        # For clarity. set all those attributes that are optional in
-        # either a v2 or v3 token to None first
-        domain_id = None
-        domain_name = None
-        project_id = None
-        project_name = None
-        user_domain_id = None
-        user_domain_name = None
-        project_domain_id = None
-        project_domain_name = None
-
-        if _token_is_v2(token_info):
-            user = token_info['access']['user']
-            token = token_info['access']['token']
-            roles = ','.join([role['name'] for role in user.get('roles', [])])
-            catalog_root = token_info['access']
-            catalog_key = 'serviceCatalog'
-            project_id, project_name = get_tenant_info()
-        else:
-            #v3 token
-            token = token_info['token']
-            user = token['user']
-            user_domain_id = user['domain']['id']
-            user_domain_name = user['domain']['name']
-            roles = (','.join([role['name']
-                     for role in token.get('roles', [])]))
-            catalog_root = token
-            catalog_key = 'catalog'
-            # For v3, the server will put in the default project if there is
-            # one, so no need for us to add it here (like we do for a v2 token)
-            if 'domain' in token:
-                domain_id = token['domain']['id']
-                domain_name = token['domain']['name']
-            elif 'project' in token:
-                project_id = token['project']['id']
-                project_name = token['project']['name']
-                project_domain_id = token['project']['domain']['id']
-                project_domain_name = token['project']['domain']['name']
-
-        user_id = user['id']
-        user_name = user['name']
 
         rval = {
             'X-Identity-Status': 'Confirmed',
-            'X-Domain-Id': domain_id,
-            'X-Domain-Name': domain_name,
-            'X-Project-Id': project_id,
-            'X-Project-Name': project_name,
-            'X-Project-Domain-Id': project_domain_id,
-            'X-Project-Domain-Name': project_domain_name,
-            'X-User-Id': user_id,
-            'X-User-Name': user_name,
-            'X-User-Domain-Id': user_domain_id,
-            'X-User-Domain-Name': user_domain_name,
+            'X-Domain-Id': auth_ref.domain_id,
+            'X-Domain-Name': auth_ref.domain_name,
+            'X-Project-Id': auth_ref.project_id,
+            'X-Project-Name': auth_ref.project_name,
+            'X-Project-Domain-Id': auth_ref.project_domain_id,
+            'X-Project-Domain-Name': auth_ref.project_domain_name,
+            'X-User-Id': auth_ref.user_id,
+            'X-User-Name': auth_ref.username,
+            'X-User-Domain-Id': auth_ref.user_domain_id,
+            'X-User-Domain-Name': auth_ref.user_domain_name,
             'X-Roles': roles,
             # Deprecated
-            'X-User': user_name,
-            'X-Tenant-Id': project_id,
-            'X-Tenant-Name': project_name,
-            'X-Tenant': project_name,
+            'X-User': auth_ref.username,
+            'X-Tenant-Id': auth_ref.project_id,
+            'X-Tenant-Name': auth_ref.project_name,
+            'X-Tenant': auth_ref.project_name,
             'X-Role': roles,
         }
 
         self.LOG.debug("Received request from user: %s with project_id : %s"
-                       " and roles: %s ", user_id, project_id, roles)
+                       " and roles: %s ",
+                       auth_ref.user_id, auth_ref.project_id, roles)
 
-        if self.include_service_catalog and catalog_key in catalog_root:
-            catalog = catalog_root[catalog_key]
+        if self.include_service_catalog and auth_ref.has_service_catalog():
+            catalog = auth_ref.service_catalog.get_data()
             rval['X-Service-Catalog'] = jsonutils.dumps(catalog)
 
         return rval
@@ -1149,9 +1125,6 @@ class AuthProtocol(object):
         self.LOG.debug('Marking token as unauthorized in cache')
         self._cache_store(token_id, 'invalid')
 
-    def cert_file_missing(self, proc_output, file_name):
-        return (file_name in proc_output and not os.path.exists(file_name))
-
     def verify_uuid_token(self, user_token, retry=True):
         """Authenticate user token with keystone.
 
@@ -1225,28 +1198,32 @@ class AuthProtocol(object):
     def cms_verify(self, data):
         """Verifies the signature of the provided data's IAW CMS syntax.
 
-        If either of the certificate files are missing, fetch them and
+        If either of the certificate files might be missing, fetch them and
         retry.
         """
-        while True:
+        def verify():
             try:
-                output = cms.cms_verify(data, self.signing_cert_file_name,
-                                        self.signing_ca_file_name)
-            except exceptions.CertificateConfigError as err:
-                if self.cert_file_missing(err.output,
-                                          self.signing_cert_file_name):
-                    self.fetch_signing_cert()
-                    continue
-                if self.cert_file_missing(err.output,
-                                          self.signing_ca_file_name):
-                    self.fetch_ca_cert()
-                    continue
-                self.LOG.error('CMS Verify output: %s', err.output)
-                raise
+                return cms.cms_verify(data, self.signing_cert_file_name,
+                                      self.signing_ca_file_name)
             except cms.subprocess.CalledProcessError as err:
                 self.LOG.warning('Verify error: %s', err)
                 raise
-            return output
+
+        try:
+            return verify()
+        except exceptions.CertificateConfigError:
+            # the certs might be missing; unconditionally fetch to avoid racing
+            self.fetch_signing_cert()
+            self.fetch_ca_cert()
+
+            try:
+                # retry with certs in place
+                return verify()
+            except exceptions.CertificateConfigError as err:
+                # if this is still occurring, something else is wrong and we
+                # need err.output to identify the problem
+                self.LOG.error('CMS Verify output: %s', err.output)
+                raise
 
     def verify_signed_token(self, signed_text):
         """Check that the token is unrevoked and has a valid signature."""
@@ -1353,7 +1330,15 @@ class AuthProtocol(object):
         return self.cms_verify(data['signed'])
 
     def _fetch_cert_file(self, cert_file_name, cert_type):
-        path = '/v2.0/certificates/' + cert_type
+        if not self.auth_version:
+            self.auth_version = self._choose_api_version()
+
+        if self.auth_version == 'v3.0':
+            if cert_type == 'signing':
+                cert_type = 'certificates'
+            path = '/v3/OS-SIMPLE-CERT/' + cert_type
+        else:
+            path = '/v2.0/certificates/' + cert_type
         response = self._http_request('GET', path)
         if response.status_code != 200:
             raise exceptions.CertificateConfigError(response.text)

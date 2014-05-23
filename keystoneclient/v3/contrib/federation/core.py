@@ -1,9 +1,3 @@
-# Copyright 2010 Jacob Kaplan-Moss
-# Copyright 2011 Nebula, Inc.
-# Copyright 2013 Alessio Ababilov
-# Copyright 2013 OpenStack Foundation
-# All Rights Reserved.
-#
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
 #    a copy of the License at
@@ -16,18 +10,12 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-"""
-Exception definitions.
-
-Deprecated since v0.7.1. Use 'keystoneclient.exceptions' instead of
-this module.
-"""
-
-import warnings
-
-from keystoneclient.exceptions import *     # noqa
+from keystoneclient.v3.contrib.federation import identity_providers
+from keystoneclient.v3.contrib.federation import mappings
 
 
-warnings.warn("The 'keystoneclient.apiclient.exceptions' module is deprecated "
-              "since v.0.7.1. Use 'keystoneclient.exceptions' instead of this "
-              "module.", DeprecationWarning)
+class FederationManager(object):
+    def __init__(self, api):
+        self.identity_providers = identity_providers.IdentityProviderManager(
+            api)
+        self.mappings = mappings.MappingManager(api)

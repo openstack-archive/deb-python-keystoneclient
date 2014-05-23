@@ -19,6 +19,8 @@ from keystoneclient.auth.identity import v3 as v3_auth
 from keystoneclient import exceptions
 from keystoneclient import httpclient
 from keystoneclient.openstack.common import jsonutils
+from keystoneclient.v3.contrib import endpoint_filter
+from keystoneclient.v3.contrib import federation
 from keystoneclient.v3.contrib import trusts
 from keystoneclient.v3 import credentials
 from keystoneclient.v3 import domains
@@ -95,6 +97,7 @@ class Client(httpclient.HTTPClient):
         self.credentials = credentials.CredentialManager(self)
         self.endpoints = endpoints.EndpointManager(self)
         self.domains = domains.DomainManager(self)
+        self.federation = federation.FederationManager(self)
         self.groups = groups.GroupManager(self)
         self.policies = policies.PolicyManager(self)
         self.projects = projects.ProjectManager(self)
@@ -102,6 +105,7 @@ class Client(httpclient.HTTPClient):
         self.services = services.ServiceManager(self)
         self.users = users.UserManager(self)
         self.trusts = trusts.TrustManager(self)
+        self.endpoint_filter = endpoint_filter.EndpointFilterManager(self)
 
         # DEPRECATED: if session is passed then we go to the new behaviour of
         # authenticating on the first required call.

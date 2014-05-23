@@ -265,10 +265,7 @@ class BaseAuthTokenMiddlewareTest(testtools.TestCase):
         self.middleware = None
 
         self.conf = {
-            'auth_host': 'keystone.example.com',
-            'auth_port': 1234,
-            'auth_protocol': 'https',
-            'auth_admin_prefix': '/testadmin',
+            'identity_uri': 'https://keystone.example.com:1234/testadmin/',
             'signing_dir': client_fixtures.CERTDIR,
             'auth_version': auth_version,
             'auth_uri': 'https://keystone.example.com:1234',
@@ -498,6 +495,7 @@ class CommonAuthTokenMiddlewareTest(object):
         self.assertLastPath(None)
 
     def test_init_by_ipv6Addr_auth_host(self):
+        del self.conf['identity_uri']
         conf = {
             'auth_host': '2001:2013:1:f101::1',
             'auth_port': 1234,
@@ -524,11 +522,19 @@ class CommonAuthTokenMiddlewareTest(object):
         self.assert_valid_request_200(self.token_dict['uuid_token_default'])
         self.assert_valid_last_url(self.token_dict['uuid_token_default'])
 
+    def test_valid_uuid_request_with_auth_fragments(self):
+        del self.conf['identity_uri']
+        self.conf['auth_protocol'] = 'https'
+        self.conf['auth_host'] = 'keystone.example.com'
+        self.conf['auth_port'] = 1234
+        self.conf['auth_admin_prefix'] = '/testadmin'
+        self.set_middleware()
+        self.assert_valid_request_200(self.token_dict['uuid_token_default'])
+        self.assert_valid_last_url(self.token_dict['uuid_token_default'])
+
     def test_valid_signed_request(self):
         self.assert_valid_request_200(
             self.token_dict['signed_token_scoped'])
-        self.assertEqual(self.middleware.conf['auth_admin_prefix'],
-                         "/testadmin")
         #ensure that signed requests do not generate HTTP traffic
         self.assertLastPath(None)
 
@@ -575,8 +581,8 @@ class CommonAuthTokenMiddlewareTest(object):
         tmp_name = uuid.uuid4().hex
         test_parent_signing_dir = "/tmp/%s" % tmp_name
         self.middleware.signing_dirname = "/tmp/%s/%s" % ((tmp_name,) * 2)
-        self.middleware.signing_cert_file_name = "%s/test.pem" % \
-            self.middleware.signing_dirname
+        self.middleware.signing_cert_file_name = (
+            "%s/test.pem" % self.middleware.signing_dirname)
         self.middleware.verify_signing_dir()
         # NOTE(wu_wenxiang): Verify if the signing dir was created as expected.
         self.assertTrue(os.path.isdir(self.middleware.signing_dirname))
@@ -587,14 +593,6 @@ class CommonAuthTokenMiddlewareTest(object):
             stat.S_IMODE(os.stat(self.middleware.signing_dirname).st_mode),
             stat.S_IRWXU)
         shutil.rmtree(test_parent_signing_dir)
-
-    def test_cert_file_missing(self):
-        self.assertFalse(self.middleware.cert_file_missing(
-                         "openstack: /tmp/haystack: No such file or directory",
-                         "/tmp/needle"))
-        self.assertTrue(self.middleware.cert_file_missing(
-                        "openstack: /not/exist: No such file or directory",
-                        "/not/exist"))
 
     def test_get_token_revocation_list_fetched_time_returns_min(self):
         self.middleware.token_revocation_list_fetched_time = None
@@ -1126,22 +1124,33 @@ class CommonAuthTokenMiddlewareTest(object):
                                       success=False)
 
 
-class CertDownloadMiddlewareTest(BaseAuthTokenMiddlewareTest,
-                                 testresources.ResourcedTestCase):
+class V2CertDownloadMiddlewareTest(BaseAuthTokenMiddlewareTest,
+                                   testresources.ResourcedTestCase):
 
     resources = [('examples', client_fixtures.EXAMPLES_RESOURCE)]
 
+    def __init__(self, *args, **kwargs):
+        super(V2CertDownloadMiddlewareTest, self).__init__(*args, **kwargs)
+        self.auth_version = 'v2.0'
+        self.fake_app = None
+        self.ca_path = '/v2.0/certificates/ca'
+        self.signing_path = '/v2.0/certificates/signing'
+
     def setUp(self):
-        super(CertDownloadMiddlewareTest, self).setUp()
+        super(V2CertDownloadMiddlewareTest, self).setUp(
+            auth_version=self.auth_version,
+            fake_app=self.fake_app)
         self.base_dir = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self.base_dir)
         self.cert_dir = os.path.join(self.base_dir, 'certs')
         os.makedirs(self.cert_dir, stat.S_IRWXU)
         conf = {
             'signing_dir': self.cert_dir,
+            'auth_version': self.auth_version,
         }
         self.set_middleware(conf=conf)
 
+        httpretty.reset()
         httpretty.enable()
         self.addCleanup(httpretty.disable)
 
@@ -1152,10 +1161,10 @@ class CertDownloadMiddlewareTest(BaseAuthTokenMiddlewareTest,
         cms._ensure_subprocess()
 
         httpretty.register_uri(httpretty.GET,
-                               "%s/v2.0/certificates/ca" % BASE_URI,
+                               "%s%s" % (BASE_URI, self.ca_path),
                                status=404)
         httpretty.register_uri(httpretty.GET,
-                               "%s/v2.0/certificates/signing" % BASE_URI,
+                               "%s%s" % (BASE_URI, self.signing_path),
                                status=404)
         self.assertRaises(exceptions.CertificateConfigError,
                           self.middleware.verify_signed_token,
@@ -1164,72 +1173,90 @@ class CertDownloadMiddlewareTest(BaseAuthTokenMiddlewareTest,
     def test_fetch_signing_cert(self):
         data = 'FAKE CERT'
         httpretty.register_uri(httpretty.GET,
-                               "%s/v2.0/certificates/signing" % BASE_URI,
+                               "%s%s" % (BASE_URI, self.signing_path),
                                body=data)
         self.middleware.fetch_signing_cert()
 
         with open(self.middleware.signing_cert_file_name, 'r') as f:
             self.assertEqual(f.read(), data)
 
-        self.assertEqual("/testadmin/v2.0/certificates/signing",
+        self.assertEqual("/testadmin%s" % self.signing_path,
                          httpretty.last_request().path)
 
     def test_fetch_signing_ca(self):
         data = 'FAKE CA'
         httpretty.register_uri(httpretty.GET,
-                               "%s/v2.0/certificates/ca" % BASE_URI,
+                               "%s%s" % (BASE_URI, self.ca_path),
                                body=data)
         self.middleware.fetch_ca_cert()
 
         with open(self.middleware.signing_ca_file_name, 'r') as f:
             self.assertEqual(f.read(), data)
 
-        self.assertEqual("/testadmin/v2.0/certificates/ca",
+        self.assertEqual("/testadmin%s" % self.ca_path,
                          httpretty.last_request().path)
 
     def test_prefix_trailing_slash(self):
+        del self.conf['identity_uri']
+        self.conf['auth_protocol'] = 'https'
+        self.conf['auth_host'] = 'keystone.example.com'
+        self.conf['auth_port'] = 1234
         self.conf['auth_admin_prefix'] = '/newadmin/'
 
         httpretty.register_uri(httpretty.GET,
-                               "%s/newadmin/v2.0/certificates/ca" % BASE_HOST,
+                               "%s/newadmin%s" % (BASE_HOST, self.ca_path),
                                body='FAKECA')
         httpretty.register_uri(httpretty.GET,
-                               "%s/newadmin/v2.0/certificates/signing" %
-                               BASE_HOST, body='FAKECERT')
+                               "%s/newadmin%s" %
+                               (BASE_HOST, self.signing_path), body='FAKECERT')
 
         self.set_middleware(conf=self.conf)
 
         self.middleware.fetch_ca_cert()
 
-        self.assertEqual('/newadmin/v2.0/certificates/ca',
+        self.assertEqual('/newadmin%s' % self.ca_path,
                          httpretty.last_request().path)
 
         self.middleware.fetch_signing_cert()
 
-        self.assertEqual('/newadmin/v2.0/certificates/signing',
+        self.assertEqual('/newadmin%s' % self.signing_path,
                          httpretty.last_request().path)
 
     def test_without_prefix(self):
+        del self.conf['identity_uri']
+        self.conf['auth_protocol'] = 'https'
+        self.conf['auth_host'] = 'keystone.example.com'
+        self.conf['auth_port'] = 1234
         self.conf['auth_admin_prefix'] = ''
 
         httpretty.register_uri(httpretty.GET,
-                               "%s/v2.0/certificates/ca" % BASE_HOST,
+                               "%s%s" % (BASE_HOST, self.ca_path),
                                body='FAKECA')
         httpretty.register_uri(httpretty.GET,
-                               "%s/v2.0/certificates/signing" % BASE_HOST,
+                               "%s%s" % (BASE_HOST, self.signing_path),
                                body='FAKECERT')
 
         self.set_middleware(conf=self.conf)
 
         self.middleware.fetch_ca_cert()
 
-        self.assertEqual('/v2.0/certificates/ca',
+        self.assertEqual(self.ca_path,
                          httpretty.last_request().path)
 
         self.middleware.fetch_signing_cert()
 
-        self.assertEqual('/v2.0/certificates/signing',
+        self.assertEqual(self.signing_path,
                          httpretty.last_request().path)
+
+
+class V3CertDownloadMiddlewareTest(V2CertDownloadMiddlewareTest):
+
+    def __init__(self, *args, **kwargs):
+        super(V3CertDownloadMiddlewareTest, self).__init__(*args, **kwargs)
+        self.auth_version = 'v3.0'
+        self.fake_app = v3FakeApp
+        self.ca_path = '/v3/OS-SIMPLE-CERT/ca'
+        self.signing_path = '/v3/OS-SIMPLE-CERT/certificates'
 
 
 def network_error_response(method, uri, headers):
@@ -1350,8 +1377,8 @@ class v2AuthTokenMiddlewareTest(BaseAuthTokenMiddlewareTest,
     def test_request_prevent_service_catalog_injection(self):
         req = webob.Request.blank('/')
         req.headers['X-Service-Catalog'] = '[]'
-        req.headers['X-Auth-Token'] = \
-            self.examples.UUID_TOKEN_NO_SERVICE_CATALOG
+        req.headers['X-Auth-Token'] = (
+            self.examples.UUID_TOKEN_NO_SERVICE_CATALOG)
         body = self.middleware(req.environ, self.start_fake_response)
         self.assertEqual(self.response_status, 200)
         self.assertFalse(req.headers.get('X-Service-Catalog'))
