@@ -1,3 +1,9 @@
+python-keystoneclient (1:0.8.0-1) unstable; urgency=medium
+
+  * New upstream release.
+
+ -- Thomas Goirand <zigo@debian.org>  Fri, 23 May 2014 18:19:43 +0800
+
 python-keystoneclient (1:0.7.1-1) unstable; urgency=high
 
   * New upstream release.
