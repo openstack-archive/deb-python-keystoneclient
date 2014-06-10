@@ -1,5 +1,3 @@
-# vim: tabstop=4 shiftwidth=4 softtabstop=4
-
 # Licensed under the Apache License, Version 2.0 (the "License"); you may
 # not use this file except in compliance with the License. You may obtain
 # a copy of the License at
@@ -71,7 +69,7 @@ class Auth(base.BaseIdentityPlugin):
         self.tenant_name = tenant_name
 
     def get_auth_ref(self, session, **kwargs):
-        headers = {}
+        headers = {'Accept': 'application/json'}
         url = self.auth_url + '/tokens'
         params = {'auth': self.get_auth_data(headers)}
 
@@ -84,7 +82,13 @@ class Auth(base.BaseIdentityPlugin):
 
         resp = session.post(url, json=params, headers=headers,
                             authenticated=False)
-        return access.AccessInfoV2(**resp.json()['access'])
+
+        try:
+            resp_data = resp.json()['access']
+        except (KeyError, ValueError):
+            raise exceptions.InvalidResponse(response=resp)
+
+        return access.AccessInfoV2(**resp_data)
 
     @abc.abstractmethod
     def get_auth_data(self, headers=None):

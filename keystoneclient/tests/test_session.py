@@ -235,7 +235,6 @@ class RedirectTests(utils.TestCase):
 
         ses_resp = session.get(self.REDIRECT_CHAIN[0])
 
-        self.assertEqual(type(req_resp.history), type(ses_resp.history))
         self.assertEqual(len(req_resp.history), len(ses_resp.history))
 
         for r, s in zip(req_resp.history, ses_resp.history):
@@ -290,8 +289,9 @@ class AuthPlugin(base.BaseAuthPlugin):
                   'admin': 'http://image-admin:3333/v2.0'}
     }
 
-    def __init__(self, token=TEST_TOKEN):
+    def __init__(self, token=TEST_TOKEN, invalidate=True):
         self.token = token
+        self._invalidate = invalidate
 
     def get_token(self, session):
         return self.token
@@ -302,6 +302,32 @@ class AuthPlugin(base.BaseAuthPlugin):
             return self.SERVICE_URLS[service_type][interface]
         except (KeyError, AttributeError):
             return None
+
+    def invalidate(self):
+        return self._invalidate
+
+
+class CalledAuthPlugin(base.BaseAuthPlugin):
+
+    ENDPOINT = 'http://fakeendpoint/'
+
+    def __init__(self, invalidate=True):
+        self.get_token_called = False
+        self.get_endpoint_called = False
+        self.invalidate_called = False
+        self._invalidate = invalidate
+
+    def get_token(self, session):
+        self.get_token_called = True
+        return 'aToken'
+
+    def get_endpoint(self, session, **kwargs):
+        self.get_endpoint_called = True
+        return self.ENDPOINT
+
+    def invalidate(self):
+        self.invalidate_called = True
+        return self._invalidate
 
 
 class SessionAuthTests(utils.TestCase):
@@ -375,3 +401,108 @@ class SessionAuthTests(utils.TestCase):
                           sess.get, '/path',
                           endpoint_filter={'service_type': 'unknown',
                                            'interface': 'public'})
+
+    @httpretty.activate
+    def test_raises_exc_only_when_asked(self):
+        # A request that returns a HTTP error should by default raise an
+        # exception by default, if you specify raise_exc=False then it will not
+
+        self.stub_url(httpretty.GET, status=401)
+
+        sess = client_session.Session()
+        self.assertRaises(exceptions.Unauthorized, sess.get, self.TEST_URL)
+
+        resp = sess.get(self.TEST_URL, raise_exc=False)
+        self.assertEqual(401, resp.status_code)
+
+    @httpretty.activate
+    def test_passed_auth_plugin(self):
+        passed = CalledAuthPlugin()
+        sess = client_session.Session()
+
+        httpretty.register_uri(httpretty.GET,
+                               CalledAuthPlugin.ENDPOINT + 'path',
+                               status=200)
+        endpoint_filter = {'service_type': 'identity'}
+
+        # no plugin with authenticated won't work
+        self.assertRaises(exceptions.MissingAuthPlugin, sess.get, 'path',
+                          authenticated=True)
+
+        # no plugin with an endpoint filter won't work
+        self.assertRaises(exceptions.MissingAuthPlugin, sess.get, 'path',
+                          authenticated=False, endpoint_filter=endpoint_filter)
+
+        resp = sess.get('path', auth=passed, endpoint_filter=endpoint_filter)
+
+        self.assertEqual(200, resp.status_code)
+        self.assertTrue(passed.get_endpoint_called)
+        self.assertTrue(passed.get_token_called)
+
+    @httpretty.activate
+    def test_passed_auth_plugin_overrides(self):
+        fixed = CalledAuthPlugin()
+        passed = CalledAuthPlugin()
+
+        sess = client_session.Session(fixed)
+
+        httpretty.register_uri(httpretty.GET,
+                               CalledAuthPlugin.ENDPOINT + 'path',
+                               status=200)
+
+        resp = sess.get('path', auth=passed,
+                        endpoint_filter={'service_type': 'identity'})
+
+        self.assertEqual(200, resp.status_code)
+        self.assertTrue(passed.get_endpoint_called)
+        self.assertTrue(passed.get_token_called)
+        self.assertFalse(fixed.get_endpoint_called)
+        self.assertFalse(fixed.get_token_called)
+
+    def test_requests_auth_plugin(self):
+        sess = client_session.Session()
+
+        requests_auth = object()
+
+        FAKE_RESP = utils.TestResponse({'status_code': 200, 'text': 'resp'})
+        RESP = mock.Mock(return_value=FAKE_RESP)
+
+        with mock.patch.object(sess.session, 'request', RESP) as mocked:
+            sess.get(self.TEST_URL, requests_auth=requests_auth)
+
+            mocked.assert_called_once_with('GET', self.TEST_URL,
+                                           headers=mock.ANY,
+                                           allow_redirects=mock.ANY,
+                                           auth=requests_auth,
+                                           verify=mock.ANY)
+
+    @httpretty.activate
+    def test_reauth_called(self):
+        auth = CalledAuthPlugin(invalidate=True)
+        sess = client_session.Session(auth=auth)
+
+        responses = [httpretty.Response(body='Failed', status=401),
+                     httpretty.Response(body='Hello', status=200)]
+        httpretty.register_uri(httpretty.GET, self.TEST_URL,
+                               responses=responses)
+
+        # allow_reauth=True is the default
+        resp = sess.get(self.TEST_URL, authenticated=True)
+
+        self.assertEqual(200, resp.status_code)
+        self.assertEqual('Hello', resp.text)
+        self.assertTrue(auth.invalidate_called)
+
+    @httpretty.activate
+    def test_reauth_not_called(self):
+        auth = CalledAuthPlugin(invalidate=True)
+        sess = client_session.Session(auth=auth)
+
+        responses = [httpretty.Response(body='Failed', status=401),
+                     httpretty.Response(body='Hello', status=200)]
+        httpretty.register_uri(httpretty.GET, self.TEST_URL,
+                               responses=responses)
+
+        self.assertRaises(exceptions.Unauthorized, sess.get, self.TEST_URL,
+                          authenticated=True, allow_reauth=False)
+        self.assertFalse(auth.invalidate_called)

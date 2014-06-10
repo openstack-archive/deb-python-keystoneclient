@@ -1,5 +1,3 @@
-# vim: tabstop=4 shiftwidth=4 softtabstop=4
-
 # Licensed under the Apache License, Version 2.0 (the "License"); you may
 # not use this file except in compliance with the License. You may obtain
 # a copy of the License at
@@ -20,6 +18,7 @@ from six.moves import urllib
 from keystoneclient import access
 from keystoneclient.auth.identity import v3
 from keystoneclient import exceptions
+from keystoneclient.openstack.common import jsonutils
 from keystoneclient import session
 from keystoneclient.tests import utils
 
@@ -165,6 +164,8 @@ class V3IdentityPlugin(utils.TestCase):
                                       'password': self.TEST_PASS}}}}}
 
         self.assertRequestBodyIs(json=req)
+        self.assertRequestHeaderEqual('Content-Type', 'application/json')
+        self.assertRequestHeaderEqual('Accept', 'application/json')
         self.assertEqual(s.auth.auth_ref.auth_token, self.TEST_TOKEN)
 
     @httpretty.activate
@@ -213,6 +214,9 @@ class V3IdentityPlugin(utils.TestCase):
                 'token': {'id': self.TEST_TOKEN}}}}
 
         self.assertRequestBodyIs(json=req)
+
+        self.assertRequestHeaderEqual('Content-Type', 'application/json')
+        self.assertRequestHeaderEqual('Accept', 'application/json')
         self.assertEqual(s.auth.auth_ref.auth_token, self.TEST_TOKEN)
 
     def test_missing_auth_params(self):
@@ -361,3 +365,47 @@ class V3IdentityPlugin(utils.TestCase):
                      endpoint_filter={'service_type': 'compute'})
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.text, 'SUCCESS')
+
+    @httpretty.activate
+    def test_invalid_auth_response_dict(self):
+        self.stub_auth(json={'hello': 'world'})
+
+        a = v3.Password(self.TEST_URL, username=self.TEST_USER,
+                        password=self.TEST_PASS)
+        s = session.Session(auth=a)
+
+        self.assertRaises(exceptions.InvalidResponse, s.get, 'http://any',
+                          authenticated=True)
+
+    @httpretty.activate
+    def test_invalid_auth_response_type(self):
+        self.stub_url(httpretty.POST, ['auth', 'tokens'], body='testdata')
+
+        a = v3.Password(self.TEST_URL, username=self.TEST_USER,
+                        password=self.TEST_PASS)
+        s = session.Session(auth=a)
+
+        self.assertRaises(exceptions.InvalidResponse, s.get, 'http://any',
+                          authenticated=True)
+
+    @httpretty.activate
+    def test_invalidate_response(self):
+        body = jsonutils.dumps(self.TEST_RESPONSE_DICT)
+        auth_responses = [httpretty.Response(body=body,
+                                             X_Subject_Token='token1',
+                                             status=200),
+                          httpretty.Response(body=body,
+                                             X_Subject_Token='token2',
+                                             status=200)]
+
+        httpretty.register_uri(httpretty.POST,
+                               '%s/auth/tokens' % self.TEST_URL,
+                               responses=auth_responses)
+
+        a = v3.Password(self.TEST_URL, username=self.TEST_USER,
+                        password=self.TEST_PASS)
+        s = session.Session(auth=a)
+
+        self.assertEqual('token1', s.get_token())
+        a.invalidate()
+        self.assertEqual('token2', s.get_token())

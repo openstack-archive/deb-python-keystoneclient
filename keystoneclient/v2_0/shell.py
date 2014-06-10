@@ -14,6 +14,13 @@
 #    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 #    License for the specific language governing permissions and limitations
 #    under the License.
+"""
+This module is pending deprecation in favor of python-openstackclient.
+
+Bug fixes are welcome, but new features should be exposed to the CLI by
+python-openstackclient after being added to the python-keystoneclient library.
+
+"""
 
 import argparse
 import getpass
@@ -385,7 +392,7 @@ def do_user_role_list(kc, args):
            'the authenticated user will be used.')
 @utils.arg('--user_id', help=argparse.SUPPRESS)
 @utils.arg('--tenant-id', metavar='<tenant-id>',
-           help='Tenant ID for which to to create credentials. If not '
+           help='Tenant ID for which to create credentials. If not '
            'specified, the authenticated tenant ID will be used.')
 @utils.arg('--tenant_id', help=argparse.SUPPRESS)
 def do_ec2_credentials_create(kc, args):

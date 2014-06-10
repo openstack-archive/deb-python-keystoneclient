@@ -1,5 +1,3 @@
-# vim: tabstop=4 shiftwidth=4 softtabstop=4
-
 # Licensed under the Apache License, Version 2.0 (the "License"); you may
 # not use this file except in compliance with the License. You may obtain
 # a copy of the License at
@@ -12,11 +10,14 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+import copy
+
 import httpretty
 from six.moves import urllib
 
 from keystoneclient.auth.identity import v2
 from keystoneclient import exceptions
+from keystoneclient.openstack.common import jsonutils
 from keystoneclient import session
 from keystoneclient.tests import utils
 
@@ -109,6 +110,8 @@ class V2IdentityPlugin(utils.TestCase):
         req = {'auth': {'passwordCredentials': {'username': self.TEST_USER,
                                                 'password': self.TEST_PASS}}}
         self.assertRequestBodyIs(json=req)
+        self.assertRequestHeaderEqual('Content-Type', 'application/json')
+        self.assertRequestHeaderEqual('Accept', 'application/json')
         self.assertEqual(s.auth.auth_ref.auth_token, self.TEST_TOKEN)
 
     @httpretty.activate
@@ -135,6 +138,8 @@ class V2IdentityPlugin(utils.TestCase):
         req = {'auth': {'token': {'id': 'foo'}}}
         self.assertRequestBodyIs(json=req)
         self.assertRequestHeaderEqual('x-Auth-Token', 'foo')
+        self.assertRequestHeaderEqual('Content-Type', 'application/json')
+        self.assertRequestHeaderEqual('Accept', 'application/json')
         self.assertEqual(s.auth.auth_ref.auth_token, self.TEST_TOKEN)
 
     def test_missing_auth_params(self):
@@ -207,3 +212,48 @@ class V2IdentityPlugin(utils.TestCase):
                      endpoint_filter={'service_type': 'compute'})
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.text, 'SUCCESS')
+
+    @httpretty.activate
+    def test_invalid_auth_response_dict(self):
+        self.stub_auth(json={'hello': 'world'})
+
+        a = v2.Password(self.TEST_URL, username=self.TEST_USER,
+                        password=self.TEST_PASS)
+        s = session.Session(auth=a)
+
+        self.assertRaises(exceptions.InvalidResponse, s.get, 'http://any',
+                          authenticated=True)
+
+    @httpretty.activate
+    def test_invalid_auth_response_type(self):
+        self.stub_url(httpretty.POST, ['tokens'], body='testdata')
+
+        a = v2.Password(self.TEST_URL, username=self.TEST_USER,
+                        password=self.TEST_PASS)
+        s = session.Session(auth=a)
+
+        self.assertRaises(exceptions.InvalidResponse, s.get, 'http://any',
+                          authenticated=True)
+
+    @httpretty.activate
+    def test_invalidate_response(self):
+        resp_data1 = copy.deepcopy(self.TEST_RESPONSE_DICT)
+        resp_data2 = copy.deepcopy(self.TEST_RESPONSE_DICT)
+
+        resp_data1['access']['token']['id'] = 'token1'
+        resp_data2['access']['token']['id'] = 'token2'
+
+        auth_responses = [httpretty.Response(body=jsonutils.dumps(resp_data1),
+                                             status=200),
+                          httpretty.Response(body=jsonutils.dumps(resp_data2),
+                                             status=200)]
+
+        self.stub_auth(responses=auth_responses)
+
+        a = v2.Password(self.TEST_URL, username=self.TEST_USER,
+                        password=self.TEST_PASS)
+        s = session.Session(auth=a)
+
+        self.assertEqual('token1', s.get_token())
+        a.invalidate()
+        self.assertEqual('token2', s.get_token())

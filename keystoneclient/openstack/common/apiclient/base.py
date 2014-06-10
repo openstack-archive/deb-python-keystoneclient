@@ -30,6 +30,7 @@ import six
 from six.moves.urllib import parse
 
 from keystoneclient.openstack.common.apiclient import exceptions
+from keystoneclient.openstack.common.gettextutils import _
 from keystoneclient.openstack.common import strutils
 
 
@@ -74,8 +75,8 @@ class HookableMixin(object):
 
         :param cls: class that registers hooks
         :param hook_type: hook type, e.g., '__pre_parse_args__'
-        :param **args: args to be passed to every hook function
-        :param **kwargs: kwargs to be passed to every hook function
+        :param args: args to be passed to every hook function
+        :param kwargs: kwargs to be passed to every hook function
         """
         hook_funcs = cls._hooks_map.get(hook_type) or []
         for hook_func in hook_funcs:
@@ -219,7 +220,10 @@ class ManagerWithFind(BaseManager):
         matches = self.findall(**kwargs)
         num_matches = len(matches)
         if num_matches == 0:
-            msg = "No %s matching %s." % (self.resource_class.__name__, kwargs)
+            msg = _("No %(name)s matching %(args)s.") % {
+                'name': self.resource_class.__name__,
+                'args': kwargs
+            }
             raise exceptions.NotFound(msg)
         elif num_matches > 1:
             raise exceptions.NoUniqueMatch()
@@ -373,7 +377,10 @@ class CrudManager(BaseManager):
         num = len(rl)
 
         if num == 0:
-            msg = "No %s matching %s." % (self.resource_class.__name__, kwargs)
+            msg = _("No %(name)s matching %(args)s.") % {
+                'name': self.resource_class.__name__,
+                'args': kwargs
+            }
             raise exceptions.NotFound(404, msg)
         elif num > 1:
             raise exceptions.NoUniqueMatch
@@ -457,17 +464,22 @@ class Resource(object):
     def __getattr__(self, k):
         if k not in self.__dict__:
             #NOTE(bcwaldon): disallow lazy-loading if already loaded once
-            if not self.is_loaded:
-                self._get()
+            if not self.is_loaded():
+                self.get()
                 return self.__getattr__(k)
 
             raise AttributeError(k)
         else:
             return self.__dict__[k]
 
-    def _get(self):
-        # set _loaded first ... so if we have to bail, we know we tried.
-        self._loaded = True
+    def get(self):
+        """Support for lazy loading details.
+
+        Some clients, such as novaclient have the option to lazy load the
+        details, details which can be loaded with this function.
+        """
+        # set_loaded() first ... so if we have to bail, we know we tried.
+        self.set_loaded(True)
         if not hasattr(self.manager, 'get'):
             return
 
@@ -485,9 +497,11 @@ class Resource(object):
             return self.id == other.id
         return self._info == other._info
 
-    @property
     def is_loaded(self):
         return self._loaded
+
+    def set_loaded(self, val):
+        self._loaded = val
 
     def to_dict(self):
         return copy.deepcopy(self._info)

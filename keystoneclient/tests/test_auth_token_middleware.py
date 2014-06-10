@@ -14,10 +14,10 @@
 
 import calendar
 import datetime
+import json
 import os
 import shutil
 import stat
-import sys
 import tempfile
 import time
 import uuid
@@ -30,13 +30,16 @@ import testresources
 import testtools
 import webob
 
+from keystoneclient import access
 from keystoneclient.common import cms
 from keystoneclient import exceptions
+from keystoneclient import fixture
 from keystoneclient.middleware import auth_token
 from keystoneclient.openstack.common import jsonutils
 from keystoneclient.openstack.common import memorycache
 from keystoneclient.openstack.common import timeutils
 from keystoneclient.tests import client_fixtures
+from keystoneclient.tests import utils
 
 
 EXPECTED_V2_DEFAULT_ENV_RESPONSE = {
@@ -122,58 +125,11 @@ def memcached_available():
     return MEMCACHED_AVAILABLE
 
 
-class NoModuleFinder(object):
-    """Disallow further imports of 'module'."""
-
-    def __init__(self, module):
-        self.module = module
-
-    def find_module(self, fullname, path):
-        if fullname == self.module or fullname.startswith(self.module + '.'):
-            raise ImportError
-
-
 def cleanup_revoked_file(filename):
     try:
         os.remove(filename)
     except OSError:
         pass
-
-
-class DisableModuleFixture(fixtures.Fixture):
-    """A fixture to provide support for unloading/disabling modules."""
-
-    def __init__(self, module, *args, **kw):
-        super(DisableModuleFixture, self).__init__(*args, **kw)
-        self.module = module
-        self._finders = []
-        self._cleared_modules = {}
-
-    def tearDown(self):
-        super(DisableModuleFixture, self).tearDown()
-        for finder in self._finders:
-            sys.meta_path.remove(finder)
-        sys.modules.update(self._cleared_modules)
-
-    def clear_module(self):
-        cleared_modules = {}
-        for fullname in sys.modules.keys():
-            if (fullname == self.module or
-                    fullname.startswith(self.module + '.')):
-                cleared_modules[fullname] = sys.modules.pop(fullname)
-        return cleared_modules
-
-    def setUp(self):
-        """Ensure ImportError for the specified module."""
-
-        super(DisableModuleFixture, self).setUp()
-
-        # Clear 'module' references in sys.modules
-        self._cleared_modules.update(self.clear_module())
-
-        finder = NoModuleFinder(self.module)
-        self._finders.append(finder)
-        sys.meta_path.insert(0, finder)
 
 
 class TimezoneFixture(fixtures.Fixture):
@@ -250,7 +206,7 @@ class BaseAuthTokenMiddlewareTest(testtools.TestCase):
     All the tests allow for running with auth_token
     configured for receiving v2 or v3 tokens, with the
     choice being made by passing configuration data into
-    Setup().
+    setUp().
 
     The base class will, by default, run all the tests
     expecting v2 token formats.  Child classes can override
@@ -265,10 +221,7 @@ class BaseAuthTokenMiddlewareTest(testtools.TestCase):
         self.middleware = None
 
         self.conf = {
-            'auth_host': 'keystone.example.com',
-            'auth_port': 1234,
-            'auth_protocol': 'https',
-            'auth_admin_prefix': '/testadmin',
+            'identity_uri': 'https://keystone.example.com:1234/testadmin/',
             'signing_dir': client_fixtures.CERTDIR,
             'auth_version': auth_version,
             'auth_uri': 'https://keystone.example.com:1234',
@@ -278,7 +231,7 @@ class BaseAuthTokenMiddlewareTest(testtools.TestCase):
         self.response_status = None
         self.response_headers = None
 
-    def set_middleware(self, fake_app=None, expected_env=None, conf=None):
+    def set_middleware(self, expected_env=None, conf=None):
         """Configure the class ready to call the auth_token middleware.
 
         Set up the various fake items needed to run the middleware.
@@ -289,14 +242,11 @@ class BaseAuthTokenMiddlewareTest(testtools.TestCase):
         if conf:
             self.conf.update(conf)
 
-        if not fake_app:
-            fake_app = self.fake_app
-
         if expected_env:
             self.expected_env.update(expected_env)
 
-        self.middleware = auth_token.AuthProtocol(fake_app(self.expected_env),
-                                                  self.conf)
+        self.middleware = auth_token.AuthProtocol(
+            self.fake_app(self.expected_env), self.conf)
         self.middleware._iso8601 = iso8601
 
         with tempfile.NamedTemporaryFile(dir=self.middleware.signing_dirname,
@@ -320,33 +270,6 @@ class BaseAuthTokenMiddlewareTest(testtools.TestCase):
         else:
             self.assertIsInstance(httpretty.last_request(),
                                   httpretty.core.HTTPrettyRequestEmpty)
-
-if tuple(sys.version_info)[0:2] < (2, 7):
-
-    # 2.6 doesn't have the assert dict equals so make sure that it exists
-    class AdjustedBaseAuthTokenMiddlewareTest(BaseAuthTokenMiddlewareTest):
-        def assertIsInstance(self, obj, cls, msg=None):
-            """Same as self.assertTrue(isinstance(obj, cls)), with a nicer
-            default message.
-            """
-            if not isinstance(obj, cls):
-                standardMsg = '%s is not an instance of %r' % (obj, cls)
-                self.fail(self._formatMessage(msg, standardMsg))
-
-        def assertDictEqual(self, d1, d2, msg=None):
-            # Simple version taken from 2.7
-            self.assertIsInstance(d1, dict,
-                                  'First argument is not a dictionary')
-            self.assertIsInstance(d2, dict,
-                                  'Second argument is not a dictionary')
-            if d1 != d2:
-                if msg:
-                    self.fail(msg)
-                else:
-                    standardMsg = '%r != %r' % (d1, d2)
-                    self.fail(standardMsg)
-
-    BaseAuthTokenMiddlewareTest = AdjustedBaseAuthTokenMiddlewareTest
 
 
 class MultiStepAuthTokenMiddlewareTest(BaseAuthTokenMiddlewareTest,
@@ -427,10 +350,11 @@ class DiabloAuthTokenMiddlewareTest(BaseAuthTokenMiddlewareTest,
 
 
 class NoMemcacheAuthToken(BaseAuthTokenMiddlewareTest):
+    """These tests will not have the memcache module available."""
 
     def setUp(self):
         super(NoMemcacheAuthToken, self).setUp()
-        self.useFixture(DisableModuleFixture('memcache'))
+        self.useFixture(utils.DisableModuleFixture('memcache'))
 
     def test_nomemcache(self):
         conf = {
@@ -443,22 +367,34 @@ class NoMemcacheAuthToken(BaseAuthTokenMiddlewareTest):
 
         auth_token.AuthProtocol(FakeApp(), conf)
 
-    def test_not_use_cache_from_env(self):
+
+class CachePoolTest(BaseAuthTokenMiddlewareTest):
+    def test_use_cache_from_env(self):
+        """If `swift.cache` is set in the environment and `cache` is set in the
+        config then the env cache is used.
+        """
         env = {'swift.cache': 'CACHE_TEST'}
         conf = {
-            'memcached_servers': MEMCACHED_SERVERS
+            'cache': 'swift.cache'
         }
         self.set_middleware(conf=conf)
+        self.middleware._init_cache(env)
+        with self.middleware._cache_pool.reserve() as cache:
+            self.assertEqual(cache, 'CACHE_TEST')
+
+    def test_not_use_cache_from_env(self):
+        """If `swift.cache` is set in the environment but `cache` isn't set in
+        the config then the env cache isn't used.
+        """
+        self.set_middleware()
+        env = {'swift.cache': 'CACHE_TEST'}
         self.middleware._init_cache(env)
         with self.middleware._cache_pool.reserve() as cache:
             self.assertNotEqual(cache, 'CACHE_TEST')
 
     def test_multiple_context_managers_share_single_client(self):
+        self.set_middleware()
         env = {}
-        conf = {
-            'memcached_servers': MEMCACHED_SERVERS
-        }
-        self.set_middleware(conf=conf)
         self.middleware._init_cache(env)
 
         caches = []
@@ -473,11 +409,8 @@ class NoMemcacheAuthToken(BaseAuthTokenMiddlewareTest):
         self.assertEqual(set(caches), set(self.middleware._cache_pool))
 
     def test_nested_context_managers_create_multiple_clients(self):
+        self.set_middleware()
         env = {}
-        conf = {
-            'memcached_servers': MEMCACHED_SERVERS
-        }
-        self.set_middleware(conf=conf)
         self.middleware._init_cache(env)
 
         with self.middleware._cache_pool.reserve() as outer_cache:
@@ -488,319 +421,13 @@ class NoMemcacheAuthToken(BaseAuthTokenMiddlewareTest):
             set([inner_cache, outer_cache]), set(self.middleware._cache_pool))
 
 
-class CommonAuthTokenMiddlewareTest(object):
+class GeneralAuthTokenMiddlewareTest(BaseAuthTokenMiddlewareTest,
+                                     testresources.ResourcedTestCase):
+    """These tests are not affected by the token format
+    (see CommonAuthTokenMiddlewareTest).
+    """
 
-    def test_init_does_not_call_http(self):
-        conf = {
-            'revocation_cache_time': 1
-        }
-        self.set_middleware(conf=conf)
-        self.assertLastPath(None)
-
-    def test_init_by_ipv6Addr_auth_host(self):
-        conf = {
-            'auth_host': '2001:2013:1:f101::1',
-            'auth_port': 1234,
-            'auth_protocol': 'http',
-            'auth_uri': None,
-        }
-        self.set_middleware(conf=conf)
-        expected_auth_uri = 'http://[2001:2013:1:f101::1]:1234'
-        self.assertEqual(expected_auth_uri, self.middleware.auth_uri)
-
-    def assert_valid_request_200(self, token, with_catalog=True):
-        req = webob.Request.blank('/')
-        req.headers['X-Auth-Token'] = token
-        body = self.middleware(req.environ, self.start_fake_response)
-        self.assertEqual(self.response_status, 200)
-        if with_catalog:
-            self.assertTrue(req.headers.get('X-Service-Catalog'))
-        else:
-            self.assertNotIn('X-Service-Catalog', req.headers)
-        self.assertEqual(body, [FakeApp.SUCCESS])
-        self.assertIn('keystone.token_info', req.environ)
-
-    def test_valid_uuid_request(self):
-        self.assert_valid_request_200(self.token_dict['uuid_token_default'])
-        self.assert_valid_last_url(self.token_dict['uuid_token_default'])
-
-    def test_valid_signed_request(self):
-        self.assert_valid_request_200(
-            self.token_dict['signed_token_scoped'])
-        self.assertEqual(self.middleware.conf['auth_admin_prefix'],
-                         "/testadmin")
-        #ensure that signed requests do not generate HTTP traffic
-        self.assertLastPath(None)
-
-    def test_revoked_token_receives_401(self):
-        self.middleware.token_revocation_list = self.get_revocation_list_json()
-        req = webob.Request.blank('/')
-        req.headers['X-Auth-Token'] = self.token_dict['revoked_token']
-        self.middleware(req.environ, self.start_fake_response)
-        self.assertEqual(self.response_status, 401)
-
-    def get_revocation_list_json(self, token_ids=None):
-        if token_ids is None:
-            token_ids = [self.token_dict['revoked_token_hash']]
-        revocation_list = {'revoked': [{'id': x, 'expires': timeutils.utcnow()}
-                                       for x in token_ids]}
-        return jsonutils.dumps(revocation_list)
-
-    def test_is_signed_token_revoked_returns_false(self):
-        #explicitly setting an empty revocation list here to document intent
-        self.middleware.token_revocation_list = jsonutils.dumps(
-            {"revoked": [], "extra": "success"})
-        result = self.middleware.is_signed_token_revoked(
-            self.token_dict['revoked_token'])
-        self.assertFalse(result)
-
-    def test_is_signed_token_revoked_returns_true(self):
-        self.middleware.token_revocation_list = self.get_revocation_list_json()
-        result = self.middleware.is_signed_token_revoked(
-            self.token_dict['revoked_token'])
-        self.assertTrue(result)
-
-    def test_verify_signed_token_raises_exception_for_revoked_token(self):
-        self.middleware.token_revocation_list = self.get_revocation_list_json()
-        self.assertRaises(auth_token.InvalidUserToken,
-                          self.middleware.verify_signed_token,
-                          self.token_dict['revoked_token'])
-
-    def test_verify_signed_token_succeeds_for_unrevoked_token(self):
-        self.middleware.token_revocation_list = self.get_revocation_list_json()
-        self.middleware.verify_signed_token(
-            self.token_dict['signed_token_scoped'])
-
-    def test_verify_signing_dir_create_while_missing(self):
-        tmp_name = uuid.uuid4().hex
-        test_parent_signing_dir = "/tmp/%s" % tmp_name
-        self.middleware.signing_dirname = "/tmp/%s/%s" % ((tmp_name,) * 2)
-        self.middleware.signing_cert_file_name = "%s/test.pem" % \
-            self.middleware.signing_dirname
-        self.middleware.verify_signing_dir()
-        # NOTE(wu_wenxiang): Verify if the signing dir was created as expected.
-        self.assertTrue(os.path.isdir(self.middleware.signing_dirname))
-        self.assertTrue(os.access(self.middleware.signing_dirname, os.W_OK))
-        self.assertEqual(os.stat(self.middleware.signing_dirname).st_uid,
-                         os.getuid())
-        self.assertEqual(
-            stat.S_IMODE(os.stat(self.middleware.signing_dirname).st_mode),
-            stat.S_IRWXU)
-        shutil.rmtree(test_parent_signing_dir)
-
-    def test_cert_file_missing(self):
-        self.assertFalse(self.middleware.cert_file_missing(
-                         "openstack: /tmp/haystack: No such file or directory",
-                         "/tmp/needle"))
-        self.assertTrue(self.middleware.cert_file_missing(
-                        "openstack: /not/exist: No such file or directory",
-                        "/not/exist"))
-
-    def test_get_token_revocation_list_fetched_time_returns_min(self):
-        self.middleware.token_revocation_list_fetched_time = None
-        self.middleware.revoked_file_name = ''
-        self.assertEqual(self.middleware.token_revocation_list_fetched_time,
-                         datetime.datetime.min)
-
-    def test_get_token_revocation_list_fetched_time_returns_mtime(self):
-        self.middleware.token_revocation_list_fetched_time = None
-        mtime = os.path.getmtime(self.middleware.revoked_file_name)
-        fetched_time = datetime.datetime.utcfromtimestamp(mtime)
-        self.assertEqual(fetched_time,
-                         self.middleware.token_revocation_list_fetched_time)
-
-    @testtools.skipUnless(TimezoneFixture.supported(),
-                          'TimezoneFixture not supported')
-    def test_get_token_revocation_list_fetched_time_returns_utc(self):
-        with TimezoneFixture('UTC-1'):
-            self.middleware.token_revocation_list = jsonutils.dumps(
-                self.examples.REVOCATION_LIST)
-            self.middleware.token_revocation_list_fetched_time = None
-            fetched_time = self.middleware.token_revocation_list_fetched_time
-            self.assertTrue(timeutils.is_soon(fetched_time, 1))
-
-    def test_get_token_revocation_list_fetched_time_returns_value(self):
-        expected = self.middleware._token_revocation_list_fetched_time
-        self.assertEqual(self.middleware.token_revocation_list_fetched_time,
-                         expected)
-
-    def test_get_revocation_list_returns_fetched_list(self):
-        # auth_token uses v2 to fetch this, so don't allow the v3
-        # tests to override the fake http connection
-        self.middleware.token_revocation_list_fetched_time = None
-        os.remove(self.middleware.revoked_file_name)
-        self.assertEqual(self.middleware.token_revocation_list,
-                         self.examples.REVOCATION_LIST)
-
-    def test_get_revocation_list_returns_current_list_from_memory(self):
-        self.assertEqual(self.middleware.token_revocation_list,
-                         self.middleware._token_revocation_list)
-
-    def test_get_revocation_list_returns_current_list_from_disk(self):
-        in_memory_list = self.middleware.token_revocation_list
-        self.middleware._token_revocation_list = None
-        self.assertEqual(self.middleware.token_revocation_list, in_memory_list)
-
-    def test_invalid_revocation_list_raises_service_error(self):
-        httpretty.register_uri(httpretty.GET,
-                               "%s/v2.0/tokens/revoked" % BASE_URI,
-                               body="{}",
-                               status=200)
-
-        self.assertRaises(auth_token.ServiceError,
-                          self.middleware.fetch_revocation_list)
-
-    def test_fetch_revocation_list(self):
-        # auth_token uses v2 to fetch this, so don't allow the v3
-        # tests to override the fake http connection
-        fetched_list = jsonutils.loads(self.middleware.fetch_revocation_list())
-        self.assertEqual(fetched_list, self.examples.REVOCATION_LIST)
-
-    def test_request_invalid_uuid_token(self):
-        # remember because we are testing the middleware we stub the connection
-        # to the keystone server, but this is not what gets returned
-        invalid_uri = "%s/v2.0/tokens/invalid-token" % BASE_URI
-        httpretty.register_uri(httpretty.GET, invalid_uri, body="", status=404)
-
-        req = webob.Request.blank('/')
-        req.headers['X-Auth-Token'] = 'invalid-token'
-        self.middleware(req.environ, self.start_fake_response)
-        self.assertEqual(self.response_status, 401)
-        self.assertEqual(self.response_headers['WWW-Authenticate'],
-                         "Keystone uri='https://keystone.example.com:1234'")
-
-    def test_request_invalid_signed_token(self):
-        req = webob.Request.blank('/')
-        req.headers['X-Auth-Token'] = self.examples.INVALID_SIGNED_TOKEN
-        self.middleware(req.environ, self.start_fake_response)
-        self.assertEqual(self.response_status, 401)
-        self.assertEqual(self.response_headers['WWW-Authenticate'],
-                         "Keystone uri='https://keystone.example.com:1234'")
-
-    def test_request_no_token(self):
-        req = webob.Request.blank('/')
-        self.middleware(req.environ, self.start_fake_response)
-        self.assertEqual(self.response_status, 401)
-        self.assertEqual(self.response_headers['WWW-Authenticate'],
-                         "Keystone uri='https://keystone.example.com:1234'")
-
-    def test_request_no_token_log_message(self):
-        class FakeLog(object):
-            def __init__(self):
-                self.msg = None
-                self.debugmsg = None
-
-            def warn(self, msg=None, *args, **kwargs):
-                self.msg = msg
-
-            def debug(self, msg=None, *args, **kwargs):
-                self.debugmsg = msg
-
-        self.middleware.LOG = FakeLog()
-        self.middleware.delay_auth_decision = False
-        self.assertRaises(auth_token.InvalidUserToken,
-                          self.middleware._get_user_token_from_header, {})
-        self.assertIsNotNone(self.middleware.LOG.msg)
-        self.assertIsNotNone(self.middleware.LOG.debugmsg)
-
-    def test_request_no_token_http(self):
-        req = webob.Request.blank('/', environ={'REQUEST_METHOD': 'HEAD'})
-        self.set_middleware()
-        body = self.middleware(req.environ, self.start_fake_response)
-        self.assertEqual(self.response_status, 401)
-        self.assertEqual(self.response_headers['WWW-Authenticate'],
-                         "Keystone uri='https://keystone.example.com:1234'")
-        self.assertEqual(body, [''])
-
-    def test_request_blank_token(self):
-        req = webob.Request.blank('/')
-        req.headers['X-Auth-Token'] = ''
-        self.middleware(req.environ, self.start_fake_response)
-        self.assertEqual(self.response_status, 401)
-        self.assertEqual(self.response_headers['WWW-Authenticate'],
-                         "Keystone uri='https://keystone.example.com:1234'")
-
-    def _get_cached_token(self, token):
-        token_id = cms.cms_hash_token(token)
-        # NOTE(vish): example tokens are expired so skip the expiration check.
-        return self.middleware._cache_get(token_id, ignore_expires=True)
-
-    def test_memcache(self):
-        # NOTE(jamielennox): it appears that httpretty can mess with the
-        # memcache socket. Just disable it as it's not required here anyway.
-        httpretty.disable()
-        req = webob.Request.blank('/')
-        token = self.token_dict['signed_token_scoped']
-        req.headers['X-Auth-Token'] = token
-        self.middleware(req.environ, self.start_fake_response)
-        self.assertIsNotNone(self._get_cached_token(token))
-
-    def test_expired(self):
-        httpretty.disable()
-        req = webob.Request.blank('/')
-        token = self.token_dict['signed_token_scoped_expired']
-        req.headers['X-Auth-Token'] = token
-        self.middleware(req.environ, self.start_fake_response)
-        self.assertEqual(self.response_status, 401)
-
-    def test_memcache_set_invalid_uuid(self):
-        invalid_uri = "%s/v2.0/tokens/invalid-token" % BASE_URI
-        httpretty.register_uri(httpretty.GET, invalid_uri, body="", status=404)
-
-        req = webob.Request.blank('/')
-        token = 'invalid-token'
-        req.headers['X-Auth-Token'] = token
-        self.middleware(req.environ, self.start_fake_response)
-        self.assertRaises(auth_token.InvalidUserToken,
-                          self._get_cached_token, token)
-
-    def test_memcache_set_invalid_signed(self):
-        req = webob.Request.blank('/')
-        token = self.token_dict['signed_token_scoped_expired']
-        req.headers['X-Auth-Token'] = token
-        self.middleware(req.environ, self.start_fake_response)
-        self.assertRaises(auth_token.InvalidUserToken,
-                          self._get_cached_token, token)
-
-    def test_memcache_set_expired(self, extra_conf={}, extra_environ={}):
-        httpretty.disable()
-        token_cache_time = 10
-        conf = {
-            'token_cache_time': token_cache_time,
-            'signing_dir': client_fixtures.CERTDIR,
-        }
-        conf.update(extra_conf)
-        self.set_middleware(conf=conf)
-        req = webob.Request.blank('/')
-        token = self.token_dict['signed_token_scoped']
-        req.headers['X-Auth-Token'] = token
-        req.environ.update(extra_environ)
-        timeutils_utcnow = 'keystoneclient.openstack.common.timeutils.utcnow'
-        now = datetime.datetime.utcnow()
-        with mock.patch(timeutils_utcnow) as mock_utcnow:
-            mock_utcnow.return_value = now
-            self.middleware(req.environ, self.start_fake_response)
-            self.assertIsNotNone(self._get_cached_token(token))
-        expired = now + datetime.timedelta(seconds=token_cache_time)
-        with mock.patch(timeutils_utcnow) as mock_utcnow:
-            mock_utcnow.return_value = expired
-            self.assertIsNone(self._get_cached_token(token))
-
-    def test_swift_memcache_set_expired(self):
-        extra_conf = {'cache': 'swift.cache'}
-        extra_environ = {'swift.cache': memorycache.Client()}
-        self.test_memcache_set_expired(extra_conf, extra_environ)
-
-    def test_use_cache_from_env(self):
-        env = {'swift.cache': 'CACHE_TEST'}
-        conf = {
-            'cache': 'swift.cache',
-            'memcached_servers': MEMCACHED_SERVERS
-        }
-        self.set_middleware(conf=conf)
-        self.middleware._init_cache(env)
-        with self.middleware._cache_pool.reserve() as cache:
-            self.assertEqual(cache, 'CACHE_TEST')
+    resources = [('examples', client_fixtures.EXAMPLES_RESOURCE)]
 
     def test_will_expire_soon(self):
         tenseconds = datetime.datetime.utcnow() + datetime.timedelta(
@@ -925,6 +552,480 @@ class CommonAuthTokenMiddlewareTest(object):
         middleware = auth_token.AuthProtocol(self.fake_app, conf)
         self.assertEqual(middleware.token_revocation_list_cache_timeout,
                          datetime.timedelta(seconds=24))
+
+
+class CommonAuthTokenMiddlewareTest(object):
+    """These tests are run once using v2 tokens and again using v3 tokens."""
+
+    def test_init_does_not_call_http(self):
+        conf = {
+            'revocation_cache_time': 1
+        }
+        self.set_middleware(conf=conf)
+        self.assertLastPath(None)
+
+    def test_init_by_ipv6Addr_auth_host(self):
+        del self.conf['identity_uri']
+        conf = {
+            'auth_host': '2001:2013:1:f101::1',
+            'auth_port': 1234,
+            'auth_protocol': 'http',
+            'auth_uri': None,
+        }
+        self.set_middleware(conf=conf)
+        expected_auth_uri = 'http://[2001:2013:1:f101::1]:1234'
+        self.assertEqual(expected_auth_uri, self.middleware.auth_uri)
+
+    def assert_valid_request_200(self, token, with_catalog=True):
+        req = webob.Request.blank('/')
+        req.headers['X-Auth-Token'] = token
+        body = self.middleware(req.environ, self.start_fake_response)
+        self.assertEqual(self.response_status, 200)
+        if with_catalog:
+            self.assertTrue(req.headers.get('X-Service-Catalog'))
+        else:
+            self.assertNotIn('X-Service-Catalog', req.headers)
+        self.assertEqual(body, [FakeApp.SUCCESS])
+        self.assertIn('keystone.token_info', req.environ)
+        return req
+
+    def test_valid_uuid_request(self):
+        for _ in range(2):  # Do it twice because first result was cached.
+            token = self.token_dict['uuid_token_default']
+            self.assert_valid_request_200(token)
+            self.assert_valid_last_url(token)
+
+    def test_valid_uuid_request_with_auth_fragments(self):
+        del self.conf['identity_uri']
+        self.conf['auth_protocol'] = 'https'
+        self.conf['auth_host'] = 'keystone.example.com'
+        self.conf['auth_port'] = 1234
+        self.conf['auth_admin_prefix'] = '/testadmin'
+        self.set_middleware()
+        self.assert_valid_request_200(self.token_dict['uuid_token_default'])
+        self.assert_valid_last_url(self.token_dict['uuid_token_default'])
+
+    def _test_cache_revoked(self, token, revoked_form=None):
+        # When the token is cached and revoked, 401 is returned.
+        self.middleware.check_revocations_for_cached = True
+
+        req = webob.Request.blank('/')
+        req.headers['X-Auth-Token'] = token
+
+        # Token should be cached as ok after this.
+        self.middleware(req.environ, self.start_fake_response)
+        self.assertEqual(200, self.response_status)
+
+        # Put it in revocation list.
+        self.middleware.token_revocation_list = self.get_revocation_list_json(
+            token_ids=[revoked_form or token])
+        self.middleware(req.environ, self.start_fake_response)
+        self.assertEqual(401, self.response_status)
+
+    def test_cached_revoked_uuid(self):
+        # When the UUID token is cached and revoked, 401 is returned.
+        self._test_cache_revoked(self.token_dict['uuid_token_default'])
+
+    def test_valid_signed_request(self):
+        for _ in range(2):  # Do it twice because first result was cached.
+            self.assert_valid_request_200(
+                self.token_dict['signed_token_scoped'])
+            #ensure that signed requests do not generate HTTP traffic
+            self.assertLastPath(None)
+
+    def test_valid_signed_compressed_request(self):
+        self.assert_valid_request_200(
+            self.token_dict['signed_token_scoped_pkiz'])
+        # ensure that signed requests do not generate HTTP traffic
+        self.assertLastPath(None)
+
+    def test_revoked_token_receives_401(self):
+        self.middleware.token_revocation_list = self.get_revocation_list_json()
+        req = webob.Request.blank('/')
+        req.headers['X-Auth-Token'] = self.token_dict['revoked_token']
+        self.middleware(req.environ, self.start_fake_response)
+        self.assertEqual(self.response_status, 401)
+
+    def test_revoked_token_receives_401_sha256(self):
+        self.conf['hash_algorithms'] = ['sha256', 'md5']
+        self.set_middleware()
+        self.middleware.token_revocation_list = (
+            self.get_revocation_list_json(mode='sha256'))
+        req = webob.Request.blank('/')
+        req.headers['X-Auth-Token'] = self.token_dict['revoked_token']
+        self.middleware(req.environ, self.start_fake_response)
+        self.assertEqual(self.response_status, 401)
+
+    def test_cached_revoked_pki(self):
+        # When the PKI token is cached and revoked, 401 is returned.
+        token = self.token_dict['signed_token_scoped']
+        revoked_form = cms.cms_hash_token(token)
+        self._test_cache_revoked(token, revoked_form)
+
+    def test_revoked_token_receives_401_md5_secondary(self):
+        # When hash_algorithms has 'md5' as the secondary hash and the
+        # revocation list contains the md5 hash for a token, that token is
+        # considered revoked so returns 401.
+        self.conf['hash_algorithms'] = ['sha256', 'md5']
+        self.set_middleware()
+        self.middleware.token_revocation_list = self.get_revocation_list_json()
+        req = webob.Request.blank('/')
+        req.headers['X-Auth-Token'] = self.token_dict['revoked_token']
+        self.middleware(req.environ, self.start_fake_response)
+        self.assertEqual(self.response_status, 401)
+
+    def test_revoked_hashed_pki_token(self):
+        # If hash_algorithms is set as ['sha256', 'md5'],
+        # and check_revocations_for_cached is True,
+        # and a token is in the cache because it was successfully validated
+        # using the md5 hash, then
+        # if the token is in the revocation list by md5 hash, it'll be
+        # rejected and auth_token returns 401.
+        self.conf['hash_algorithms'] = ['sha256', 'md5']
+        self.conf['check_revocations_for_cached'] = True
+        self.set_middleware()
+
+        token = self.token_dict['signed_token_scoped']
+
+        # Put the token in the revocation list.
+        token_hashed = cms.cms_hash_token(token)
+        self.middleware.token_revocation_list = self.get_revocation_list_json(
+            token_ids=[token_hashed])
+
+        # First, request is using the hashed token, is valid so goes in
+        # cache using the given hash.
+        req = webob.Request.blank('/')
+        req.headers['X-Auth-Token'] = token_hashed
+        self.middleware(req.environ, self.start_fake_response)
+        self.assertEqual(200, self.response_status)
+
+        # This time use the PKI token
+        req.headers['X-Auth-Token'] = token
+        self.middleware(req.environ, self.start_fake_response)
+
+        # Should find the token in the cache and revocation list.
+        self.assertEqual(401, self.response_status)
+
+    def get_revocation_list_json(self, token_ids=None, mode=None):
+        if token_ids is None:
+            key = 'revoked_token_hash' + (('_' + mode) if mode else '')
+            token_ids = [self.token_dict[key]]
+        revocation_list = {'revoked': [{'id': x, 'expires': timeutils.utcnow()}
+                                       for x in token_ids]}
+        return jsonutils.dumps(revocation_list)
+
+    def test_is_signed_token_revoked_returns_false(self):
+        #explicitly setting an empty revocation list here to document intent
+        self.middleware.token_revocation_list = jsonutils.dumps(
+            {"revoked": [], "extra": "success"})
+        result = self.middleware.is_signed_token_revoked(
+            [self.token_dict['revoked_token_hash']])
+        self.assertFalse(result)
+
+    def test_is_signed_token_revoked_returns_true(self):
+        self.middleware.token_revocation_list = self.get_revocation_list_json()
+        result = self.middleware.is_signed_token_revoked(
+            [self.token_dict['revoked_token_hash']])
+        self.assertTrue(result)
+
+    def test_is_signed_token_revoked_returns_true_sha256(self):
+        self.conf['hash_algorithms'] = ['sha256', 'md5']
+        self.set_middleware()
+        self.middleware.token_revocation_list = (
+            self.get_revocation_list_json(mode='sha256'))
+        result = self.middleware.is_signed_token_revoked(
+            [self.token_dict['revoked_token_hash_sha256']])
+        self.assertTrue(result)
+
+    def test_verify_signed_token_raises_exception_for_revoked_token(self):
+        self.middleware.token_revocation_list = self.get_revocation_list_json()
+        self.assertRaises(auth_token.InvalidUserToken,
+                          self.middleware.verify_signed_token,
+                          self.token_dict['revoked_token'],
+                          [self.token_dict['revoked_token_hash']])
+
+    def test_verify_signed_token_raises_exception_for_revoked_token_s256(self):
+        self.conf['hash_algorithms'] = ['sha256', 'md5']
+        self.set_middleware()
+        self.middleware.token_revocation_list = (
+            self.get_revocation_list_json(mode='sha256'))
+        self.assertRaises(auth_token.InvalidUserToken,
+                          self.middleware.verify_signed_token,
+                          self.token_dict['revoked_token'],
+                          [self.token_dict['revoked_token_hash_sha256'],
+                           self.token_dict['revoked_token_hash']])
+
+    def test_verify_signed_token_raises_exception_for_revoked_pkiz_token(self):
+        self.middleware.token_revocation_list = (
+            self.examples.REVOKED_TOKEN_PKIZ_LIST_JSON)
+        self.assertRaises(auth_token.InvalidUserToken,
+                          self.middleware.verify_pkiz_token,
+                          self.token_dict['revoked_token_pkiz'],
+                          [self.token_dict['revoked_token_pkiz_hash']])
+
+    def assertIsValidJSON(self, text):
+        json.loads(text)
+
+    def test_verify_signed_token_succeeds_for_unrevoked_token(self):
+        self.middleware.token_revocation_list = self.get_revocation_list_json()
+        text = self.middleware.verify_signed_token(
+            self.token_dict['signed_token_scoped'],
+            [self.token_dict['signed_token_scoped_hash']])
+        self.assertIsValidJSON(text)
+
+    def test_verify_signed_compressed_token_succeeds_for_unrevoked_token(self):
+        self.middleware.token_revocation_list = self.get_revocation_list_json()
+        text = self.middleware.verify_pkiz_token(
+            self.token_dict['signed_token_scoped_pkiz'],
+            [self.token_dict['signed_token_scoped_hash']])
+        self.assertIsValidJSON(text)
+
+    def test_verify_signed_token_succeeds_for_unrevoked_token_sha256(self):
+        self.conf['hash_algorithms'] = ['sha256', 'md5']
+        self.set_middleware()
+        self.middleware.token_revocation_list = (
+            self.get_revocation_list_json(mode='sha256'))
+        text = self.middleware.verify_signed_token(
+            self.token_dict['signed_token_scoped'],
+            [self.token_dict['signed_token_scoped_hash_sha256'],
+             self.token_dict['signed_token_scoped_hash']])
+        self.assertIsValidJSON(text)
+
+    def test_verify_signing_dir_create_while_missing(self):
+        tmp_name = uuid.uuid4().hex
+        test_parent_signing_dir = "/tmp/%s" % tmp_name
+        self.middleware.signing_dirname = "/tmp/%s/%s" % ((tmp_name,) * 2)
+        self.middleware.signing_cert_file_name = (
+            "%s/test.pem" % self.middleware.signing_dirname)
+        self.middleware.verify_signing_dir()
+        # NOTE(wu_wenxiang): Verify if the signing dir was created as expected.
+        self.assertTrue(os.path.isdir(self.middleware.signing_dirname))
+        self.assertTrue(os.access(self.middleware.signing_dirname, os.W_OK))
+        self.assertEqual(os.stat(self.middleware.signing_dirname).st_uid,
+                         os.getuid())
+        self.assertEqual(
+            stat.S_IMODE(os.stat(self.middleware.signing_dirname).st_mode),
+            stat.S_IRWXU)
+        shutil.rmtree(test_parent_signing_dir)
+
+    def test_get_token_revocation_list_fetched_time_returns_min(self):
+        self.middleware.token_revocation_list_fetched_time = None
+        self.middleware.revoked_file_name = ''
+        self.assertEqual(self.middleware.token_revocation_list_fetched_time,
+                         datetime.datetime.min)
+
+    def test_get_token_revocation_list_fetched_time_returns_mtime(self):
+        self.middleware.token_revocation_list_fetched_time = None
+        mtime = os.path.getmtime(self.middleware.revoked_file_name)
+        fetched_time = datetime.datetime.utcfromtimestamp(mtime)
+        self.assertEqual(fetched_time,
+                         self.middleware.token_revocation_list_fetched_time)
+
+    @testtools.skipUnless(TimezoneFixture.supported(),
+                          'TimezoneFixture not supported')
+    def test_get_token_revocation_list_fetched_time_returns_utc(self):
+        with TimezoneFixture('UTC-1'):
+            self.middleware.token_revocation_list = jsonutils.dumps(
+                self.examples.REVOCATION_LIST)
+            self.middleware.token_revocation_list_fetched_time = None
+            fetched_time = self.middleware.token_revocation_list_fetched_time
+            self.assertTrue(timeutils.is_soon(fetched_time, 1))
+
+    def test_get_token_revocation_list_fetched_time_returns_value(self):
+        expected = self.middleware._token_revocation_list_fetched_time
+        self.assertEqual(self.middleware.token_revocation_list_fetched_time,
+                         expected)
+
+    def test_get_revocation_list_returns_fetched_list(self):
+        # auth_token uses v2 to fetch this, so don't allow the v3
+        # tests to override the fake http connection
+        self.middleware.token_revocation_list_fetched_time = None
+        os.remove(self.middleware.revoked_file_name)
+        self.assertEqual(self.middleware.token_revocation_list,
+                         self.examples.REVOCATION_LIST)
+
+    def test_get_revocation_list_returns_current_list_from_memory(self):
+        self.assertEqual(self.middleware.token_revocation_list,
+                         self.middleware._token_revocation_list)
+
+    def test_get_revocation_list_returns_current_list_from_disk(self):
+        in_memory_list = self.middleware.token_revocation_list
+        self.middleware._token_revocation_list = None
+        self.assertEqual(self.middleware.token_revocation_list, in_memory_list)
+
+    def test_invalid_revocation_list_raises_service_error(self):
+        httpretty.register_uri(httpretty.GET,
+                               "%s/v2.0/tokens/revoked" % BASE_URI,
+                               body="{}",
+                               status=200)
+
+        self.assertRaises(auth_token.ServiceError,
+                          self.middleware.fetch_revocation_list)
+
+    def test_fetch_revocation_list(self):
+        # auth_token uses v2 to fetch this, so don't allow the v3
+        # tests to override the fake http connection
+        fetched_list = jsonutils.loads(self.middleware.fetch_revocation_list())
+        self.assertEqual(fetched_list, self.examples.REVOCATION_LIST)
+
+    def test_request_invalid_uuid_token(self):
+        # remember because we are testing the middleware we stub the connection
+        # to the keystone server, but this is not what gets returned
+        invalid_uri = "%s/v2.0/tokens/invalid-token" % BASE_URI
+        httpretty.register_uri(httpretty.GET, invalid_uri, body="", status=404)
+
+        req = webob.Request.blank('/')
+        req.headers['X-Auth-Token'] = 'invalid-token'
+        self.middleware(req.environ, self.start_fake_response)
+        self.assertEqual(self.response_status, 401)
+        self.assertEqual(self.response_headers['WWW-Authenticate'],
+                         "Keystone uri='https://keystone.example.com:1234'")
+
+    def test_request_invalid_signed_token(self):
+        req = webob.Request.blank('/')
+        req.headers['X-Auth-Token'] = self.examples.INVALID_SIGNED_TOKEN
+        self.middleware(req.environ, self.start_fake_response)
+        self.assertEqual(401, self.response_status)
+        self.assertEqual("Keystone uri='https://keystone.example.com:1234'",
+                         self.response_headers['WWW-Authenticate'])
+
+    def test_request_invalid_signed_pkiz_token(self):
+        req = webob.Request.blank('/')
+        req.headers['X-Auth-Token'] = self.examples.INVALID_SIGNED_PKIZ_TOKEN
+        self.middleware(req.environ, self.start_fake_response)
+        self.assertEqual(401, self.response_status)
+        self.assertEqual("Keystone uri='https://keystone.example.com:1234'",
+                         self.response_headers['WWW-Authenticate'])
+
+    def test_request_no_token(self):
+        req = webob.Request.blank('/')
+        self.middleware(req.environ, self.start_fake_response)
+        self.assertEqual(self.response_status, 401)
+        self.assertEqual(self.response_headers['WWW-Authenticate'],
+                         "Keystone uri='https://keystone.example.com:1234'")
+
+    def test_request_no_token_log_message(self):
+        class FakeLog(object):
+            def __init__(self):
+                self.msg = None
+                self.debugmsg = None
+
+            def warn(self, msg=None, *args, **kwargs):
+                self.msg = msg
+
+            def debug(self, msg=None, *args, **kwargs):
+                self.debugmsg = msg
+
+        self.middleware.LOG = FakeLog()
+        self.middleware.delay_auth_decision = False
+        self.assertRaises(auth_token.InvalidUserToken,
+                          self.middleware._get_user_token_from_header, {})
+        self.assertIsNotNone(self.middleware.LOG.msg)
+        self.assertIsNotNone(self.middleware.LOG.debugmsg)
+
+    def test_request_no_token_http(self):
+        req = webob.Request.blank('/', environ={'REQUEST_METHOD': 'HEAD'})
+        self.set_middleware()
+        body = self.middleware(req.environ, self.start_fake_response)
+        self.assertEqual(self.response_status, 401)
+        self.assertEqual(self.response_headers['WWW-Authenticate'],
+                         "Keystone uri='https://keystone.example.com:1234'")
+        self.assertEqual(body, [''])
+
+    def test_request_blank_token(self):
+        req = webob.Request.blank('/')
+        req.headers['X-Auth-Token'] = ''
+        self.middleware(req.environ, self.start_fake_response)
+        self.assertEqual(self.response_status, 401)
+        self.assertEqual(self.response_headers['WWW-Authenticate'],
+                         "Keystone uri='https://keystone.example.com:1234'")
+
+    def _get_cached_token(self, token, mode='md5'):
+        token_id = cms.cms_hash_token(token, mode=mode)
+        return self.middleware._cache_get(token_id)
+
+    def test_memcache(self):
+        # NOTE(jamielennox): it appears that httpretty can mess with the
+        # memcache socket. Just disable it as it's not required here anyway.
+        httpretty.disable()
+        req = webob.Request.blank('/')
+        token = self.token_dict['signed_token_scoped']
+        req.headers['X-Auth-Token'] = token
+        self.middleware(req.environ, self.start_fake_response)
+        self.assertIsNotNone(self._get_cached_token(token))
+
+    def test_expired(self):
+        httpretty.disable()
+        req = webob.Request.blank('/')
+        token = self.token_dict['signed_token_scoped_expired']
+        req.headers['X-Auth-Token'] = token
+        self.middleware(req.environ, self.start_fake_response)
+        self.assertEqual(self.response_status, 401)
+
+    def test_memcache_set_invalid_uuid(self):
+        invalid_uri = "%s/v2.0/tokens/invalid-token" % BASE_URI
+        httpretty.register_uri(httpretty.GET, invalid_uri, body="", status=404)
+
+        req = webob.Request.blank('/')
+        token = 'invalid-token'
+        req.headers['X-Auth-Token'] = token
+        self.middleware(req.environ, self.start_fake_response)
+        self.assertRaises(auth_token.InvalidUserToken,
+                          self._get_cached_token, token)
+
+    def _test_memcache_set_invalid_signed(self, hash_algorithms=None,
+                                          exp_mode='md5'):
+        req = webob.Request.blank('/')
+        token = self.token_dict['signed_token_scoped_expired']
+        req.headers['X-Auth-Token'] = token
+        if hash_algorithms:
+            self.conf['hash_algorithms'] = hash_algorithms
+            self.set_middleware()
+        self.middleware(req.environ, self.start_fake_response)
+        self.assertRaises(auth_token.InvalidUserToken,
+                          self._get_cached_token, token, mode=exp_mode)
+
+    def test_memcache_set_invalid_signed(self):
+        self._test_memcache_set_invalid_signed()
+
+    def test_memcache_set_invalid_signed_sha256_md5(self):
+        hash_algorithms = ['sha256', 'md5']
+        self._test_memcache_set_invalid_signed(hash_algorithms=hash_algorithms,
+                                               exp_mode='sha256')
+
+    def test_memcache_set_invalid_signed_sha256(self):
+        hash_algorithms = ['sha256']
+        self._test_memcache_set_invalid_signed(hash_algorithms=hash_algorithms,
+                                               exp_mode='sha256')
+
+    def test_memcache_set_expired(self, extra_conf={}, extra_environ={}):
+        httpretty.disable()
+        token_cache_time = 10
+        conf = {
+            'token_cache_time': token_cache_time,
+            'signing_dir': client_fixtures.CERTDIR,
+        }
+        conf.update(extra_conf)
+        self.set_middleware(conf=conf)
+        req = webob.Request.blank('/')
+        token = self.token_dict['signed_token_scoped']
+        req.headers['X-Auth-Token'] = token
+        req.environ.update(extra_environ)
+        timeutils_utcnow = 'keystoneclient.openstack.common.timeutils.utcnow'
+        now = datetime.datetime.utcnow()
+        with mock.patch(timeutils_utcnow) as mock_utcnow:
+            mock_utcnow.return_value = now
+            self.middleware(req.environ, self.start_fake_response)
+            self.assertIsNotNone(self._get_cached_token(token))
+        expired = now + datetime.timedelta(seconds=token_cache_time)
+        with mock.patch(timeutils_utcnow) as mock_utcnow:
+            mock_utcnow.return_value = expired
+            self.assertIsNone(self._get_cached_token(token))
+
+    def test_swift_memcache_set_expired(self):
+        extra_conf = {'cache': 'swift.cache'}
+        extra_environ = {'swift.cache': memorycache.Client()}
+        self.test_memcache_set_expired(extra_conf, extra_environ)
 
     def test_http_error_not_cached_token(self):
         """Test to don't cache token as invalid on network errors.
@@ -1126,22 +1227,33 @@ class CommonAuthTokenMiddlewareTest(object):
                                       success=False)
 
 
-class CertDownloadMiddlewareTest(BaseAuthTokenMiddlewareTest,
-                                 testresources.ResourcedTestCase):
+class V2CertDownloadMiddlewareTest(BaseAuthTokenMiddlewareTest,
+                                   testresources.ResourcedTestCase):
 
     resources = [('examples', client_fixtures.EXAMPLES_RESOURCE)]
 
+    def __init__(self, *args, **kwargs):
+        super(V2CertDownloadMiddlewareTest, self).__init__(*args, **kwargs)
+        self.auth_version = 'v2.0'
+        self.fake_app = None
+        self.ca_path = '/v2.0/certificates/ca'
+        self.signing_path = '/v2.0/certificates/signing'
+
     def setUp(self):
-        super(CertDownloadMiddlewareTest, self).setUp()
+        super(V2CertDownloadMiddlewareTest, self).setUp(
+            auth_version=self.auth_version,
+            fake_app=self.fake_app)
         self.base_dir = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self.base_dir)
         self.cert_dir = os.path.join(self.base_dir, 'certs')
         os.makedirs(self.cert_dir, stat.S_IRWXU)
         conf = {
             'signing_dir': self.cert_dir,
+            'auth_version': self.auth_version,
         }
         self.set_middleware(conf=conf)
 
+        httpretty.reset()
         httpretty.enable()
         self.addCleanup(httpretty.disable)
 
@@ -1152,84 +1264,103 @@ class CertDownloadMiddlewareTest(BaseAuthTokenMiddlewareTest,
         cms._ensure_subprocess()
 
         httpretty.register_uri(httpretty.GET,
-                               "%s/v2.0/certificates/ca" % BASE_URI,
+                               "%s%s" % (BASE_URI, self.ca_path),
                                status=404)
         httpretty.register_uri(httpretty.GET,
-                               "%s/v2.0/certificates/signing" % BASE_URI,
+                               "%s%s" % (BASE_URI, self.signing_path),
                                status=404)
         self.assertRaises(exceptions.CertificateConfigError,
                           self.middleware.verify_signed_token,
-                          self.examples.SIGNED_TOKEN_SCOPED)
+                          self.examples.SIGNED_TOKEN_SCOPED,
+                          [self.examples.SIGNED_TOKEN_SCOPED_HASH])
 
     def test_fetch_signing_cert(self):
         data = 'FAKE CERT'
         httpretty.register_uri(httpretty.GET,
-                               "%s/v2.0/certificates/signing" % BASE_URI,
+                               "%s%s" % (BASE_URI, self.signing_path),
                                body=data)
         self.middleware.fetch_signing_cert()
 
         with open(self.middleware.signing_cert_file_name, 'r') as f:
             self.assertEqual(f.read(), data)
 
-        self.assertEqual("/testadmin/v2.0/certificates/signing",
+        self.assertEqual("/testadmin%s" % self.signing_path,
                          httpretty.last_request().path)
 
     def test_fetch_signing_ca(self):
         data = 'FAKE CA'
         httpretty.register_uri(httpretty.GET,
-                               "%s/v2.0/certificates/ca" % BASE_URI,
+                               "%s%s" % (BASE_URI, self.ca_path),
                                body=data)
         self.middleware.fetch_ca_cert()
 
         with open(self.middleware.signing_ca_file_name, 'r') as f:
             self.assertEqual(f.read(), data)
 
-        self.assertEqual("/testadmin/v2.0/certificates/ca",
+        self.assertEqual("/testadmin%s" % self.ca_path,
                          httpretty.last_request().path)
 
     def test_prefix_trailing_slash(self):
+        del self.conf['identity_uri']
+        self.conf['auth_protocol'] = 'https'
+        self.conf['auth_host'] = 'keystone.example.com'
+        self.conf['auth_port'] = 1234
         self.conf['auth_admin_prefix'] = '/newadmin/'
 
         httpretty.register_uri(httpretty.GET,
-                               "%s/newadmin/v2.0/certificates/ca" % BASE_HOST,
+                               "%s/newadmin%s" % (BASE_HOST, self.ca_path),
                                body='FAKECA')
         httpretty.register_uri(httpretty.GET,
-                               "%s/newadmin/v2.0/certificates/signing" %
-                               BASE_HOST, body='FAKECERT')
+                               "%s/newadmin%s" %
+                               (BASE_HOST, self.signing_path), body='FAKECERT')
 
         self.set_middleware(conf=self.conf)
 
         self.middleware.fetch_ca_cert()
 
-        self.assertEqual('/newadmin/v2.0/certificates/ca',
+        self.assertEqual('/newadmin%s' % self.ca_path,
                          httpretty.last_request().path)
 
         self.middleware.fetch_signing_cert()
 
-        self.assertEqual('/newadmin/v2.0/certificates/signing',
+        self.assertEqual('/newadmin%s' % self.signing_path,
                          httpretty.last_request().path)
 
     def test_without_prefix(self):
+        del self.conf['identity_uri']
+        self.conf['auth_protocol'] = 'https'
+        self.conf['auth_host'] = 'keystone.example.com'
+        self.conf['auth_port'] = 1234
         self.conf['auth_admin_prefix'] = ''
 
         httpretty.register_uri(httpretty.GET,
-                               "%s/v2.0/certificates/ca" % BASE_HOST,
+                               "%s%s" % (BASE_HOST, self.ca_path),
                                body='FAKECA')
         httpretty.register_uri(httpretty.GET,
-                               "%s/v2.0/certificates/signing" % BASE_HOST,
+                               "%s%s" % (BASE_HOST, self.signing_path),
                                body='FAKECERT')
 
         self.set_middleware(conf=self.conf)
 
         self.middleware.fetch_ca_cert()
 
-        self.assertEqual('/v2.0/certificates/ca',
+        self.assertEqual(self.ca_path,
                          httpretty.last_request().path)
 
         self.middleware.fetch_signing_cert()
 
-        self.assertEqual('/v2.0/certificates/signing',
+        self.assertEqual(self.signing_path,
                          httpretty.last_request().path)
+
+
+class V3CertDownloadMiddlewareTest(V2CertDownloadMiddlewareTest):
+
+    def __init__(self, *args, **kwargs):
+        super(V3CertDownloadMiddlewareTest, self).__init__(*args, **kwargs)
+        self.auth_version = 'v3.0'
+        self.fake_app = v3FakeApp
+        self.ca_path = '/v3/OS-SIMPLE-CERT/ca'
+        self.signing_path = '/v3/OS-SIMPLE-CERT/certificates'
 
 
 def network_error_response(method, uri, headers):
@@ -1251,7 +1382,7 @@ class v2AuthTokenMiddlewareTest(BaseAuthTokenMiddlewareTest,
       tenant
 
     The tests below were originally part of the generic AuthTokenMiddlewareTest
-    class, but now, since they really are v2 specifc, they are included here.
+    class, but now, since they really are v2 specific, they are included here.
 
     """
 
@@ -1266,10 +1397,19 @@ class v2AuthTokenMiddlewareTest(BaseAuthTokenMiddlewareTest,
             'uuid_token_bind': self.examples.UUID_TOKEN_BIND,
             'uuid_token_unknown_bind': self.examples.UUID_TOKEN_UNKNOWN_BIND,
             'signed_token_scoped': self.examples.SIGNED_TOKEN_SCOPED,
+            'signed_token_scoped_pkiz': self.examples.SIGNED_TOKEN_SCOPED_PKIZ,
+            'signed_token_scoped_hash': self.examples.SIGNED_TOKEN_SCOPED_HASH,
+            'signed_token_scoped_hash_sha256':
+            self.examples.SIGNED_TOKEN_SCOPED_HASH_SHA256,
             'signed_token_scoped_expired':
             self.examples.SIGNED_TOKEN_SCOPED_EXPIRED,
             'revoked_token': self.examples.REVOKED_TOKEN,
-            'revoked_token_hash': self.examples.REVOKED_TOKEN_HASH
+            'revoked_token_pkiz': self.examples.REVOKED_TOKEN_PKIZ,
+            'revoked_token_pkiz_hash':
+            self.examples.REVOKED_TOKEN_PKIZ_HASH,
+            'revoked_token_hash': self.examples.REVOKED_TOKEN_HASH,
+            'revoked_token_hash_sha256':
+            self.examples.REVOKED_TOKEN_HASH_SHA256,
         }
 
         httpretty.reset()
@@ -1294,7 +1434,8 @@ class v2AuthTokenMiddlewareTest(BaseAuthTokenMiddlewareTest,
                       self.examples.UUID_TOKEN_UNSCOPED,
                       self.examples.UUID_TOKEN_BIND,
                       self.examples.UUID_TOKEN_UNKNOWN_BIND,
-                      self.examples.UUID_TOKEN_NO_SERVICE_CATALOG):
+                      self.examples.UUID_TOKEN_NO_SERVICE_CATALOG,
+                      self.examples.SIGNED_TOKEN_SCOPED_KEY,):
             httpretty.register_uri(httpretty.GET,
                                    "%s/v2.0/tokens/%s" % (BASE_URI, token),
                                    body=
@@ -1350,8 +1491,8 @@ class v2AuthTokenMiddlewareTest(BaseAuthTokenMiddlewareTest,
     def test_request_prevent_service_catalog_injection(self):
         req = webob.Request.blank('/')
         req.headers['X-Service-Catalog'] = '[]'
-        req.headers['X-Auth-Token'] = \
-            self.examples.UUID_TOKEN_NO_SERVICE_CATALOG
+        req.headers['X-Auth-Token'] = (
+            self.examples.UUID_TOKEN_NO_SERVICE_CATALOG)
         body = self.middleware(req.environ, self.start_fake_response)
         self.assertEqual(self.response_status, 200)
         self.assertFalse(req.headers.get('X-Service-Catalog'))
@@ -1413,7 +1554,7 @@ class v3AuthTokenMiddlewareTest(BaseAuthTokenMiddlewareTest,
     """Test auth_token middleware with v3 tokens.
 
     Re-execute the AuthTokenMiddlewareTest class tests, but with the
-    the auth_token middleware configured to expect v3 tokens back from
+    auth_token middleware configured to expect v3 tokens back from
     a keystone server.
 
     This is done by configuring the AuthTokenMiddlewareTest class via
@@ -1448,10 +1589,21 @@ class v3AuthTokenMiddlewareTest(BaseAuthTokenMiddlewareTest,
             'uuid_token_unknown_bind':
             self.examples.v3_UUID_TOKEN_UNKNOWN_BIND,
             'signed_token_scoped': self.examples.SIGNED_v3_TOKEN_SCOPED,
+            'signed_token_scoped_pkiz':
+            self.examples.SIGNED_v3_TOKEN_SCOPED_PKIZ,
+            'signed_token_scoped_hash':
+            self.examples.SIGNED_v3_TOKEN_SCOPED_HASH,
+            'signed_token_scoped_hash_sha256':
+            self.examples.SIGNED_v3_TOKEN_SCOPED_HASH_SHA256,
             'signed_token_scoped_expired':
             self.examples.SIGNED_TOKEN_SCOPED_EXPIRED,
             'revoked_token': self.examples.REVOKED_v3_TOKEN,
-            'revoked_token_hash': self.examples.REVOKED_v3_TOKEN_HASH
+            'revoked_token_pkiz': self.examples.REVOKED_v3_TOKEN_PKIZ,
+            'revoked_token_hash': self.examples.REVOKED_v3_TOKEN_HASH,
+            'revoked_token_hash_sha256':
+            self.examples.REVOKED_v3_TOKEN_HASH_SHA256,
+            'revoked_token_pkiz_hash':
+            self.examples.REVOKED_v3_PKIZ_TOKEN_HASH,
         }
 
         httpretty.reset()
@@ -1538,6 +1690,20 @@ class v3AuthTokenMiddlewareTest(BaseAuthTokenMiddlewareTest,
         self.assert_valid_request_200(
             self.examples.v3_UUID_TOKEN_DOMAIN_SCOPED)
         self.assertLastPath('/testadmin/v3/auth/tokens')
+
+    def test_gives_v2_catalog(self):
+        self.set_middleware()
+        req = self.assert_valid_request_200(
+            self.examples.SIGNED_v3_TOKEN_SCOPED)
+
+        catalog = jsonutils.loads(req.headers['X-Service-Catalog'])
+
+        for service in catalog:
+            for endpoint in service['endpoints']:
+                # no point checking everything, just that it's in v2 format
+                self.assertIn('adminURL', endpoint)
+                self.assertIn('publicURL', endpoint)
+                self.assertIn('adminURL', endpoint)
 
 
 class TokenEncodingTest(testtools.TestCase):
@@ -1754,6 +1920,69 @@ class TokenExpirationTest(BaseAuthTokenMiddlewareTest):
         expires = timeutils.strtime(some_time_earlier) + '-02:00'
         self.middleware._cache_put(token, data, expires)
         self.assertIsNone(self.middleware._cache_get(token))
+
+
+class CatalogConversionTests(BaseAuthTokenMiddlewareTest):
+
+    PUBLIC_URL = 'http://server:5000/v2.0'
+    ADMIN_URL = 'http://admin:35357/v2.0'
+    INTERNAL_URL = 'http://internal:5000/v2.0'
+
+    REGION_ONE = 'RegionOne'
+    REGION_TWO = 'RegionTwo'
+    REGION_THREE = 'RegionThree'
+
+    def test_basic_convert(self):
+        token = fixture.V3Token()
+        s = token.add_service(type='identity')
+        s.add_standard_endpoints(public=self.PUBLIC_URL,
+                                 admin=self.ADMIN_URL,
+                                 internal=self.INTERNAL_URL,
+                                 region=self.REGION_ONE)
+
+        auth_ref = access.AccessInfo.factory(body=token)
+        catalog_data = auth_ref.service_catalog.get_data()
+        catalog = auth_token._v3_to_v2_catalog(catalog_data)
+
+        self.assertEqual(1, len(catalog))
+        service = catalog[0]
+        self.assertEqual(1, len(service['endpoints']))
+        endpoints = service['endpoints'][0]
+
+        self.assertEqual('identity', service['type'])
+        self.assertEqual(4, len(endpoints))
+        self.assertEqual(self.PUBLIC_URL, endpoints['publicURL'])
+        self.assertEqual(self.ADMIN_URL, endpoints['adminURL'])
+        self.assertEqual(self.INTERNAL_URL, endpoints['internalURL'])
+        self.assertEqual(self.REGION_ONE, endpoints['region'])
+
+    def test_multi_region(self):
+        token = fixture.V3Token()
+        s = token.add_service(type='identity')
+
+        s.add_endpoint('internal', self.INTERNAL_URL, region=self.REGION_ONE)
+        s.add_endpoint('public', self.PUBLIC_URL, region=self.REGION_TWO)
+        s.add_endpoint('admin', self.ADMIN_URL, region=self.REGION_THREE)
+
+        auth_ref = access.AccessInfo.factory(body=token)
+        catalog_data = auth_ref.service_catalog.get_data()
+        catalog = auth_token._v3_to_v2_catalog(catalog_data)
+
+        self.assertEqual(1, len(catalog))
+        service = catalog[0]
+
+        # the 3 regions will come through as 3 separate endpoints
+        expected = [{'internalURL': self.INTERNAL_URL,
+                    'region': self.REGION_ONE},
+                    {'publicURL': self.PUBLIC_URL,
+                     'region': self.REGION_TWO},
+                    {'adminURL': self.ADMIN_URL,
+                     'region': self.REGION_THREE}]
+
+        self.assertEqual('identity', service['type'])
+        self.assertEqual(3, len(service['endpoints']))
+        for e in expected:
+            self.assertIn(e, expected)
 
 
 def load_tests(loader, tests, pattern):

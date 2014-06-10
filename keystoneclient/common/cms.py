@@ -19,9 +19,12 @@ If set_subprocess() is not called, this module will pick Python's subprocess
 or eventlet.green.subprocess based on if os module is patched by eventlet.
 """
 
+import base64
 import errno
 import hashlib
 import logging
+import zlib
+
 import six
 
 from keystoneclient import exceptions
@@ -29,7 +32,10 @@ from keystoneclient import exceptions
 
 subprocess = None
 LOG = logging.getLogger(__name__)
-PKI_ANS1_PREFIX = 'MII'
+PKI_ASN1_PREFIX = 'MII'
+PKIZ_PREFIX = 'PKIZ_'
+PKIZ_CMS_FORM = 'DER'
+PKI_ASN1_FORM = 'PEM'
 
 
 def _ensure_subprocess():
@@ -72,11 +78,11 @@ def _check_files_accessible(files):
     return err
 
 
-def _process_communicate_handle_oserror(process, text, files):
+def _process_communicate_handle_oserror(process, data, files):
     """Wrapper around process.communicate that checks for OSError."""
 
     try:
-        output, err = process.communicate(text)
+        output, err = process.communicate(data)
     except OSError as e:
         if e.errno != errno.EPIPE:
             raise
@@ -87,35 +93,53 @@ def _process_communicate_handle_oserror(process, text, files):
         # able to read an input file, so check ourselves if can't read a file.
         err = _check_files_accessible(files)
         if process.stderr:
-            err += process.stderr.read()
-
-        output = ""
+            msg = process.stderr.read()
+            err = err + msg.decode('utf-8')
+        output = ''
         retcode = -1
     else:
         retcode = process.poll()
+        if err is not None:
+            err = err.decode('utf-8')
 
     return output, err, retcode
 
 
-def cms_verify(formatted, signing_cert_file_name, ca_file_name):
+def _encoding_for_form(inform):
+    if inform == PKI_ASN1_FORM:
+        encoding = 'UTF-8'
+    elif inform == PKIZ_CMS_FORM:
+        encoding = 'hex'
+    else:
+        raise ValueError('"inform" must be either %s or %s' %
+                         (PKI_ASN1_FORM, PKIZ_CMS_FORM))
+
+    return encoding
+
+
+def cms_verify(formatted, signing_cert_file_name, ca_file_name,
+               inform=PKI_ASN1_FORM):
     """Verifies the signature of the contents IAW CMS syntax.
 
     :raises: subprocess.CalledProcessError
     :raises: CertificateConfigError if certificate is not configured properly.
     """
     _ensure_subprocess()
-    process = subprocess.Popen(["openssl", "cms", "-verify",
-                                "-certfile", signing_cert_file_name,
-                                "-CAfile", ca_file_name,
-                                "-inform", "PEM",
-                                "-nosmimecap", "-nodetach",
-                                "-nocerts", "-noattr"],
+    if isinstance(formatted, six.string_types):
+        data = bytearray(formatted, _encoding_for_form(inform))
+    else:
+        data = formatted
+    process = subprocess.Popen(['openssl', 'cms', '-verify',
+                                '-certfile', signing_cert_file_name,
+                                '-CAfile', ca_file_name,
+                                '-inform', 'PEM',
+                                '-nosmimecap', '-nodetach',
+                                '-nocerts', '-noattr'],
                                stdin=subprocess.PIPE,
                                stdout=subprocess.PIPE,
-                               stderr=subprocess.PIPE,
-                               universal_newlines=True)
+                               stderr=subprocess.PIPE)
     output, err, retcode = _process_communicate_handle_oserror(
-        process, formatted, (signing_cert_file_name, ca_file_name))
+        process, data, (signing_cert_file_name, ca_file_name))
 
     # Do not log errors, as some happen in the positive thread
     # instead, catch them in the calling code and log them there.
@@ -131,20 +155,62 @@ def cms_verify(formatted, signing_cert_file_name, ca_file_name):
     # Error opening certificate file not_exist_file
     #
     if retcode == 2:
-        raise exceptions.CertificateConfigError(err)
+        if err.startswith('Error reading S/MIME message'):
+            raise exceptions.CMSError(err)
+        else:
+            raise exceptions.CertificateConfigError(err)
     elif retcode:
         # NOTE(dmllr): Python 2.6 compatibility:
         # CalledProcessError did not have output keyword argument
-        e = subprocess.CalledProcessError(retcode, "openssl")
+        e = subprocess.CalledProcessError(retcode, 'openssl')
         e.output = err
         raise e
     return output
 
 
+def is_pkiz(token_text):
+    """Determine if a token a cmsz token
+
+    Checks if the string has the prefix that indicates it is a
+    Crypto Message Syntax, Z compressed token.
+    """
+    return token_text.startswith(PKIZ_PREFIX)
+
+
+def pkiz_sign(text,
+              signing_cert_file_name,
+              signing_key_file_name,
+              compression_level=6):
+    signed = cms_sign_data(text,
+                           signing_cert_file_name,
+                           signing_key_file_name,
+                           PKIZ_CMS_FORM)
+
+    compressed = zlib.compress(signed, compression_level)
+    encoded = PKIZ_PREFIX + base64.urlsafe_b64encode(
+        compressed).decode('utf-8')
+    return encoded
+
+
+def pkiz_uncompress(signed_text):
+    text = signed_text[len(PKIZ_PREFIX):].encode('utf-8')
+    unencoded = base64.urlsafe_b64decode(text)
+    uncompressed = zlib.decompress(unencoded)
+    return uncompressed
+
+
+def pkiz_verify(signed_text, signing_cert_file_name, ca_file_name):
+    uncompressed = pkiz_uncompress(signed_text)
+    return cms_verify(uncompressed, signing_cert_file_name, ca_file_name,
+                      inform=PKIZ_CMS_FORM)
+
+
+# This function is deprecated and will be removed once the ASN1 token format
+# is no longer required. It is only here to be used for testing.
 def token_to_cms(signed_text):
     copy_of_text = signed_text.replace('-', '/')
 
-    formatted = "-----BEGIN CMS-----\n"
+    formatted = '-----BEGIN CMS-----\n'
     line_length = 64
     while len(copy_of_text) > 0:
         if (len(copy_of_text) > line_length):
@@ -152,10 +218,10 @@ def token_to_cms(signed_text):
             copy_of_text = copy_of_text[line_length:]
         else:
             formatted += copy_of_text
-            copy_of_text = ""
-        formatted += "\n"
+            copy_of_text = ''
+        formatted += '\n'
 
-    formatted += "-----END CMS-----\n"
+    formatted += '-----END CMS-----\n'
 
     return formatted
 
@@ -166,7 +232,7 @@ def verify_token(token, signing_cert_file_name, ca_file_name):
                       ca_file_name)
 
 
-def is_ans1_token(token):
+def is_asn1_token(token):
     """Determine if a token appears to be PKI-based.
 
     thx to ayoung for sorting this out.
@@ -213,45 +279,80 @@ def is_ans1_token(token):
     It's not practical to support a token of this length or greater in http
     therefore, we will check for MII only and ignore the case of larger tokens
     """
-    return token[:3] == PKI_ANS1_PREFIX
+    return token[:3] == PKI_ASN1_PREFIX
 
 
-def cms_sign_text(text, signing_cert_file_name, signing_key_file_name):
+def is_ans1_token(token):
+    """Deprecated. Use is_asn1_token() instead."""
+    LOG.warning('The function is_ans1_token() is deprecated, '
+                'use is_asn1_token() instead.')
+    return is_asn1_token(token)
+
+
+def cms_sign_text(data_to_sign, signing_cert_file_name, signing_key_file_name):
+    return cms_sign_data(data_to_sign, signing_cert_file_name,
+                         signing_key_file_name)
+
+
+def cms_sign_data(data_to_sign, signing_cert_file_name, signing_key_file_name,
+                  outform=PKI_ASN1_FORM):
     """Uses OpenSSL to sign a document.
 
     Produces a Base64 encoding of a DER formatted CMS Document
     http://en.wikipedia.org/wiki/Cryptographic_Message_Syntax
+
+    :param data_to_sign: data to sign
+    :param signing_cert_file_name:  path to the X509 certificate containing
+        the public key associated with the private key used to sign the data
+    :param signing_key_file_name: path to the private key used to sign
+        the data
+    :param outform: Format for the signed document PKIZ_CMS_FORM or
+        PKI_ASN1_FORM
+
+
     """
     _ensure_subprocess()
-    process = subprocess.Popen(["openssl", "cms", "-sign",
-                                "-signer", signing_cert_file_name,
-                                "-inkey", signing_key_file_name,
-                                "-outform", "PEM",
-                                "-nosmimecap", "-nodetach",
-                                "-nocerts", "-noattr"],
+    if isinstance(data_to_sign, six.string_types):
+        data = bytearray(data_to_sign, encoding='utf-8')
+    else:
+        data = data_to_sign
+    process = subprocess.Popen(['openssl', 'cms', '-sign',
+                                '-signer', signing_cert_file_name,
+                                '-inkey', signing_key_file_name,
+                                '-outform', 'PEM',
+                                '-nosmimecap', '-nodetach',
+                                '-nocerts', '-noattr'],
                                stdin=subprocess.PIPE,
                                stdout=subprocess.PIPE,
-                               stderr=subprocess.PIPE,
-                               universal_newlines=True)
+                               stderr=subprocess.PIPE)
 
     output, err, retcode = _process_communicate_handle_oserror(
-        process, text, (signing_cert_file_name, signing_key_file_name))
+        process, data, (signing_cert_file_name, signing_key_file_name))
 
-    if retcode or "Error" in err:
-        LOG.error('Signing error: %s' % err)
-        raise subprocess.CalledProcessError(retcode, "openssl")
-    return output
+    if retcode or ('Error' in err):
+        LOG.error('Signing error: %s', err)
+        if retcode == 3:
+            LOG.error('Signing error: Unable to load certificate - '
+                      'ensure you have configured PKI with '
+                      '"keystone-manage pki_setup"')
+        else:
+            LOG.error('Signing error: %s', err)
+        raise subprocess.CalledProcessError(retcode, 'openssl')
+    if outform == PKI_ASN1_FORM:
+        return output.decode('utf-8')
+    else:
+        return output
 
 
 def cms_sign_token(text, signing_cert_file_name, signing_key_file_name):
-    output = cms_sign_text(text, signing_cert_file_name, signing_key_file_name)
+    output = cms_sign_data(text, signing_cert_file_name, signing_key_file_name)
     return cms_to_token(output)
 
 
 def cms_to_token(cms_text):
 
-    start_delim = "-----BEGIN CMS-----"
-    end_delim = "-----END CMS-----"
+    start_delim = '-----BEGIN CMS-----'
+    end_delim = '-----END CMS-----'
     signed_text = cms_text
     signed_text = signed_text.replace('/', '-')
     signed_text = signed_text.replace(start_delim, '')
@@ -261,16 +362,16 @@ def cms_to_token(cms_text):
     return signed_text
 
 
-def cms_hash_token(token_id):
+def cms_hash_token(token_id, mode='md5'):
     """Hash PKI tokens.
 
-    return: for ans1_token, returns the hash of the passed in token
+    return: for asn1 or pkiz tokens, returns the hash of the passed in token
             otherwise, returns what it was passed in.
     """
     if token_id is None:
         return None
-    if is_ans1_token(token_id):
-        hasher = hashlib.md5()
+    if is_asn1_token(token_id) or is_pkiz(token_id):
+        hasher = hashlib.new(mode)
         if isinstance(token_id, six.text_type):
             token_id = token_id.encode('utf-8')
         hasher.update(token_id)

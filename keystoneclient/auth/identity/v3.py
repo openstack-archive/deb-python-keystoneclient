@@ -1,5 +1,3 @@
-# vim: tabstop=4 shiftwidth=4 softtabstop=4
-
 # Licensed under the Apache License, Version 2.0 (the "License"); you may
 # not use this file except in compliance with the License. You may obtain
 # a copy of the License at
@@ -66,7 +64,7 @@ class Auth(base.BaseIdentityPlugin):
         return '%s/auth/tokens' % self.auth_url.rstrip('/')
 
     def get_auth_ref(self, session, **kwargs):
-        headers = {}
+        headers = {'Accept': 'application/json'}
         body = {'auth': {'identity': {}}}
         ident = body['auth']['identity']
 
@@ -108,8 +106,14 @@ class Auth(base.BaseIdentityPlugin):
 
         resp = session.post(self.token_url, json=body, headers=headers,
                             authenticated=False)
+
+        try:
+            resp_data = resp.json()['token']
+        except (KeyError, ValueError):
+            raise exceptions.InvalidResponse(response=resp)
+
         return access.AccessInfoV3(resp.headers['X-Subject-Token'],
-                                   **resp.json()['token'])
+                                   **resp_data)
 
     @staticmethod
     def _factory(auth_url, **kwargs):
@@ -243,7 +247,7 @@ class TokenMethod(AuthMethod):
     _method_parameters = ['token']
 
     def __init__(self, **kwargs):
-        """Construct a Auth plugin to fetch a token from a token.
+        """Construct an Auth plugin to fetch a token from a token.
 
         :param string token: Token for authentication.
         """

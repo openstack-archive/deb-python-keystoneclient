@@ -31,6 +31,12 @@ CMSDIR = os.path.join(ROOTDIR, 'examples', 'pki', 'cms')
 KEYDIR = os.path.join(ROOTDIR, 'examples', 'pki', 'private')
 
 
+def _hash_signed_token_safe(signed_text, **kwargs):
+    if isinstance(signed_text, six.text_type):
+        signed_text = signed_text.encode('utf-8')
+    return utils.hash_signed_token(signed_text, **kwargs)
+
+
 class Examples(fixtures.Fixture):
     """Example tokens and certs loaded from the examples directory.
 
@@ -53,19 +59,42 @@ class Examples(fixtures.Fixture):
         # files in the signing subdirectory.  In order to keep the values
         # consistent between the tests and the signed documents, we read them
         # in for use in the tests.
+        with open(os.path.join(CMSDIR, 'auth_token_scoped.json')) as f:
+            self.TOKEN_SCOPED_DATA = cms.cms_to_token(f.read())
 
         with open(os.path.join(CMSDIR, 'auth_token_scoped.pem')) as f:
             self.SIGNED_TOKEN_SCOPED = cms.cms_to_token(f.read())
+        self.SIGNED_TOKEN_SCOPED_HASH = _hash_signed_token_safe(
+            self.SIGNED_TOKEN_SCOPED)
+        self.SIGNED_TOKEN_SCOPED_HASH_SHA256 = _hash_signed_token_safe(
+            self.SIGNED_TOKEN_SCOPED, mode='sha256')
         with open(os.path.join(CMSDIR, 'auth_token_unscoped.pem')) as f:
             self.SIGNED_TOKEN_UNSCOPED = cms.cms_to_token(f.read())
         with open(os.path.join(CMSDIR, 'auth_v3_token_scoped.pem')) as f:
             self.SIGNED_v3_TOKEN_SCOPED = cms.cms_to_token(f.read())
+        self.SIGNED_v3_TOKEN_SCOPED_HASH = _hash_signed_token_safe(
+            self.SIGNED_v3_TOKEN_SCOPED)
+        self.SIGNED_v3_TOKEN_SCOPED_HASH_SHA256 = _hash_signed_token_safe(
+            self.SIGNED_v3_TOKEN_SCOPED, mode='sha256')
         with open(os.path.join(CMSDIR, 'auth_token_revoked.pem')) as f:
             self.REVOKED_TOKEN = cms.cms_to_token(f.read())
         with open(os.path.join(CMSDIR, 'auth_token_scoped_expired.pem')) as f:
             self.SIGNED_TOKEN_SCOPED_EXPIRED = cms.cms_to_token(f.read())
         with open(os.path.join(CMSDIR, 'auth_v3_token_revoked.pem')) as f:
             self.REVOKED_v3_TOKEN = cms.cms_to_token(f.read())
+        with open(os.path.join(CMSDIR, 'auth_token_scoped.pkiz')) as f:
+            self.SIGNED_TOKEN_SCOPED_PKIZ = cms.cms_to_token(f.read())
+        with open(os.path.join(CMSDIR, 'auth_token_unscoped.pkiz')) as f:
+            self.SIGNED_TOKEN_UNSCOPED_PKIZ = cms.cms_to_token(f.read())
+        with open(os.path.join(CMSDIR, 'auth_v3_token_scoped.pkiz')) as f:
+            self.SIGNED_v3_TOKEN_SCOPED_PKIZ = cms.cms_to_token(f.read())
+        with open(os.path.join(CMSDIR, 'auth_token_revoked.pkiz')) as f:
+            self.REVOKED_TOKEN_PKIZ = cms.cms_to_token(f.read())
+        with open(os.path.join(CMSDIR,
+                               'auth_token_scoped_expired.pkiz')) as f:
+            self.SIGNED_TOKEN_SCOPED_EXPIRED_PKIZ = cms.cms_to_token(f.read())
+        with open(os.path.join(CMSDIR, 'auth_v3_token_revoked.pkiz')) as f:
+            self.REVOKED_v3_TOKEN_PKIZ = cms.cms_to_token(f.read())
         with open(os.path.join(CMSDIR, 'revocation_list.json')) as f:
             self.REVOCATION_LIST = jsonutils.loads(f.read())
         with open(os.path.join(CMSDIR, 'revocation_list.pem')) as f:
@@ -101,6 +130,8 @@ class Examples(fixtures.Fixture):
         if isinstance(revoked_token, six.text_type):
             revoked_token = revoked_token.encode('utf-8')
         self.REVOKED_TOKEN_HASH = utils.hash_signed_token(revoked_token)
+        self.REVOKED_TOKEN_HASH_SHA256 = utils.hash_signed_token(revoked_token,
+                                                                 mode='sha256')
         self.REVOKED_TOKEN_LIST = (
             {'revoked': [{'id': self.REVOKED_TOKEN_HASH,
                           'expires': timeutils.utcnow()}]})
@@ -110,11 +141,33 @@ class Examples(fixtures.Fixture):
         if isinstance(revoked_v3_token, six.text_type):
             revoked_v3_token = revoked_v3_token.encode('utf-8')
         self.REVOKED_v3_TOKEN_HASH = utils.hash_signed_token(revoked_v3_token)
+        hash = utils.hash_signed_token(revoked_v3_token, mode='sha256')
+        self.REVOKED_v3_TOKEN_HASH_SHA256 = hash
         self.REVOKED_v3_TOKEN_LIST = (
             {'revoked': [{'id': self.REVOKED_v3_TOKEN_HASH,
                           'expires': timeutils.utcnow()}]})
         self.REVOKED_v3_TOKEN_LIST_JSON = jsonutils.dumps(
             self.REVOKED_v3_TOKEN_LIST)
+
+        revoked_token_pkiz = self.REVOKED_TOKEN_PKIZ
+        if isinstance(revoked_token_pkiz, six.text_type):
+            revoked_token_pkiz = revoked_token_pkiz.encode('utf-8')
+        self.REVOKED_TOKEN_PKIZ_HASH = utils.hash_signed_token(
+            revoked_token_pkiz)
+        revoked_v3_token_pkiz = self.REVOKED_v3_TOKEN_PKIZ
+        if isinstance(revoked_v3_token_pkiz, six.text_type):
+            revoked_v3_token_pkiz = revoked_v3_token_pkiz.encode('utf-8')
+        self.REVOKED_v3_PKIZ_TOKEN_HASH = utils.hash_signed_token(
+            revoked_v3_token_pkiz)
+
+        self.REVOKED_TOKEN_PKIZ_LIST = (
+            {'revoked': [{'id': self.REVOKED_TOKEN_PKIZ_HASH,
+                          'expires': timeutils.utcnow()},
+                         {'id': self.REVOKED_v3_PKIZ_TOKEN_HASH,
+                          'expires': timeutils.utcnow()},
+                         ]})
+        self.REVOKED_TOKEN_PKIZ_LIST_JSON = jsonutils.dumps(
+            self.REVOKED_TOKEN_PKIZ_LIST)
 
         self.SIGNED_TOKEN_SCOPED_KEY = cms.cms_hash_token(
             self.SIGNED_TOKEN_SCOPED)
@@ -123,8 +176,34 @@ class Examples(fixtures.Fixture):
         self.SIGNED_v3_TOKEN_SCOPED_KEY = cms.cms_hash_token(
             self.SIGNED_v3_TOKEN_SCOPED)
 
+        self.SIGNED_TOKEN_SCOPED_PKIZ_KEY = cms.cms_hash_token(
+            self.SIGNED_TOKEN_SCOPED_PKIZ)
+        self.SIGNED_TOKEN_UNSCOPED_PKIZ_KEY = cms.cms_hash_token(
+            self.SIGNED_TOKEN_UNSCOPED_PKIZ)
+        self.SIGNED_v3_TOKEN_SCOPED_PKIZ_KEY = cms.cms_hash_token(
+            self.SIGNED_v3_TOKEN_SCOPED_PKIZ)
+
         self.INVALID_SIGNED_TOKEN = (
             "MIIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+            "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+            "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC"
+            "DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD"
+            "EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE"
+            "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"
+            "0000000000000000000000000000000000000000000000000000000000000000"
+            "1111111111111111111111111111111111111111111111111111111111111111"
+            "2222222222222222222222222222222222222222222222222222222222222222"
+            "3333333333333333333333333333333333333333333333333333333333333333"
+            "4444444444444444444444444444444444444444444444444444444444444444"
+            "5555555555555555555555555555555555555555555555555555555555555555"
+            "6666666666666666666666666666666666666666666666666666666666666666"
+            "7777777777777777777777777777777777777777777777777777777777777777"
+            "8888888888888888888888888888888888888888888888888888888888888888"
+            "9999999999999999999999999999999999999999999999999999999999999999"
+            "0000000000000000000000000000000000000000000000000000000000000000")
+
+        self.INVALID_SIGNED_PKIZ_TOKEN = (
+            "PKIZ_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
             "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
             "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC"
             "DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD"
@@ -330,6 +409,7 @@ class Examples(fixtures.Fixture):
                 'access': {
                     'token': {
                         'id': self.SIGNED_TOKEN_SCOPED_KEY,
+                        'expires': '2020-01-01T00:00:10.000123Z',
                     },
                     'user': {
                         'id': 'user_id1',
@@ -347,6 +427,7 @@ class Examples(fixtures.Fixture):
                 'access': {
                     'token': {
                         'id': self.SIGNED_TOKEN_UNSCOPED_KEY,
+                        'expires': '2020-01-01T00:00:10.000123Z',
                     },
                     'user': {
                         'id': 'user_id1',
@@ -360,7 +441,7 @@ class Examples(fixtures.Fixture):
             },
             self.SIGNED_v3_TOKEN_SCOPED_KEY: {
                 'token': {
-                    'expires': '2020-01-01T00:00:10.000123Z',
+                    'expires_at': '2020-01-01T00:00:10.000123Z',
                     'methods': ['password'],
                     'user': {
                         'id': 'user_id1',
@@ -442,6 +523,12 @@ class Examples(fixtures.Fixture):
                 }
             },
         }
+        self.TOKEN_RESPONSES[self.SIGNED_TOKEN_SCOPED_PKIZ_KEY] = (
+            self.TOKEN_RESPONSES[self.SIGNED_TOKEN_SCOPED_KEY])
+        self.TOKEN_RESPONSES[self.SIGNED_TOKEN_UNSCOPED_PKIZ_KEY] = (
+            self.TOKEN_RESPONSES[self.SIGNED_TOKEN_UNSCOPED_KEY])
+        self.TOKEN_RESPONSES[self.SIGNED_v3_TOKEN_SCOPED_PKIZ_KEY] = (
+            self.TOKEN_RESPONSES[self.SIGNED_v3_TOKEN_SCOPED_KEY])
 
         self.JSON_TOKEN_RESPONSES = dict([(k, jsonutils.dumps(v)) for k, v in
                                           six.iteritems(self.TOKEN_RESPONSES)])

@@ -54,16 +54,16 @@ class AuthenticateAgainstKeystoneTests(utils.TestCase):
     @httpretty.activate
     def test_authenticate_success_expired(self):
         # Build an expired token
-        self.TEST_RESPONSE_DICT['access']['token']['expires'] = \
-            (timeutils.utcnow() - datetime.timedelta(1)).isoformat()
+        self.TEST_RESPONSE_DICT['access']['token']['expires'] = (
+            (timeutils.utcnow() - datetime.timedelta(1)).isoformat())
 
         exp_resp = httpretty.Response(body=json.dumps(self.TEST_RESPONSE_DICT),
                                       content_type='application/json')
 
         # Build a new response
         TEST_TOKEN = "abcdef"
-        self.TEST_RESPONSE_DICT['access']['token']['expires'] = \
-            '2020-01-01T00:00:10.000123Z'
+        self.TEST_RESPONSE_DICT['access']['token']['expires'] = (
+            '2020-01-01T00:00:10.000123Z')
         self.TEST_RESPONSE_DICT['access']['token']['id'] = TEST_TOKEN
 
         new_resp = httpretty.Response(body=json.dumps(self.TEST_RESPONSE_DICT),
@@ -264,7 +264,7 @@ class AuthenticateAgainstKeystoneTests(utils.TestCase):
         self.assertEqual(httpretty.last_request().headers.get('X-Auth-Token'),
                          fake_token)
 
-        # if we clear that overriden token then we fall back to the original
+        # if we clear that overridden token then we fall back to the original
         del cl.auth_token
 
         resp, body = cl.get(fake_url)

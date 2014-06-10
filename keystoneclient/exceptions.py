@@ -17,7 +17,15 @@ Exception definitions.
 """
 
 #flake8: noqa
-from keystoneclient.apiclient.exceptions import *
+from keystoneclient.openstack.common.apiclient.exceptions import *
+
+# NOTE(akurilin): This alias should be left here to support backwards
+# compatibility until we are sure that usage of these exceptions in
+# projects is correct.
+ConnectionError = ConnectionRefused
+HTTPNotImplemented = HttpNotImplemented
+Timeout = RequestTimeout
+HTTPError = HttpError
 
 
 class CertificateConfigError(Exception):
@@ -29,16 +37,21 @@ class CertificateConfigError(Exception):
         super(CertificateConfigError, self).__init__(msg)
 
 
-class ConnectionError(ClientException):
-    """Something went wrong trying to connect to a server"""
+class CMSError(Exception):
+    """Error reading the certificate"""
+    def __init__(self, output):
+        self.output = output
+        msg = ("Unable to sign or verify data.")
+        super(CMSError, self).__init__(msg)
 
 
-class SSLError(ConnectionError):
+class EmptyCatalog(EndpointNotFound):
+    """The service catalog is empty."""
+    pass
+
+
+class SSLError(ConnectionRefused):
     """An SSL error occurred."""
-
-
-class Timeout(ClientException):
-    """The request timed out."""
 
 
 class DiscoveryFailure(ClientException):
@@ -49,6 +62,10 @@ class VersionNotAvailable(DiscoveryFailure):
     """Discovery failed as the version you requested is not available."""
 
 
+class MethodNotImplemented(ClientException):
+    """Method not implemented by the keystoneclient API."""
+
+
 class MissingAuthPlugin(ClientException):
     """An authenticated request is required but no plugin available."""
 
@@ -56,3 +73,11 @@ class MissingAuthPlugin(ClientException):
 class NoMatchingPlugin(ClientException):
     """There were no auth plugins that could be created from the parameters
     provided."""
+
+
+class InvalidResponse(ClientException):
+    """The response from the server is not valid for this request."""
+
+    def __init__(self, response):
+        super(InvalidResponse, self).__init__()
+        self.response = response

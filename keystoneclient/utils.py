@@ -61,11 +61,14 @@ def print_list(objs, fields, formatters={}, order_by=None):
 
     if order_by is None:
         order_by = fields[0]
-    print(strutils.safe_encode(pt.get_string(sortby=order_by)))
+    encoded = strutils.safe_encode(pt.get_string(sortby=order_by))
+    if six.PY3:
+        encoded = encoded.decode()
+    print(encoded)
 
 
 def _word_wrap(string, max_length=0):
-    """wrap long strings to be no longer then max_length."""
+    """wrap long strings to be no longer than max_length."""
     if max_length <= 0:
         return string
     return '\n'.join([string[i:i + max_length] for i in
@@ -85,7 +88,10 @@ def print_dict(d, wrap=0):
             value = ''
         value = _word_wrap(value, max_length=wrap)
         pt.add_row([prop, value])
-    print(strutils.safe_encode(pt.get_string(sortby='Property')))
+    encoded = strutils.safe_encode(pt.get_string(sortby='Property'))
+    if six.PY3:
+        encoded = encoded.decode()
+    print(encoded)
 
 
 def find_resource(manager, name_or_id):
@@ -141,8 +147,8 @@ def isunauthenticated(f):
     return getattr(f, 'unauthenticated', False)
 
 
-def hash_signed_token(signed_text):
-    hash_ = hashlib.md5()
+def hash_signed_token(signed_text, mode='md5'):
+    hash_ = hashlib.new(mode)
     hash_.update(signed_text)
     return hash_.hexdigest()
 

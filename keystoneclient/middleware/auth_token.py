@@ -108,6 +108,8 @@ HTTP_X_ROLES
 
 HTTP_X_SERVICE_CATALOG
     json encoded keystone service catalog (optional).
+    For compatibility reasons this catalog will always be in the V2 catalog
+    format even if it is a v3 token.
 
 HTTP_X_TENANT_ID
     *Deprecated* in favor of HTTP_X_PROJECT_ID
@@ -157,13 +159,13 @@ from oslo.config import cfg
 import six
 from six.moves import urllib
 
+from keystoneclient import access
 from keystoneclient.common import cms
 from keystoneclient import exceptions
 from keystoneclient.middleware import memcache_crypt
 from keystoneclient.openstack.common import jsonutils
 from keystoneclient.openstack.common import memorycache
 from keystoneclient.openstack.common import timeutils
-from keystoneclient import utils
 
 
 # alternative middleware configuration in the main application's
@@ -183,26 +185,44 @@ from keystoneclient import utils
 # To use Swift memcache, you must set the 'cache' option to the environment
 # key where the Swift cache object is stored.
 
+
+# NOTE(jamielennox): A number of options below are deprecated however are left
+# in the list and only mentioned as deprecated in the help string. This is
+# because we have to provide the same deprecation functionality for arguments
+# passed in via the conf in __init__ (from paste) and there is no way to test
+# that the default value was set or not in CONF.
+# Also if we were to remove the options from the CONF list (as typical CONF
+# deprecation works) then other projects will not be able to override the
+# options via CONF.
+
 opts = [
     cfg.StrOpt('auth_admin_prefix',
                default='',
-               help='Prefix to prepend at the beginning of the path'),
+               help='Prefix to prepend at the beginning of the path. '
+                    'Deprecated, use identity_uri.'),
     cfg.StrOpt('auth_host',
                default='127.0.0.1',
-               help='Host providing the admin Identity API endpoint'),
+               help='Host providing the admin Identity API endpoint. '
+                    'Deprecated, use identity_uri.'),
     cfg.IntOpt('auth_port',
                default=35357,
-               help='Port of the admin Identity API endpoint'),
+               help='Port of the admin Identity API endpoint. '
+                    'Deprecated, use identity_uri.'),
     cfg.StrOpt('auth_protocol',
                default='https',
-               help='Protocol of the admin Identity API endpoint'
-               '(http or https)'),
+               help='Protocol of the admin Identity API endpoint '
+                    '(http or https). Deprecated, use identity_uri.'),
     cfg.StrOpt('auth_uri',
                default=None,
                # FIXME(dolph): should be default='http://127.0.0.1:5000/v2.0/',
                # or (depending on client support) an unversioned, publicly
                # accessible identity endpoint (see bug 1207517)
                help='Complete public Identity API endpoint'),
+    cfg.StrOpt('identity_uri',
+               default=None,
+               help='Complete admin Identity API endpoint. This should '
+                    'specify the unversioned root endpoint '
+                    'e.g. https://localhost:35357/'),
     cfg.StrOpt('auth_version',
                default=None,
                help='API version of the admin Identity API endpoint'),
@@ -221,9 +241,12 @@ opts = [
                ' communicating with Identity API Server.'),
     cfg.StrOpt('admin_token',
                secret=True,
-               help='Single shared secret with the Keystone configuration'
+               help='This option is deprecated and may be removed in a future'
+               ' release. Single shared secret with the Keystone configuration'
                ' used for bootstrapping a Keystone installation, or otherwise'
-               ' bypassing the normal authentication process.'),
+               ' bypassing the normal authentication process. This option'
+               ' should not be used, use `admin_user` and `admin_password`'
+               ' instead.'),
     cfg.StrOpt('admin_user',
                help='Keystone account username'),
     cfg.StrOpt('admin_password',
@@ -258,7 +281,7 @@ opts = [
                ' configurable duration (in seconds). Set to -1 to disable'
                ' caching completely.'),
     cfg.IntOpt('revocation_cache_time',
-               default=300,
+               default=10,
                help='Determines the frequency at which the list of revoked'
                ' tokens is retrieved from the Identity service (in seconds). A'
                ' high number of revocation events combined with a low cache'
@@ -293,6 +316,20 @@ opts = [
                ' unknown the token will be rejected. "required" any form of'
                ' token binding is needed to be allowed. Finally the name of a'
                ' binding method that must be present in tokens.'),
+    cfg.BoolOpt('check_revocations_for_cached', default=False,
+                help='If true, the revocation list will be checked for cached'
+                ' tokens. This requires that PKI tokens are configured on the'
+                ' Keystone server.'),
+    cfg.ListOpt('hash_algorithms', default=['md5'],
+                help='Hash algorithms to use for hashing PKI tokens. This may'
+                ' be a single algorithm or multiple. The algorithms are those'
+                ' supported by Python standard hashlib.new(). The hashes will'
+                ' be tried in the order given, so put the preferred one first'
+                ' for performance. The result of the first hash will be stored'
+                ' in the cache. This will typically be set to multiple values'
+                ' only while migrating from a less secure algorithm to a more'
+                ' secure one. Once all the old tokens are expired this option'
+                ' should be set to a single value for better performance.'),
 ]
 
 CONF = cfg.CONF
@@ -345,6 +382,42 @@ def confirm_token_not_expired(data):
     return timeutils.isotime(at=expires, subsecond=True)
 
 
+def _v3_to_v2_catalog(catalog):
+    """Convert a catalog to v2 format.
+
+    X_SERVICE_CATALOG must be specified in v2 format. If you get a token
+    that is in v3 convert it.
+    """
+    v2_services = []
+    for v3_service in catalog:
+        # first copy over the entries we allow for the service
+        v2_service = {'type': v3_service['type']}
+        try:
+            v2_service['name'] = v3_service['name']
+        except KeyError:
+            pass
+
+        # now convert the endpoints. Because in v3 we specify region per
+        # URL not per group we have to collect all the entries of the same
+        # region together before adding it to the new service.
+        regions = {}
+        for v3_endpoint in v3_service.get('endpoints', []):
+            region_name = v3_endpoint.get('region')
+            try:
+                region = regions[region_name]
+            except KeyError:
+                region = {'region': region_name} if region_name else {}
+                regions[region_name] = region
+
+            interface_name = v3_endpoint['interface'].lower() + 'URL'
+            region[interface_name] = v3_endpoint['url']
+
+        v2_service['endpoints'] = list(regions.values())
+        v2_services.append(v2_service)
+
+    return v2_services
+
+
 def safe_quote(s):
     """URL-encode strings that are not already URL-encoded."""
     return urllib.parse.quote(s) if s == urllib.parse.unquote(s) else s
@@ -394,19 +467,35 @@ class AuthProtocol(object):
                                     (True, 'true', 't', '1', 'on', 'yes', 'y'))
 
         # where to find the auth service (we use this to validate tokens)
-        auth_host = self._conf_get('auth_host')
-        auth_port = int(self._conf_get('auth_port'))
-        auth_protocol = self._conf_get('auth_protocol')
-        auth_admin_prefix = self._conf_get('auth_admin_prefix')
+        self.identity_uri = self._conf_get('identity_uri')
         self.auth_uri = self._conf_get('auth_uri')
 
-        if netaddr.valid_ipv6(auth_host):
-            # Note(dzyu) it is an IPv6 address, so it needs to be wrapped
-            # with '[]' to generate a valid IPv6 URL, based on
-            # http://www.ietf.org/rfc/rfc2732.txt
-            auth_host = '[%s]' % auth_host
+        # NOTE(jamielennox): it does appear here that our defaults arguments
+        # are backwards. We need to do it this way so that we can handle the
+        # same deprecation strategy for CONF and the conf variable.
+        if not self.identity_uri:
+            self.LOG.warning('Configuring admin URI using auth fragments. '
+                             'This is deprecated, use \'identity_uri\''
+                             ' instead.')
 
-        self.request_uri = '%s://%s:%s' % (auth_protocol, auth_host, auth_port)
+            auth_host = self._conf_get('auth_host')
+            auth_port = int(self._conf_get('auth_port'))
+            auth_protocol = self._conf_get('auth_protocol')
+            auth_admin_prefix = self._conf_get('auth_admin_prefix')
+
+            if netaddr.valid_ipv6(auth_host):
+                # Note(dzyu) it is an IPv6 address, so it needs to be wrapped
+                # with '[]' to generate a valid IPv6 URL, based on
+                # http://www.ietf.org/rfc/rfc2732.txt
+                auth_host = '[%s]' % auth_host
+
+            self.identity_uri = '%s://%s:%s' % (auth_protocol, auth_host,
+                                                auth_port)
+            if auth_admin_prefix:
+                self.identity_uri = '%s/%s' % (self.identity_uri,
+                                               auth_admin_prefix.strip('/'))
+        else:
+            self.identity_uri = self.identity_uri.rstrip('/')
 
         if self.auth_uri is None:
             self.LOG.warning(
@@ -415,12 +504,11 @@ class AuthProtocol(object):
                 'authenticate against an admin endpoint')
 
             # FIXME(dolph): drop support for this fallback behavior as
-            # documented in bug 1207517
-            self.auth_uri = self.request_uri
-
-        if auth_admin_prefix:
-            self.request_uri = "%s/%s" % (self.request_uri,
-                                          auth_admin_prefix.strip('/'))
+            # documented in bug 1207517.
+            # NOTE(jamielennox): we urljoin '/' to get just the base URI as
+            # this is the original behaviour.
+            self.auth_uri = urllib.parse.urljoin(self.identity_uri, '/')
+            self.auth_uri = self.auth_uri.rstrip('/')
 
         # SSL
         self.cert_file = self._conf_get('certfile')
@@ -446,6 +534,12 @@ class AuthProtocol(object):
         # Credentials used to verify this component with the Auth service since
         # validating tokens is a privileged call
         self.admin_token = self._conf_get('admin_token')
+        if self.admin_token:
+            self.LOG.warning(
+                "The admin_token option in the auth_token middleware is "
+                "deprecated and should not be used. The admin_user and "
+                "admin_password options should be used instead. The "
+                "admin_token option may be removed in a future release.")
         self.admin_token_expiry = None
         self.admin_user = self._conf_get('admin_user')
         self.admin_password = self._conf_get('admin_password')
@@ -455,13 +549,13 @@ class AuthProtocol(object):
         self._cache_pool = None
         self._cache_initialized = False
         # memcache value treatment, ENCRYPT or MAC
-        self._memcache_security_strategy = \
-            self._conf_get('memcache_security_strategy')
+        self._memcache_security_strategy = (
+            self._conf_get('memcache_security_strategy'))
         if self._memcache_security_strategy is not None:
-            self._memcache_security_strategy = \
-                self._memcache_security_strategy.upper()
-        self._memcache_secret_key = \
-            self._conf_get('memcache_secret_key')
+            self._memcache_security_strategy = (
+                self._memcache_security_strategy.upper())
+        self._memcache_secret_key = (
+            self._conf_get('memcache_secret_key'))
         self._assert_valid_memcache_protection_config()
         # By default the token will be cached for 5 minutes
         self.token_cache_time = int(self._conf_get('token_cache_time'))
@@ -473,11 +567,14 @@ class AuthProtocol(object):
         self.http_connect_timeout = (http_connect_timeout_cfg and
                                      int(http_connect_timeout_cfg))
         self.auth_version = None
-        self.http_request_max_retries = \
-            self._conf_get('http_request_max_retries')
+        self.http_request_max_retries = (
+            self._conf_get('http_request_max_retries'))
 
         self.include_service_catalog = self._conf_get(
             'include_service_catalog')
+
+        self.check_revocations_for_cached = self._conf_get(
+            'check_revocations_for_cached')
 
     def _assert_valid_memcache_protection_config(self):
         if self._memcache_security_strategy:
@@ -539,8 +636,8 @@ class AuthProtocol(object):
         versions = []
         response, data = self._json_request('GET', '/')
         if response.status_code == 501:
-            self.LOG.warning("Old keystone installation found...assuming v2.0")
-            versions.append("v2.0")
+            self.LOG.warning('Old keystone installation found...assuming v2.0')
+            versions.append('v2.0')
         elif response.status_code != 300:
             self.LOG.error('Unable to get version info from keystone: %s',
                            response.status_code)
@@ -642,9 +739,9 @@ class AuthProtocol(object):
             return token
         else:
             if not self.delay_auth_decision:
-                self.LOG.warn("Unable to find authentication token"
-                              " in headers")
-                self.LOG.debug("Headers: %s", env)
+                self.LOG.warn('Unable to find authentication token'
+                              ' in headers')
+                self.LOG.debug('Headers: %s', env)
             raise InvalidUserToken('Unable to find token in headers')
 
     def _reject_request(self, env, start_response):
@@ -690,7 +787,7 @@ class AuthProtocol(object):
         :raise ServerError when unable to communicate with keystone
 
         """
-        url = "%s/%s" % (self.request_uri, path.lstrip('/'))
+        url = '%s/%s' % (self.identity_uri, path.lstrip('/'))
 
         kwargs.setdefault('timeout', self.http_connect_timeout)
         if self.cert_file and self.key_file:
@@ -789,16 +886,16 @@ class AuthProtocol(object):
             return (token, timeutils.normalize_time(datetime_expiry))
         except (AssertionError, KeyError):
             self.LOG.warn(
-                "Unexpected response from keystone service: %s", data)
+                'Unexpected response from keystone service: %s', data)
             raise ServiceError('invalid json response')
         except (ValueError):
             data['access']['token']['id'] = '<SANITIZED>'
             self.LOG.warn(
-                "Unable to parse expiration time from token: %s", data)
+                'Unable to parse expiration time from token: %s', data)
             raise ServiceError('invalid json response')
 
     def _validate_user_token(self, user_token, env, retry=True):
-        """Authenticate user using PKI
+        """Authenticate user token
 
         :param user_token: user's token id
         :param retry: Ignored, as it is not longer relevant
@@ -810,12 +907,27 @@ class AuthProtocol(object):
         token_id = None
 
         try:
-            token_id = cms.cms_hash_token(user_token)
-            cached = self._cache_get(token_id)
+            token_ids, cached = self._check_user_token_cached(user_token)
+            token_id = token_ids[0]
             if cached:
-                return cached
-            if cms.is_ans1_token(user_token):
-                verified = self.verify_signed_token(user_token)
+                data = cached
+
+                if self.check_revocations_for_cached:
+                    # A token stored in Memcached might have been revoked
+                    # regardless of initial mechanism used to validate it,
+                    # and needs to be checked.
+                    for tid in token_ids:
+                        is_revoked = self._is_token_id_in_revoked_list(tid)
+                        if is_revoked:
+                            self.LOG.debug(
+                                'Token is marked as having been revoked')
+                            raise InvalidUserToken(
+                                'Token authorization failed')
+            elif cms.is_pkiz(user_token):
+                verified = self.verify_pkiz_token(user_token, token_ids)
+                data = jsonutils.loads(verified)
+            elif cms.is_asn1_token(user_token):
+                verified = self.verify_signed_token(user_token, token_ids)
                 data = jsonutils.loads(verified)
             else:
                 data = self.verify_uuid_token(user_token, retry)
@@ -825,14 +937,47 @@ class AuthProtocol(object):
             return data
         except NetworkError:
             self.LOG.debug('Token validation failure.', exc_info=True)
-            self.LOG.warn("Authorization failed for token")
+            self.LOG.warn('Authorization failed for token')
             raise InvalidUserToken('Token authorization failed')
         except Exception:
             self.LOG.debug('Token validation failure.', exc_info=True)
             if token_id:
                 self._cache_store_invalid(token_id)
-            self.LOG.warn("Authorization failed for token")
+            self.LOG.warn('Authorization failed for token')
             raise InvalidUserToken('Token authorization failed')
+
+    def _check_user_token_cached(self, user_token):
+        """Check if the token is cached already.
+
+        Returns a tuple. The first element is a list of token IDs, where the
+        first one is the preferred hash.
+
+        The second element is the token data from the cache if the token was
+        cached, otherwise ``None``.
+
+        :raises InvalidUserToken: if the token is invalid
+
+        """
+
+        if cms.is_asn1_token(user_token):
+            # user_token is a PKI token that's not hashed.
+
+            algos = self._conf_get('hash_algorithms')
+            token_hashes = list(cms.cms_hash_token(user_token, mode=algo)
+                                for algo in algos)
+
+            for token_hash in token_hashes:
+                cached = self._cache_get(token_hash)
+                if cached:
+                    return (token_hashes, cached)
+
+            # The token wasn't found using any hash algorithm.
+            return (token_hashes, None)
+
+        # user_token is either a UUID token or a hashed PKI token.
+        token_id = user_token
+        cached = self._cache_get(token_id)
+        return ([token_id], cached)
 
     def _build_user_headers(self, token_info):
         """Convert token object into headers.
@@ -844,96 +989,41 @@ class AuthProtocol(object):
         :raise InvalidUserToken when unable to parse token object
 
         """
-        def get_tenant_info():
-            """Returns a (tenant_id, tenant_name) tuple from context."""
-            def essex():
-                """Essex puts the tenant ID and name on the token."""
-                return (token['tenant']['id'], token['tenant']['name'])
+        auth_ref = access.AccessInfo.factory(body=token_info)
+        roles = ','.join(auth_ref.role_names)
 
-            def pre_diablo():
-                """Pre-diablo, Keystone only provided tenantId."""
-                return (token['tenantId'], token['tenantId'])
-
-            def default_tenant():
-                """Pre-grizzly, assume the user's default tenant."""
-                return (user['tenantId'], user['tenantName'])
-
-            for method in [essex, pre_diablo, default_tenant]:
-                try:
-                    return method()
-                except KeyError:
-                    pass
-
+        if _token_is_v2(token_info) and not auth_ref.project_id:
             raise InvalidUserToken('Unable to determine tenancy.')
-
-        # For clarity. set all those attributes that are optional in
-        # either a v2 or v3 token to None first
-        domain_id = None
-        domain_name = None
-        project_id = None
-        project_name = None
-        user_domain_id = None
-        user_domain_name = None
-        project_domain_id = None
-        project_domain_name = None
-
-        if _token_is_v2(token_info):
-            user = token_info['access']['user']
-            token = token_info['access']['token']
-            roles = ','.join([role['name'] for role in user.get('roles', [])])
-            catalog_root = token_info['access']
-            catalog_key = 'serviceCatalog'
-            project_id, project_name = get_tenant_info()
-        else:
-            #v3 token
-            token = token_info['token']
-            user = token['user']
-            user_domain_id = user['domain']['id']
-            user_domain_name = user['domain']['name']
-            roles = (','.join([role['name']
-                     for role in token.get('roles', [])]))
-            catalog_root = token
-            catalog_key = 'catalog'
-            # For v3, the server will put in the default project if there is
-            # one, so no need for us to add it here (like we do for a v2 token)
-            if 'domain' in token:
-                domain_id = token['domain']['id']
-                domain_name = token['domain']['name']
-            elif 'project' in token:
-                project_id = token['project']['id']
-                project_name = token['project']['name']
-                project_domain_id = token['project']['domain']['id']
-                project_domain_name = token['project']['domain']['name']
-
-        user_id = user['id']
-        user_name = user['name']
 
         rval = {
             'X-Identity-Status': 'Confirmed',
-            'X-Domain-Id': domain_id,
-            'X-Domain-Name': domain_name,
-            'X-Project-Id': project_id,
-            'X-Project-Name': project_name,
-            'X-Project-Domain-Id': project_domain_id,
-            'X-Project-Domain-Name': project_domain_name,
-            'X-User-Id': user_id,
-            'X-User-Name': user_name,
-            'X-User-Domain-Id': user_domain_id,
-            'X-User-Domain-Name': user_domain_name,
+            'X-Domain-Id': auth_ref.domain_id,
+            'X-Domain-Name': auth_ref.domain_name,
+            'X-Project-Id': auth_ref.project_id,
+            'X-Project-Name': auth_ref.project_name,
+            'X-Project-Domain-Id': auth_ref.project_domain_id,
+            'X-Project-Domain-Name': auth_ref.project_domain_name,
+            'X-User-Id': auth_ref.user_id,
+            'X-User-Name': auth_ref.username,
+            'X-User-Domain-Id': auth_ref.user_domain_id,
+            'X-User-Domain-Name': auth_ref.user_domain_name,
             'X-Roles': roles,
             # Deprecated
-            'X-User': user_name,
-            'X-Tenant-Id': project_id,
-            'X-Tenant-Name': project_name,
-            'X-Tenant': project_name,
+            'X-User': auth_ref.username,
+            'X-Tenant-Id': auth_ref.project_id,
+            'X-Tenant-Name': auth_ref.project_name,
+            'X-Tenant': auth_ref.project_name,
             'X-Role': roles,
         }
 
-        self.LOG.debug("Received request from user: %s with project_id : %s"
-                       " and roles: %s ", user_id, project_id, roles)
+        self.LOG.debug('Received request from user: %s with project_id : %s'
+                       ' and roles: %s ',
+                       auth_ref.user_id, auth_ref.project_id, roles)
 
-        if self.include_service_catalog and catalog_key in catalog_root:
-            catalog = catalog_root[catalog_key]
+        if self.include_service_catalog and auth_ref.has_service_catalog():
+            catalog = auth_ref.service_catalog.get_data()
+            if _token_is_v3(token_info):
+                catalog = _v3_to_v2_catalog(catalog)
             rval['X-Service-Catalog'] = jsonutils.dumps(catalog)
 
         return rval
@@ -967,7 +1057,7 @@ class AuthProtocol(object):
         env_key = self._header_to_env_var(key)
         return env.get(env_key, default)
 
-    def _cache_get(self, token_id, ignore_expires=False):
+    def _cache_get(self, token_id):
         """Return token information from cache.
 
         If token is invalid raise InvalidUserToken
@@ -1030,7 +1120,7 @@ class AuthProtocol(object):
 
             expires = timeutils.normalize_time(expires)
             utcnow = timeutils.utcnow()
-            if ignore_expires or utcnow < expires:
+            if utcnow < expires:
                 self.LOG.debug('Returning cached token')
                 return data
             else:
@@ -1094,7 +1184,7 @@ class AuthProtocol(object):
                 # no bind provided and none required
                 return
             else:
-                self.LOG.info("No bind information present in token.")
+                self.LOG.info('No bind information present in token.')
                 self._invalid_user_token()
 
         # get the named mode if bind_mode is not one of the predefined
@@ -1104,32 +1194,32 @@ class AuthProtocol(object):
             name = bind_mode
 
         if name and name not in bind:
-            self.LOG.info("Named bind mode %s not in bind information", name)
+            self.LOG.info('Named bind mode %s not in bind information', name)
             self._invalid_user_token()
 
         for bind_type, identifier in six.iteritems(bind):
             if bind_type == BIND_MODE.KERBEROS:
                 if not env.get('AUTH_TYPE', '').lower() == 'negotiate':
-                    self.LOG.info("Kerberos credentials required and "
-                                  "not present.")
+                    self.LOG.info('Kerberos credentials required and '
+                                  'not present.')
                     self._invalid_user_token()
 
                 if not env.get('REMOTE_USER') == identifier:
-                    self.LOG.info("Kerberos credentials do not match "
-                                  "those in bind.")
+                    self.LOG.info('Kerberos credentials do not match '
+                                  'those in bind.')
                     self._invalid_user_token()
 
-                self.LOG.debug("Kerberos bind authentication successful.")
+                self.LOG.debug('Kerberos bind authentication successful.')
 
             elif bind_mode == BIND_MODE.PERMISSIVE:
-                self.LOG.debug("Ignoring Unknown bind for permissive mode: "
-                               "%(bind_type)s: %(identifier)s.",
+                self.LOG.debug('Ignoring Unknown bind for permissive mode: '
+                               '%(bind_type)s: %(identifier)s.',
                                {'bind_type': bind_type,
                                 'identifier': identifier})
 
             else:
-                self.LOG.info("Couldn't verify unknown bind: %(bind_type)s: "
-                              "%(identifier)s.",
+                self.LOG.info('Couldn`t verify unknown bind: %(bind_type)s: '
+                              '%(identifier)s.',
                               {'bind_type': bind_type,
                                'identifier': identifier})
                 self._invalid_user_token()
@@ -1148,9 +1238,6 @@ class AuthProtocol(object):
         """Store invalid token in cache."""
         self.LOG.debug('Marking token as unauthorized in cache')
         self._cache_store(token_id, 'invalid')
-
-    def cert_file_missing(self, proc_output, file_name):
-        return (file_name in proc_output and not os.path.exists(file_name))
 
     def verify_uuid_token(self, user_token, retry=True):
         """Authenticate user token with keystone.
@@ -1189,7 +1276,7 @@ class AuthProtocol(object):
         if response.status_code == 200:
             return data
         if response.status_code == 404:
-            self.LOG.warn("Authorization failed for token")
+            self.LOG.warn('Authorization failed for token')
             raise InvalidUserToken('Token authorization failed')
         if response.status_code == 401:
             self.LOG.info(
@@ -1202,59 +1289,78 @@ class AuthProtocol(object):
             self.LOG.info('Retrying validation')
             return self.verify_uuid_token(user_token, False)
         else:
-            self.LOG.warn("Invalid user token. Keystone response: %s", data)
+            self.LOG.warn('Invalid user token. Keystone response: %s', data)
 
             raise InvalidUserToken()
 
-    def is_signed_token_revoked(self, signed_text):
+    def is_signed_token_revoked(self, token_ids):
         """Indicate whether the token appears in the revocation list."""
-        revocation_list = self.token_revocation_list
-        revoked_tokens = revocation_list.get('revoked', [])
-        if not revoked_tokens:
-            return
-        revoked_ids = (x['id'] for x in revoked_tokens)
-        if isinstance(signed_text, six.text_type):
-            signed_text = signed_text.encode('utf-8')
-        token_id = utils.hash_signed_token(signed_text)
-        for revoked_id in revoked_ids:
-            if token_id == revoked_id:
+        for token_id in token_ids:
+            if self._is_token_id_in_revoked_list(token_id):
                 self.LOG.debug('Token is marked as having been revoked')
                 return True
         return False
 
-    def cms_verify(self, data):
+    def _is_token_id_in_revoked_list(self, token_id):
+        """Indicate whether the token_id appears in the revocation list."""
+        revocation_list = self.token_revocation_list
+        revoked_tokens = revocation_list.get('revoked', None)
+        if not revoked_tokens:
+            return False
+
+        revoked_ids = (x['id'] for x in revoked_tokens)
+        return token_id in revoked_ids
+
+    def cms_verify(self, data, inform=cms.PKI_ASN1_FORM):
         """Verifies the signature of the provided data's IAW CMS syntax.
 
-        If either of the certificate files are missing, fetch them and
+        If either of the certificate files might be missing, fetch them and
         retry.
         """
-        while True:
+        def verify():
             try:
-                output = cms.cms_verify(data, self.signing_cert_file_name,
-                                        self.signing_ca_file_name)
-            except exceptions.CertificateConfigError as err:
-                if self.cert_file_missing(err.output,
-                                          self.signing_cert_file_name):
-                    self.fetch_signing_cert()
-                    continue
-                if self.cert_file_missing(err.output,
-                                          self.signing_ca_file_name):
-                    self.fetch_ca_cert()
-                    continue
-                self.LOG.error('CMS Verify output: %s', err.output)
-                raise
+                return cms.cms_verify(data, self.signing_cert_file_name,
+                                      self.signing_ca_file_name,
+                                      inform=inform).decode('utf-8')
             except cms.subprocess.CalledProcessError as err:
                 self.LOG.warning('Verify error: %s', err)
                 raise
-            return output
 
-    def verify_signed_token(self, signed_text):
+        try:
+            return verify()
+        except exceptions.CertificateConfigError:
+            # the certs might be missing; unconditionally fetch to avoid racing
+            self.fetch_signing_cert()
+            self.fetch_ca_cert()
+
+            try:
+                # retry with certs in place
+                return verify()
+            except exceptions.CertificateConfigError as err:
+                # if this is still occurring, something else is wrong and we
+                # need err.output to identify the problem
+                self.LOG.error('CMS Verify output: %s', err.output)
+                raise
+
+    def verify_signed_token(self, signed_text, token_ids):
         """Check that the token is unrevoked and has a valid signature."""
-        if self.is_signed_token_revoked(signed_text):
+        if self.is_signed_token_revoked(token_ids):
             raise InvalidUserToken('Token has been revoked')
 
         formatted = cms.token_to_cms(signed_text)
-        return self.cms_verify(formatted)
+        verified = self.cms_verify(formatted)
+        return verified
+
+    def verify_pkiz_token(self, signed_text, token_ids):
+        if self.is_signed_token_revoked(token_ids):
+            raise InvalidUserToken('Token has been revoked')
+        try:
+            uncompressed = cms.pkiz_uncompress(signed_text)
+            verified = self.cms_verify(uncompressed, inform=cms.PKIZ_CMS_FORM)
+            return verified
+        # TypeError If the signed_text is not zlib compressed
+        except TypeError:
+            raise InvalidUserToken(signed_text)
 
     def verify_signing_dir(self):
         if os.path.exists(self.signing_dirname):
@@ -1353,7 +1459,15 @@ class AuthProtocol(object):
         return self.cms_verify(data['signed'])
 
     def _fetch_cert_file(self, cert_file_name, cert_type):
-        path = '/v2.0/certificates/' + cert_type
+        if not self.auth_version:
+            self.auth_version = self._choose_api_version()
+
+        if self.auth_version == 'v3.0':
+            if cert_type == 'signing':
+                cert_type = 'certificates'
+            path = '/v3/OS-SIMPLE-CERT/' + cert_type
+        else:
+            path = '/v2.0/certificates/' + cert_type
         response = self._http_request('GET', path)
         if response.status_code != 200:
             raise exceptions.CertificateConfigError(response.text)
