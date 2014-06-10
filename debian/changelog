@@ -1,6 +1,6 @@
 python-keystoneclient (1:0.9.0-1) unstable; urgency=medium
 
-  * New upstream release.
+  * New upstream release (Closes: #751063).
   * New (build-)dependencies for this release.
   * Removed CVE_2014_0105_add_pooling_for_cache_references.patch applied
     upstream.
