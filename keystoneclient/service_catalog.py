@@ -21,6 +21,7 @@ import abc
 import six
 
 from keystoneclient import exceptions
+from keystoneclient import utils
 
 
 @six.add_metaclass(abc.ABCMeta)
@@ -140,6 +141,7 @@ class ServiceCatalog(object):
         return endpoints
 
     @abc.abstractmethod
+    @utils.positional(enforcement=utils.positional.WARN)
     def get_urls(self, attr=None, filter_value=None,
                  service_type='identity', endpoint_type='publicURL',
                  region_name=None):
@@ -154,14 +156,15 @@ class ServiceCatalog(object):
         :param string service_type: Service type of the endpoint.
         :param string endpoint_type: Type of endpoint.
                                      Possible values: public or publicURL,
-                                         internal or internalURL,
-                                         admin or adminURL
+                                     internal or internalURL, admin or
+                                     adminURL
         :param string region_name: Region of the endpoint.
 
         :returns: tuple of urls or None (if no match found)
         """
         raise NotImplementedError()
 
+    @utils.positional(3, enforcement=utils.positional.WARN)
     def url_for(self, attr=None, filter_value=None,
                 service_type='identity', endpoint_type='publicURL',
                 region_name=None):
@@ -248,6 +251,7 @@ class ServiceCatalogV2(ServiceCatalog):
             pass
         return token
 
+    @utils.positional(enforcement=utils.positional.WARN)
     def get_urls(self, attr=None, filter_value=None,
                  service_type='identity', endpoint_type='publicURL',
                  region_name=None):
@@ -312,6 +316,7 @@ class ServiceCatalogV3(ServiceCatalog):
             pass
         return token
 
+    @utils.positional(enforcement=utils.positional.WARN)
     def get_urls(self, attr=None, filter_value=None,
                  service_type='identity', endpoint_type='public',
                  region_name=None):

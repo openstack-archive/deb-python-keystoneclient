@@ -18,7 +18,7 @@ import logging
 
 from keystoneclient import base
 from keystoneclient import exceptions
-
+from keystoneclient import utils
 
 LOG = logging.getLogger(__name__)
 
@@ -44,6 +44,7 @@ class UserManager(base.CrudManager):
             msg = 'Specify both a user and a group'
             raise exceptions.ValidationError(msg)
 
+    @utils.positional(1, enforcement=utils.positional.WARN)
     def create(self, name, domain=None, project=None, password=None,
                email=None, description=None, enabled=True,
                default_project=None, **kwargs):
@@ -51,7 +52,7 @@ class UserManager(base.CrudManager):
 
         .. warning::
 
-        The project argument is deprecated, use default_project instead.
+          The project argument is deprecated, use default_project instead.
 
         If both default_project and project is provided, the default_project
         will be used.
@@ -70,6 +71,7 @@ class UserManager(base.CrudManager):
             enabled=enabled,
             **kwargs)
 
+    @utils.positional(enforcement=utils.positional.WARN)
     def list(self, project=None, domain=None, group=None, default_project=None,
              **kwargs):
         """List users.
@@ -82,7 +84,7 @@ class UserManager(base.CrudManager):
 
         .. warning::
 
-        The project argument is deprecated, use default_project instead.
+          The project argument is deprecated, use default_project instead.
 
         If both default_project and project is provided, the default_project
         will be used.
@@ -106,6 +108,7 @@ class UserManager(base.CrudManager):
         return super(UserManager, self).get(
             user_id=base.getid(user))
 
+    @utils.positional(enforcement=utils.positional.WARN)
     def update(self, user, name=None, domain=None, project=None, password=None,
                email=None, description=None, enabled=None,
                default_project=None, **kwargs):
@@ -113,7 +116,7 @@ class UserManager(base.CrudManager):
 
         .. warning::
 
-        The project argument is deprecated, use default_project instead.
+          The project argument is deprecated, use default_project instead.
 
         If both default_project and project is provided, the default_project
         will be used.
@@ -132,6 +135,23 @@ class UserManager(base.CrudManager):
             description=description,
             enabled=enabled,
             **kwargs)
+
+    def update_password(self, old_password, new_password):
+        """Update the password for the user the token belongs to."""
+        if not (old_password and new_password):
+            msg = 'Specify both the current password and a new password'
+            raise exceptions.ValidationError(msg)
+
+        if old_password == new_password:
+            msg = 'Old password and new password must be different.'
+            raise exceptions.ValidationError(msg)
+
+        params = {'user': {'password': new_password,
+                           'original_password': old_password}}
+
+        base_url = '/users/%s/password' % self.api.user_id
+
+        return self._update(base_url, params, method='POST', management=False)
 
     def add_to_group(self, user, group):
         self._require_user_and_group(user, group)
