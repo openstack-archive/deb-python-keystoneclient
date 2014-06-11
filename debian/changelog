@@ -1,3 +1,9 @@
+python-keystoneclient (1:0.9.0-2) unstable; urgency=medium
+
+  * Added python3 support.
+
+ -- Thomas Goirand <zigo@debian.org>  Wed, 11 Jun 2014 22:27:46 +0800
+
 python-keystoneclient (1:0.9.0-1) unstable; urgency=medium
 
   * New upstream release (Closes: #751063).
