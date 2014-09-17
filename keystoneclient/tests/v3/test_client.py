@@ -125,6 +125,8 @@ class KeystoneClientTest(utils.TestCase):
         self.assertFalse(c.auth_ref.domain_scoped)
         self.assertFalse(c.auth_ref.project_scoped)
         self.assertEqual(c.auth_ref.trust_id, 'fe0aef')
+        self.assertEqual(c.auth_ref.trustee_user_id, '0ca8f6')
+        self.assertEqual(c.auth_ref.trustor_user_id, 'bd263c')
         self.assertTrue(c.auth_ref.trust_scoped)
         self.assertEqual(c.auth_user_id, '0ca8f6')
 
@@ -199,3 +201,9 @@ class KeystoneClientTest(utils.TestCase):
                            region_name='South')
         self.assertEqual(cl.service_catalog.url_for(service_type='image'),
                          'http://glance.south.host/glanceapi/public')
+
+    def test_client_without_auth_params(self):
+        self.assertRaises(exceptions.AuthorizationFailure,
+                          client.Client,
+                          project_name='exampleproject',
+                          auth_url=self.TEST_URL)

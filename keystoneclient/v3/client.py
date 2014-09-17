@@ -89,6 +89,65 @@ class Client(httpclient.HTTPClient):
         >>> user = keystone.users.get(USER_ID)
         >>> user.delete()
 
+    Instances of this class have the following managers:
+
+    .. py:attribute:: credentials
+
+        :py:class:`keystoneclient.v3.credentials.CredentialManager`
+
+    .. py:attribute:: endpoint_filter
+
+        :py:class:`keystoneclient.v3.contrib.endpoint_filter.\
+EndpointFilterManager`
+
+    .. py:attribute:: endpoints
+
+        :py:class:`keystoneclient.v3.endpoints.EndpointManager`
+
+    .. py:attribute:: domains
+
+        :py:class:`keystoneclient.v3.domains.DomainManager`
+
+    .. py:attribute:: federation
+
+        :py:class:`keystoneclient.v3.contrib.federation.core.FederationManager`
+
+    .. py:attribute:: groups
+
+        :py:class:`keystoneclient.v3.groups.GroupManager`
+
+    .. py:attribute:: oauth1
+
+        :py:class:`keystoneclient.v3.contrib.oauth1.core.OAuthManager`
+
+    .. py:attribute:: policies
+
+        :py:class:`keystoneclient.v3.policies.PolicyManager`
+
+    .. py:attribute:: regions
+
+        :py:class:`keystoneclient.v3.regions.RegionManager`
+
+    .. py:attribute:: role_assignments
+
+        :py:class:`keystoneclient.v3.role_assignments.RoleAssignmentManager`
+
+    .. py:attribute:: roles
+
+        :py:class:`keystoneclient.v3.roles.RoleManager`
+
+    .. py:attribute:: services
+
+        :py:class:`keystoneclient.v3.services.ServiceManager`
+
+    .. py:attribute:: users
+
+        :py:class:`keystoneclient.v3.users.UserManager`
+
+    .. py:attribute:: trusts
+
+        :py:class:`keystoneclient.v3.contrib.trusts.TrustManager`
+
     """
 
     version = 'v3'
@@ -151,6 +210,9 @@ class Client(httpclient.HTTPClient):
                                             **kwargs):
         """Authenticate against the v3 Identity API.
 
+        If password and token methods are both provided then both methods will
+        be used in the request.
+
         :returns: access.AccessInfo if authentication was successful.
         :raises: AuthorizationFailure if unable to authenticate or validate
                  the existing authorization token
@@ -161,22 +223,33 @@ class Client(httpclient.HTTPClient):
             if auth_url is None:
                 raise ValueError("Cannot authenticate without an auth_url")
 
-            a = v3_auth.Auth._factory(auth_url,
-                                      username=username,
-                                      password=password,
-                                      token=token,
-                                      trust_id=trust_id,
-                                      user_id=user_id,
-                                      domain_id=domain_id,
-                                      domain_name=domain_name,
-                                      user_domain_id=user_domain_id,
-                                      user_domain_name=user_domain_name,
-                                      project_id=project_id,
-                                      project_name=project_name,
-                                      project_domain_id=project_domain_id,
-                                      project_domain_name=project_domain_name)
+            auth_methods = []
 
-            return a.get_auth_ref(self.session)
+            if token:
+                auth_methods.append(v3_auth.TokenMethod(token=token))
+
+            if password:
+                m = v3_auth.PasswordMethod(user_id=user_id,
+                                           username=username,
+                                           user_domain_id=user_domain_id,
+                                           user_domain_name=user_domain_name,
+                                           password=password)
+                auth_methods.append(m)
+
+            if not auth_methods:
+                msg = 'A user and password or token is required.'
+                raise exceptions.AuthorizationFailure(msg)
+
+            plugin = v3_auth.Auth(auth_url, auth_methods,
+                                  trust_id=trust_id,
+                                  domain_id=domain_id,
+                                  domain_name=domain_name,
+                                  project_id=project_id,
+                                  project_name=project_name,
+                                  project_domain_id=project_domain_id,
+                                  project_domain_name=project_domain_name)
+
+            return plugin.get_auth_ref(self.session)
         except (exceptions.AuthorizationFailure, exceptions.Unauthorized):
             _logger.debug('Authorization failed.')
             raise

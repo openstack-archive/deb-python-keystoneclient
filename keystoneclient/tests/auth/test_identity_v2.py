@@ -11,6 +11,7 @@
 # under the License.
 
 import copy
+import uuid
 
 import httpretty
 from six.moves import urllib
@@ -142,10 +143,6 @@ class V2IdentityPlugin(utils.TestCase):
         self.assertRequestHeaderEqual('Accept', 'application/json')
         self.assertEqual(s.auth.auth_ref.auth_token, self.TEST_TOKEN)
 
-    def test_missing_auth_params(self):
-        self.assertRaises(exceptions.NoMatchingPlugin, v2.Auth._factory,
-                          self.TEST_URL)
-
     @httpretty.activate
     def test_with_trust_id(self):
         self.stub_auth(json=self.TEST_RESPONSE_DICT)
@@ -179,7 +176,9 @@ class V2IdentityPlugin(utils.TestCase):
         self.assertEqual(httpretty.last_request().path, path)
 
     def test_service_url(self):
-        endpoint_filter = {'service_type': 'compute', 'interface': 'admin'}
+        endpoint_filter = {'service_type': 'compute',
+                           'interface': 'admin',
+                           'service_name': 'nova'}
         self._do_service_url_test('http://nova/novapi/admin', endpoint_filter)
 
     def test_service_url_defaults_to_public(self):
@@ -257,3 +256,14 @@ class V2IdentityPlugin(utils.TestCase):
         self.assertEqual('token1', s.get_token())
         a.invalidate()
         self.assertEqual('token2', s.get_token())
+
+    @httpretty.activate
+    def test_doesnt_log_password(self):
+        self.stub_auth(json=self.TEST_RESPONSE_DICT)
+        password = uuid.uuid4().hex
+
+        a = v2.Password(self.TEST_URL, username=self.TEST_USER,
+                        password=password)
+        s = session.Session(auth=a)
+        self.assertEqual(self.TEST_TOKEN, s.get_token())
+        self.assertNotIn(password, self.logger.output)

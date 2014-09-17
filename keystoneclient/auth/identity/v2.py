@@ -11,7 +11,9 @@
 # under the License.
 
 import abc
+import logging
 
+from oslo.config import cfg
 import six
 
 from keystoneclient import access
@@ -19,36 +21,23 @@ from keystoneclient.auth.identity import base
 from keystoneclient import exceptions
 from keystoneclient import utils
 
+_logger = logging.getLogger(__name__)
+
 
 @six.add_metaclass(abc.ABCMeta)
 class Auth(base.BaseIdentityPlugin):
 
-    @staticmethod
-    def _factory(auth_url, **kwargs):
-        """Construct a plugin appropriate to your available arguments.
+    @classmethod
+    def get_options(cls):
+        options = super(Auth, cls).get_options()
 
-        This function should only be used for loading authentication from a
-        config file or other source where you do not know the type of plugin
-        that is required.
+        options.extend([
+            cfg.StrOpt('tenant-id', help='Tenant ID'),
+            cfg.StrOpt('tenant-name', help='Tenant Name'),
+            cfg.StrOpt('trust-id', help='Trust ID'),
+        ])
 
-        If you know the style of authorization you require then you should
-        construct that plugin directly.
-
-        :raises NoMatchingPlugin: if a plugin cannot be constructed.
-
-        return Auth: a plugin that can be passed to a session.
-        """
-        username = kwargs.pop('username', None)
-        password = kwargs.pop('password', None)
-        token = kwargs.pop('token', None)
-
-        if token:
-            return Token(auth_url, token, **kwargs)
-        elif username and password:
-            return Password(auth_url, username, password, **kwargs)
-
-        msg = 'A username and password or token is required.'
-        raise exceptions.NoMatchingPlugin(msg)
+        return options
 
     @utils.positional()
     def __init__(self, auth_url,
@@ -70,7 +59,7 @@ class Auth(base.BaseIdentityPlugin):
 
     def get_auth_ref(self, session, **kwargs):
         headers = {'Accept': 'application/json'}
-        url = self.auth_url + '/tokens'
+        url = self.auth_url.rstrip('/') + '/tokens'
         params = {'auth': self.get_auth_data(headers)}
 
         if self.tenant_id:
@@ -80,8 +69,9 @@ class Auth(base.BaseIdentityPlugin):
         if self.trust_id:
             params['auth']['trust_id'] = self.trust_id
 
+        _logger.debug('Making authentication request to %s', url)
         resp = session.post(url, json=params, headers=headers,
-                            authenticated=False)
+                            authenticated=False, log=False)
 
         try:
             resp_data = resp.json()['access']
@@ -117,6 +107,20 @@ class Password(Auth):
         return {'passwordCredentials': {'username': self.username,
                                         'password': self.password}}
 
+    @classmethod
+    def get_options(cls):
+        options = super(Password, cls).get_options()
+
+        options.extend([
+            cfg.StrOpt('user-name',
+                       dest='username',
+                       deprecated_name='username',
+                       help='Username to login with'),
+            cfg.StrOpt('password', help='Password to use'),
+        ])
+
+        return options
+
 
 class Token(Auth):
 
@@ -133,3 +137,13 @@ class Token(Auth):
         if headers is not None:
             headers['X-Auth-Token'] = self.token
         return {'token': {'id': self.token}}
+
+    @classmethod
+    def get_options(cls):
+        options = super(Token, cls).get_options()
+
+        options.extend([
+            cfg.StrOpt('token', help='Token'),
+        ])
+
+        return options

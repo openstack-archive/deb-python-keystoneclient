@@ -10,14 +10,21 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+import argparse
+import uuid
 
 import httpretty
 import mock
+from oslo.config import cfg
 import requests
 import six
+from testtools import matchers
 
+from keystoneclient import adapter
 from keystoneclient.auth import base
 from keystoneclient import exceptions
+from keystoneclient.openstack.common.fixture import config
+from keystoneclient.openstack.common import jsonutils
 from keystoneclient import session as client_session
 from keystoneclient.tests import utils
 
@@ -314,6 +321,7 @@ class CalledAuthPlugin(base.BaseAuthPlugin):
     def __init__(self, invalidate=True):
         self.get_token_called = False
         self.get_endpoint_called = False
+        self.endpoint_arguments = {}
         self.invalidate_called = False
         self._invalidate = invalidate
 
@@ -323,6 +331,7 @@ class CalledAuthPlugin(base.BaseAuthPlugin):
 
     def get_endpoint(self, session, **kwargs):
         self.get_endpoint_called = True
+        self.endpoint_arguments = kwargs
         return self.ENDPOINT
 
     def invalidate(self):
@@ -506,3 +515,185 @@ class SessionAuthTests(utils.TestCase):
         self.assertRaises(exceptions.Unauthorized, sess.get, self.TEST_URL,
                           authenticated=True, allow_reauth=False)
         self.assertFalse(auth.invalidate_called)
+
+
+class AdapterTest(utils.TestCase):
+
+    SERVICE_TYPE = uuid.uuid4().hex
+    SERVICE_NAME = uuid.uuid4().hex
+    INTERFACE = uuid.uuid4().hex
+    REGION_NAME = uuid.uuid4().hex
+    USER_AGENT = uuid.uuid4().hex
+
+    TEST_URL = CalledAuthPlugin.ENDPOINT
+
+    @httpretty.activate
+    def test_setting_variables(self):
+        response = uuid.uuid4().hex
+        self.stub_url(httpretty.GET, body=response)
+
+        auth = CalledAuthPlugin()
+        sess = client_session.Session()
+        adpt = adapter.Adapter(sess,
+                               auth=auth,
+                               service_type=self.SERVICE_TYPE,
+                               service_name=self.SERVICE_NAME,
+                               interface=self.INTERFACE,
+                               region_name=self.REGION_NAME,
+                               user_agent=self.USER_AGENT)
+
+        resp = adpt.get('/')
+        self.assertEqual(resp.text, response)
+
+        self.assertEqual(self.SERVICE_TYPE,
+                         auth.endpoint_arguments['service_type'])
+        self.assertEqual(self.SERVICE_NAME,
+                         auth.endpoint_arguments['service_name'])
+        self.assertEqual(self.INTERFACE,
+                         auth.endpoint_arguments['interface'])
+        self.assertEqual(self.REGION_NAME,
+                         auth.endpoint_arguments['region_name'])
+
+        self.assertTrue(auth.get_token_called)
+        self.assertRequestHeaderEqual('User-Agent', self.USER_AGENT)
+
+    @httpretty.activate
+    def test_legacy_binding(self):
+        key = uuid.uuid4().hex
+        val = uuid.uuid4().hex
+        response = jsonutils.dumps({key: val})
+
+        self.stub_url(httpretty.GET, body=response)
+
+        auth = CalledAuthPlugin()
+        sess = client_session.Session(auth=auth)
+        adpt = adapter.LegacyJsonAdapter(sess,
+                                         service_type=self.SERVICE_TYPE,
+                                         user_agent=self.USER_AGENT)
+
+        resp, body = adpt.get('/')
+        self.assertEqual(self.SERVICE_TYPE,
+                         auth.endpoint_arguments['service_type'])
+        self.assertEqual(resp.text, response)
+        self.assertEqual(val, body[key])
+
+    @httpretty.activate
+    def test_legacy_binding_non_json_resp(self):
+        response = uuid.uuid4().hex
+        self.stub_url(httpretty.GET, body=response, content_type='text/html')
+
+        auth = CalledAuthPlugin()
+        sess = client_session.Session(auth=auth)
+        adpt = adapter.LegacyJsonAdapter(sess,
+                                         service_type=self.SERVICE_TYPE,
+                                         user_agent=self.USER_AGENT)
+
+        resp, body = adpt.get('/')
+        self.assertEqual(self.SERVICE_TYPE,
+                         auth.endpoint_arguments['service_type'])
+        self.assertEqual(resp.text, response)
+        self.assertIsNone(body)
+
+    def test_methods(self):
+        sess = client_session.Session()
+        adpt = adapter.Adapter(sess)
+        url = 'http://url'
+
+        for method in ['get', 'head', 'post', 'put', 'patch', 'delete']:
+            with mock.patch.object(adpt, 'request') as m:
+                getattr(adpt, method)(url)
+                m.assert_called_once_with(url, method.upper())
+
+
+class ConfLoadingTests(utils.TestCase):
+
+    GROUP = 'sessiongroup'
+
+    def setUp(self):
+        super(ConfLoadingTests, self).setUp()
+
+        self.conf_fixture = self.useFixture(config.Config())
+        client_session.Session.register_conf_options(self.conf_fixture.conf,
+                                                     self.GROUP)
+
+    def config(self, **kwargs):
+        kwargs['group'] = self.GROUP
+        self.conf_fixture.config(**kwargs)
+
+    def get_session(self, **kwargs):
+        return client_session.Session.load_from_conf_options(
+            self.conf_fixture.conf,
+            self.GROUP,
+            **kwargs)
+
+    def test_insecure_timeout(self):
+        self.config(insecure=True, timeout=5)
+        s = self.get_session()
+
+        self.assertFalse(s.verify)
+        self.assertEqual(5, s.timeout)
+
+    def test_client_certs(self):
+        cert = '/path/to/certfile'
+        key = '/path/to/keyfile'
+
+        self.config(certfile=cert, keyfile=key)
+        s = self.get_session()
+
+        self.assertTrue(s.verify)
+        self.assertEqual((cert, key), s.cert)
+
+    def test_cacert(self):
+        cafile = '/path/to/cacert'
+
+        self.config(cafile=cafile)
+        s = self.get_session()
+
+        self.assertEqual(cafile, s.verify)
+
+    def test_deprecated(self):
+        def new_deprecated():
+            return cfg.DeprecatedOpt(uuid.uuid4().hex, group=uuid.uuid4().hex)
+
+        opt_names = ['cafile', 'certfile', 'keyfile', 'insecure', 'timeout']
+        depr = dict([(n, [new_deprecated()]) for n in opt_names])
+        opts = client_session.Session.get_conf_options(deprecated_opts=depr)
+
+        self.assertThat(opt_names, matchers.HasLength(len(opts)))
+        for opt in opts:
+            self.assertIn(depr[opt.name][0], opt.deprecated_opts)
+
+
+class CliLoadingTests(utils.TestCase):
+
+    def setUp(self):
+        super(CliLoadingTests, self).setUp()
+
+        self.parser = argparse.ArgumentParser()
+        client_session.Session.register_cli_options(self.parser)
+
+    def get_session(self, val, **kwargs):
+        args = self.parser.parse_args(val.split())
+        return client_session.Session.load_from_cli_options(args, **kwargs)
+
+    def test_insecure_timeout(self):
+        s = self.get_session('--insecure --timeout 5.5')
+
+        self.assertFalse(s.verify)
+        self.assertEqual(5.5, s.timeout)
+
+    def test_client_certs(self):
+        cert = '/path/to/certfile'
+        key = '/path/to/keyfile'
+
+        s = self.get_session('--os-cert %s --os-key %s' % (cert, key))
+
+        self.assertTrue(s.verify)
+        self.assertEqual((cert, key), s.cert)
+
+    def test_cacert(self):
+        cacert = '/path/to/cacert'
+
+        s = self.get_session('--os-cacert %s' % cacert)
+
+        self.assertEqual(cacert, s.verify)

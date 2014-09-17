@@ -12,9 +12,13 @@
 
 import abc
 import logging
+
+from oslo.config import cfg
 import six
 
+from keystoneclient import _discover
 from keystoneclient.auth import base
+from keystoneclient import exceptions
 
 LOG = logging.getLogger(__name__)
 
@@ -36,6 +40,8 @@ class BaseIdentityPlugin(base.BaseAuthPlugin):
 
         self.auth_url = auth_url
         self.auth_ref = None
+
+        self._endpoint_cache = {}
 
         # NOTE(jamielennox): DEPRECATED. The following should not really be set
         # here but handled by the individual auth plugin.
@@ -91,8 +97,25 @@ class BaseIdentityPlugin(base.BaseAuthPlugin):
 
         return self.auth_ref
 
+    def invalidate(self):
+        """Invalidate the current authentication data.
+
+        This should result in fetching a new token on next call.
+
+        A plugin may be invalidated if an Unauthorized HTTP response is
+        returned to indicate that the token may have been revoked or is
+        otherwise now invalid.
+
+        :returns bool: True if there was something that the plugin did to
+                       invalidate. This means that it makes sense to try again.
+                       If nothing happens returns False to indicate give up.
+        """
+        self.auth_ref = None
+        return True
+
     def get_endpoint(self, session, service_type=None, interface=None,
-                     region_name=None, **kwargs):
+                     region_name=None, service_name=None, version=None,
+                     **kwargs):
         """Return a valid endpoint for a service.
 
         If a valid token is not present then a new one will be fetched using
@@ -106,6 +129,10 @@ class BaseIdentityPlugin(base.BaseAuthPlugin):
                                  Defaults to `public`.
         :param string region_name: The region the endpoint should exist in.
                                    (optional)
+        :param string service_name: The name of the service in the catalog.
+                                   (optional)
+        :param tuple version: The minimum version number required for this
+                              endpoint. (optional)
 
         :raises HttpError: An error from an invalid HTTP response.
 
@@ -121,10 +148,56 @@ class BaseIdentityPlugin(base.BaseAuthPlugin):
             interface = 'public'
 
         service_catalog = self.get_access(session).service_catalog
-        return service_catalog.url_for(service_type=service_type,
-                                       endpoint_type=interface,
-                                       region_name=region_name)
+        sc_url = service_catalog.url_for(service_type=service_type,
+                                         endpoint_type=interface,
+                                         region_name=region_name,
+                                         service_name=service_name)
 
-    def invalidate(self):
-        self.auth_ref = None
-        return True
+        if not version:
+            # NOTE(jamielennox): This may not be the best thing to default to
+            # but is here for backwards compatibility. It may be worth
+            # defaulting to the most recent version.
+            return sc_url
+
+        disc = None
+
+        # NOTE(jamielennox): we want to cache endpoints on the session as well
+        # so that they maintain sharing between auth plugins. Create a cache on
+        # the session if it doesn't exist already.
+        try:
+            session_endpoint_cache = session._identity_endpoint_cache
+        except AttributeError:
+            session_endpoint_cache = session._identity_endpoint_cache = {}
+
+        # NOTE(jamielennox): There is a cache located on both the session
+        # object and the auth plugin object so that they can be shared and the
+        # cache is still usable
+        for cache in (self._endpoint_cache, session_endpoint_cache):
+            disc = cache.get(sc_url)
+
+            if disc:
+                break
+        else:
+            try:
+                disc = _discover.Discover(session, sc_url)
+            except (exceptions.HTTPError, exceptions.ConnectionError):
+                LOG.warn('Failed to contact the endpoint at %s for discovery. '
+                         'Fallback to using that endpoint as the '
+                         'base url.', sc_url)
+
+                return sc_url
+            else:
+                self._endpoint_cache[sc_url] = disc
+                session_endpoint_cache[sc_url] = disc
+
+        return disc.url_for(version)
+
+    @classmethod
+    def get_options(cls):
+        options = super(BaseIdentityPlugin, cls).get_options()
+
+        options.extend([
+            cfg.StrOpt('auth-url', help='Authentication URL'),
+        ])
+
+        return options

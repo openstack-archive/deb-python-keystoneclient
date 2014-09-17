@@ -121,6 +121,14 @@ class AccessInfo(dict):
         raise NotImplementedError()
 
     @property
+    def issued(self):
+        """Returns the token issue time (as datetime object)
+
+        :returns: datetime
+        """
+        raise NotImplementedError()
+
+    @property
     def username(self):
         """Returns the username associated with the authentication request.
         Follows the pattern defined in the V2 API of first looking for 'name',
@@ -160,6 +168,15 @@ class AccessInfo(dict):
         Keystone configuration.
 
         :returns: str
+        """
+        raise NotImplementedError()
+
+    @property
+    def role_ids(self):
+        """Returns a list of role ids of the user associated with the
+        authentication request.
+
+        :returns: a list of strings of role ids
         """
         raise NotImplementedError()
 
@@ -247,6 +264,22 @@ class AccessInfo(dict):
         raise NotImplementedError()
 
     @property
+    def trustee_user_id(self):
+        """Returns the trustee user id associated with a trust.
+
+        :returns: str or None (if no trust associated with the token)
+        """
+        raise NotImplementedError()
+
+    @property
+    def trustor_user_id(self):
+        """Returns the trustor user id associated with a trust.
+
+        :returns: str or None (if no trust associated with the token)
+        """
+        raise NotImplementedError()
+
+    @property
     def project_id(self):
         """Returns the project ID associated with the authentication
         request, or None if the authentication request wasn't scoped to a
@@ -320,6 +353,22 @@ class AccessInfo(dict):
         """
         return self.get('version')
 
+    @property
+    def oauth_access_token_id(self):
+        """Return the access token ID if OAuth authentication used.
+
+        :returns: str or None.
+        """
+        raise NotImplementedError()
+
+    @property
+    def oauth_consumer_id(self):
+        """Return the consumer ID if OAuth authentication used.
+
+        :returns: str or None.
+        """
+        raise NotImplementedError()
+
 
 class AccessInfoV2(AccessInfo):
     """An object for encapsulating a raw v2 auth token from identity
@@ -355,6 +404,10 @@ class AccessInfoV2(AccessInfo):
         return timeutils.parse_isotime(self['token']['expires'])
 
     @property
+    def issued(self):
+        return timeutils.parse_isotime(self['token']['issued_at'])
+
+    @property
     def username(self):
         return self['user'].get('name', self['user'].get('username'))
 
@@ -369,6 +422,10 @@ class AccessInfoV2(AccessInfo):
     @property
     def user_domain_name(self):
         return 'Default'
+
+    @property
+    def role_ids(self):
+        return self.get('metadata', {}).get('roles', [])
 
     @property
     def role_names(self):
@@ -428,6 +485,15 @@ class AccessInfoV2(AccessInfo):
         return 'trust' in self
 
     @property
+    def trustee_user_id(self):
+        return self.get('trust', {}).get('trustee_user_id')
+
+    @property
+    def trustor_user_id(self):
+        # this information is not available in the v2 token bug: #1331882
+        return None
+
+    @property
     def project_id(self):
         try:
             tenant_dict = self['token']['tenant']
@@ -480,6 +546,14 @@ class AccessInfoV2(AccessInfo):
         else:
             return None
 
+    @property
+    def oauth_access_token_id(self):
+        return None
+
+    @property
+    def oauth_consumer_id(self):
+        return None
+
 
 class AccessInfoV3(AccessInfo):
     """An object for encapsulating a raw v3 auth token from identity
@@ -517,6 +591,10 @@ class AccessInfoV3(AccessInfo):
         return timeutils.parse_isotime(self['expires_at'])
 
     @property
+    def issued(self):
+        return timeutils.parse_isotime(self['issued_at'])
+
+    @property
     def user_id(self):
         return self['user']['id']
 
@@ -527,6 +605,10 @@ class AccessInfoV3(AccessInfo):
     @property
     def user_domain_name(self):
         return self['user']['domain']['name']
+
+    @property
+    def role_ids(self):
+        return [r['id'] for r in self.get('roles', [])]
 
     @property
     def role_names(self):
@@ -593,6 +675,14 @@ class AccessInfoV3(AccessInfo):
         return 'OS-TRUST:trust' in self
 
     @property
+    def trustee_user_id(self):
+        return self.get('OS-TRUST:trust', {}).get('trustee_user', {}).get('id')
+
+    @property
+    def trustor_user_id(self):
+        return self.get('OS-TRUST:trust', {}).get('trustor_user', {}).get('id')
+
+    @property
     def auth_url(self):
         # FIXME(jamielennox): this is deprecated in favour of retrieving it
         # from the service catalog. Provide a warning.
@@ -614,3 +704,11 @@ class AccessInfoV3(AccessInfo):
 
         else:
             return None
+
+    @property
+    def oauth_access_token_id(self):
+        return self.get('OS-OAUTH1', {}).get('access_token_id')
+
+    @property
+    def oauth_consumer_id(self):
+        return self.get('OS-OAUTH1', {}).get('consumer_id')

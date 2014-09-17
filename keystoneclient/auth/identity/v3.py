@@ -13,6 +13,7 @@
 import abc
 import logging
 
+from oslo.config import cfg
 import six
 
 from keystoneclient import access
@@ -104,8 +105,9 @@ class Auth(base.BaseIdentityPlugin):
         elif self.trust_id:
             body['auth']['scope'] = {'OS-TRUST:trust': {'id': self.trust_id}}
 
+        _logger.debug('Making authentication request to %s', self.token_url)
         resp = session.post(self.token_url, json=body, headers=headers,
-                            authenticated=False)
+                            authenticated=False, log=False)
 
         try:
             resp_data = resp.json()['token']
@@ -115,32 +117,23 @@ class Auth(base.BaseIdentityPlugin):
         return access.AccessInfoV3(resp.headers['X-Subject-Token'],
                                    **resp_data)
 
-    @staticmethod
-    def _factory(auth_url, **kwargs):
-        """Construct a plugin appropriate to your available arguments.
+    @classmethod
+    def get_options(cls):
+        options = super(Auth, cls).get_options()
 
-        This function is intended as a convenience and backwards compatibility.
-        If you know the style of authorization you require then you should
-        construct that plugin directly.
-        """
+        options.extend([
+            cfg.StrOpt('domain-id', help='Domain ID to scope to'),
+            cfg.StrOpt('domain-name', help='Domain name to scope to'),
+            cfg.StrOpt('project-id', help='Project ID to scope to'),
+            cfg.StrOpt('project-name', help='Project name to scope to'),
+            cfg.StrOpt('project-domain-id',
+                       help='Domain ID containing project'),
+            cfg.StrOpt('project-domain-name',
+                       help='Domain name containing project'),
+            cfg.StrOpt('trust-id', help='Trust ID'),
+        ])
 
-        methods = []
-
-        # NOTE(jamielennox): kwargs extraction is outside the if statement to
-        # clear up additional args that might be passed but not valid for type.
-        method_kwargs = PasswordMethod._extract_kwargs(kwargs)
-        if method_kwargs.get('password'):
-            methods.append(PasswordMethod(**method_kwargs))
-
-        method_kwargs = TokenMethod._extract_kwargs(kwargs)
-        if method_kwargs.get('token'):
-            methods.append(TokenMethod(**method_kwargs))
-
-        if not methods:
-            msg = 'A username and password or token is required.'
-            raise exceptions.AuthorizationFailure(msg)
-
-        return Auth(auth_url, methods, **kwargs)
+        return options
 
 
 @six.add_metaclass(abc.ABCMeta)
@@ -186,7 +179,7 @@ class AuthMethod(object):
 
 
 @six.add_metaclass(abc.ABCMeta)
-class _AuthConstructor(Auth):
+class AuthConstructor(Auth):
     """AuthConstructor is a means of creating an Auth Plugin that contains
     only one authentication method. This is generally the required usage.
 
@@ -200,7 +193,7 @@ class _AuthConstructor(Auth):
     def __init__(self, auth_url, *args, **kwargs):
         method_kwargs = self._auth_method_class._extract_kwargs(kwargs)
         method = self._auth_method_class(*args, **method_kwargs)
-        super(_AuthConstructor, self).__init__(auth_url, [method], **kwargs)
+        super(AuthConstructor, self).__init__(auth_url, [method], **kwargs)
 
 
 class PasswordMethod(AuthMethod):
@@ -238,8 +231,23 @@ class PasswordMethod(AuthMethod):
         return 'password', {'user': user}
 
 
-class Password(_AuthConstructor):
+class Password(AuthConstructor):
     _auth_method_class = PasswordMethod
+
+    @classmethod
+    def get_options(cls):
+        options = super(Password, cls).get_options()
+
+        options.extend([
+            cfg.StrOpt('user-id', help='User ID'),
+            cfg.StrOpt('user-name', dest='username', help='Username',
+                       deprecated_name='username'),
+            cfg.StrOpt('user-domain-id', help="User's domain id"),
+            cfg.StrOpt('user-domain-name', help="User's domain name"),
+            cfg.StrOpt('password', help="User's password"),
+        ])
+
+        return options
 
 
 class TokenMethod(AuthMethod):
@@ -258,8 +266,18 @@ class TokenMethod(AuthMethod):
         return 'token', {'id': self.token}
 
 
-class Token(_AuthConstructor):
+class Token(AuthConstructor):
     _auth_method_class = TokenMethod
 
     def __init__(self, auth_url, token, **kwargs):
         super(Token, self).__init__(auth_url, token=token, **kwargs)
+
+    @classmethod
+    def get_options(cls):
+        options = super(Token, cls).get_options()
+
+        options.extend([
+            cfg.StrOpt('token', help='Token to authenticate with'),
+        ])
+
+        return options

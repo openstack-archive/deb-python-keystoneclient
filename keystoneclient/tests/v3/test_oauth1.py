@@ -16,9 +16,9 @@ import uuid
 import httpretty
 import mock
 import six
+from six.moves.urllib import parse as urlparse
 from testtools import matchers
 
-from keystoneclient.openstack.common import jsonutils
 from keystoneclient.openstack.common import timeutils
 from keystoneclient import session
 from keystoneclient.tests.v3 import client_fixtures
@@ -29,6 +29,7 @@ from keystoneclient.v3.contrib.oauth1 import consumers
 from keystoneclient.v3.contrib.oauth1 import request_tokens
 
 try:
+    import oauthlib
     from oauthlib import oauth1
 except ImportError:
     oauth1 = None
@@ -86,13 +87,17 @@ class TokenTests(BaseTest):
     def _new_oauth_token(self):
         key = uuid.uuid4().hex
         secret = uuid.uuid4().hex
-        token = 'oauth_token=%s&oauth_token_secret=%s' % (key, secret)
+        params = {'oauth_token': key, 'oauth_token_secret': secret}
+        token = urlparse.urlencode(params)
         return (key, secret, token)
 
     def _new_oauth_token_with_expires_at(self):
         key, secret, token = self._new_oauth_token()
         expires_at = timeutils.strtime()
-        token += '&oauth_expires_at=%s' % expires_at
+        params = {'oauth_token': key,
+                  'oauth_token_secret': secret,
+                  'oauth_expires_at': expires_at}
+        token = urlparse.urlencode(params)
         return (key, secret, expires_at, token)
 
     def _validate_oauth_headers(self, auth_header, oauth_client):
@@ -102,7 +107,14 @@ class TokenTests(BaseTest):
 
         self.assertThat(auth_header, matchers.StartsWith('OAuth '))
         auth_header = auth_header[len('OAuth '):]
-        header_params = oauth_client.get_oauth_params()
+        # NOTE(stevemar): In newer versions of oauthlib there is
+        # an additional argument for getting oauth parameters.
+        # Adding a conditional here to revert back to no arguments
+        # if an earlier version is detected.
+        if tuple(oauthlib.__version__.split('.')) > ('0', '6', '1'):
+            header_params = oauth_client.get_oauth_params(None)
+        else:
+            header_params = oauth_client.get_oauth_params()
         parameters = dict(header_params)
 
         self.assertEqual('HMAC-SHA1', parameters['oauth_signature_method'])
@@ -163,10 +175,8 @@ class RequestTokenTests(TokenTests):
 
         request_key, request_secret, resp_ref = self._new_oauth_token()
 
-        # NOTE(stevemar) The server expects the body to be JSON. Even though
-        # the resp_ref is a string it is not a JSON string.
         self.stub_url(httpretty.POST, [self.path_prefix, 'request_token'],
-                      status=201, body=jsonutils.dumps(resp_ref),
+                      status=201, body=resp_ref,
                       content_type='application/x-www-form-urlencoded')
 
         # Assert the manager is returning request token object
@@ -206,10 +216,8 @@ class AccessTokenTests(TokenTests):
         t = self._new_oauth_token_with_expires_at()
         access_key, access_secret, expires_at, resp_ref = t
 
-        # NOTE(stevemar) The server expects the body to be JSON. Even though
-        # the resp_ref is a string it is not a JSON string.
         self.stub_url(httpretty.POST, [self.path_prefix, 'access_token'],
-                      status=201, body=jsonutils.dumps(resp_ref),
+                      status=201, body=resp_ref,
                       content_type='application/x-www-form-urlencoded')
 
         # Assert that the manager creates an access token object
@@ -260,7 +268,7 @@ class AuthenticateWithOAuthTests(TokenTests):
                        access_secret=access_secret)
         s = session.Session(auth=a)
         t = s.get_token()
-        self.assertEqual(t, self.TEST_TOKEN)
+        self.assertEqual(self.TEST_TOKEN, t)
 
         OAUTH_REQUEST_BODY = {
             "auth": {
@@ -285,9 +293,6 @@ class AuthenticateWithOAuthTests(TokenTests):
 
 
 class TestOAuthLibModule(utils.TestCase):
-
-    def setUp(self):
-        super(TestOAuthLibModule, self).setUp()
 
     def test_no_oauthlib_installed(self):
         with mock.patch.object(auth, 'oauth1', None):
