@@ -3,6 +3,8 @@ python-keystoneclient (1:0.10.1-1) experimental; urgency=medium
   * New upstream release.
   * Uploading to experimental just right before the freeze.
   * Bumped required version of python-six.
+  * Added patch for double call of TestCase.setUp(self), which was breaking all
+    the saml2 unit tests.
 
  -- Thomas Goirand <zigo@debian.org>  Wed, 17 Sep 2014 23:47:40 +0800
 
