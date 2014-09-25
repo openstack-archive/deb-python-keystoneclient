@@ -1,3 +1,10 @@
+python-keystoneclient (1:0.10.1-2) experimental; urgency=high
+
+  * Added CVE-2014-7144_Fix_the_condition_expression_for_ssl_insecure.patch,
+    (Closes: #762749).
+
+ -- Thomas Goirand <zigo@debian.org>  Thu, 25 Sep 2014 20:30:57 +0800
+
 python-keystoneclient (1:0.10.1-1) experimental; urgency=medium
 
   * New upstream release.
