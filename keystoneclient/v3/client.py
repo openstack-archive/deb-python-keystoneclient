@@ -20,6 +20,7 @@ from keystoneclient import exceptions
 from keystoneclient import httpclient
 from keystoneclient.openstack.common import jsonutils
 from keystoneclient.v3.contrib import endpoint_filter
+from keystoneclient.v3.contrib import endpoint_policy
 from keystoneclient.v3.contrib import federation
 from keystoneclient.v3.contrib import oauth1
 from keystoneclient.v3.contrib import trusts
@@ -33,6 +34,7 @@ from keystoneclient.v3 import regions
 from keystoneclient.v3 import role_assignments
 from keystoneclient.v3 import roles
 from keystoneclient.v3 import services
+from keystoneclient.v3 import tokens
 from keystoneclient.v3 import users
 
 
@@ -100,6 +102,11 @@ class Client(httpclient.HTTPClient):
         :py:class:`keystoneclient.v3.contrib.endpoint_filter.\
 EndpointFilterManager`
 
+    .. py:attribute:: endpoint_policy
+
+        :py:class:`keystoneclient.v3.contrib.endpoint_policy.\
+EndpointPolicyManager`
+
     .. py:attribute:: endpoints
 
         :py:class:`keystoneclient.v3.endpoints.EndpointManager`
@@ -140,13 +147,17 @@ EndpointFilterManager`
 
         :py:class:`keystoneclient.v3.services.ServiceManager`
 
-    .. py:attribute:: users
+    .. py:attribute:: tokens
 
-        :py:class:`keystoneclient.v3.users.UserManager`
+        :py:class:`keystoneclient.v3.tokens.TokenManager`
 
     .. py:attribute:: trusts
 
         :py:class:`keystoneclient.v3.contrib.trusts.TrustManager`
+
+    .. py:attribute:: users
+
+        :py:class:`keystoneclient.v3.users.UserManager`
 
     """
 
@@ -158,6 +169,7 @@ EndpointFilterManager`
 
         self.credentials = credentials.CredentialManager(self)
         self.endpoint_filter = endpoint_filter.EndpointFilterManager(self)
+        self.endpoint_policy = endpoint_policy.EndpointPolicyManager(self)
         self.endpoints = endpoints.EndpointManager(self)
         self.domains = domains.DomainManager(self)
         self.federation = federation.FederationManager(self)
@@ -169,8 +181,9 @@ EndpointFilterManager`
         self.role_assignments = role_assignments.RoleAssignmentManager(self)
         self.roles = roles.RoleManager(self)
         self.services = services.ServiceManager(self)
-        self.users = users.UserManager(self)
+        self.tokens = tokens.TokenManager(self)
         self.trusts = trusts.TrustManager(self)
+        self.users = users.UserManager(self)
 
         # DEPRECATED: if session is passed then we go to the new behaviour of
         # authenticating on the first required call.

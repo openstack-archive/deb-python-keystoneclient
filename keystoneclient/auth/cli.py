@@ -14,14 +14,11 @@ import argparse
 import os
 
 from keystoneclient.auth import base
-
-# NOTE(jamielennox): ideally oslo.config would be smart enough to handle all
-# the Opt manipulation that goes on in this file. However it is currently not.
-# Options are handled in as similar a way as possible to oslo.config such that
-# when available we should be able to transition.
+from keystoneclient import utils
 
 
-def register_argparse_arguments(parser, argv):
+@utils.positional()
+def register_argparse_arguments(parser, argv, default=None):
     """Register CLI options needed to create a plugin.
 
     The function inspects the provided arguments so that it can also register
@@ -29,13 +26,15 @@ def register_argparse_arguments(parser, argv):
 
     :param argparse.ArgumentParser: the parser to attach argparse options to.
     :param list argv: the arguments provided to the appliation.
+    :param str/class default: a default plugin name or a plugin object to use
+                              if one isn't specified by the CLI. default: None.
 
     :returns: The plugin class that will be loaded or None if not provided.
 
     :raises exceptions.NoMatchingPlugin: if a plugin cannot be created.
     """
     in_parser = argparse.ArgumentParser(add_help=False)
-    env_plugin = os.environ.get('OS_AUTH_PLUGIN')
+    env_plugin = os.environ.get('OS_AUTH_PLUGIN', default)
     for p in (in_parser, parser):
         p.add_argument('--os-auth-plugin',
                        metavar='<name>',
@@ -47,23 +46,15 @@ def register_argparse_arguments(parser, argv):
     if not options.os_auth_plugin:
         return None
 
-    msg = 'Options specific to the %s plugin.' % options.os_auth_plugin
+    if isinstance(options.os_auth_plugin, type):
+        msg = 'Default Authentication options'
+        plugin = options.os_auth_plugin
+    else:
+        msg = 'Options specific to the %s plugin.' % options.os_auth_plugin
+        plugin = base.get_plugin_class(options.os_auth_plugin)
+
     group = parser.add_argument_group('Authentication Options', msg)
-    plugin = base.get_plugin_class(options.os_auth_plugin)
-
-    for opt in plugin.get_options():
-        if opt.default is None:
-            env_name = opt.name.replace('-', '_').upper()
-            default = os.environ.get('OS_' + env_name)
-        else:
-            default = opt.default
-
-        group.add_argument('--os-' + opt.name,
-                           default=default,
-                           metavar=opt.metavar,
-                           help=opt.help,
-                           dest=opt.dest)
-
+    plugin.register_argparse_arguments(group)
     return plugin
 
 
@@ -82,12 +73,9 @@ def load_from_argparse_arguments(namespace, **kwargs):
     if not namespace.os_auth_plugin:
         return None
 
-    plugin_class = base.get_plugin_class(namespace.os_auth_plugin)
+    if isinstance(namespace.os_auth_plugin, type):
+        plugin = namespace.os_auth_plugin
+    else:
+        plugin = base.get_plugin_class(namespace.os_auth_plugin)
 
-    for opt in plugin_class.get_options():
-        val = getattr(namespace, opt.dest)
-        if val is not None:
-            val = opt.type(val)
-        kwargs.setdefault(opt.dest, val)
-
-    return plugin_class.load_from_options(**kwargs)
+    return plugin.load_from_argparse_arguments(namespace, **kwargs)

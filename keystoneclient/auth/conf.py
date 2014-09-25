@@ -13,7 +13,6 @@
 from oslo.config import cfg
 
 from keystoneclient.auth import base
-from keystoneclient import exceptions
 
 _AUTH_PLUGIN_OPT = cfg.StrOpt('auth_plugin', help='Name of the plugin to load')
 
@@ -80,7 +79,7 @@ def register_conf_options(conf, group):
 def load_from_conf_options(conf, group, **kwargs):
     """Load a plugin from an oslo.config CONF object.
 
-    Each plugin will register there own required options and so there is no
+    Each plugin will register their own required options and so there is no
     standard list and the plugin should be consulted.
 
     The base options should have been registered with register_conf_options
@@ -89,7 +88,7 @@ def load_from_conf_options(conf, group, **kwargs):
     :param conf: An oslo.config conf object.
     :param string group: The group name that options should be read from.
 
-    :returns plugin: An authentication Plugin.
+    :returns plugin: An authentication Plugin or None if a name is not provided
 
     :raises exceptions.NoMatchingPlugin: if a plugin cannot be created.
     """
@@ -101,16 +100,8 @@ def load_from_conf_options(conf, group, **kwargs):
 
     name = conf[group].auth_plugin
     if not name:
-        raise exceptions.NoMatchingPlugin('No plugin name provided for config')
+        return None
 
     plugin_class = base.get_plugin_class(name)
-    plugin_opts = plugin_class.get_options()
-    conf.register_opts(plugin_opts, group=group)
-
-    for opt in plugin_opts:
-        val = conf[group][opt.dest]
-        if val is not None:
-            val = opt.type(val)
-        kwargs.setdefault(opt.dest, val)
-
-    return plugin_class.load_from_options(**kwargs)
+    plugin_class.register_conf_options(conf, group)
+    return plugin_class.load_from_conf_options(conf, group, **kwargs)

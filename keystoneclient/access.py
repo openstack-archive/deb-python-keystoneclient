@@ -33,35 +33,43 @@ class AccessInfo(dict):
     """
 
     @classmethod
-    def factory(cls, resp=None, body=None, region_name=None, **kwargs):
+    def factory(cls, resp=None, body=None, region_name=None, auth_token=None,
+                **kwargs):
         """Create AccessInfo object given a successful auth response & body
            or a user-provided dict.
         """
         # FIXME(jamielennox): Passing region_name is deprecated. Provide an
         # appropriate warning.
+        auth_ref = None
 
         if body is not None or len(kwargs):
             if AccessInfoV3.is_valid(body, **kwargs):
-                token = None
-                if resp:
-                    token = resp.headers['X-Subject-Token']
+                if resp and not auth_token:
+                    auth_token = resp.headers['X-Subject-Token']
+                # NOTE(jamielennox): these return AccessInfo because they
+                # already have auth_token installed on them.
                 if body:
                     if region_name:
                         body['token']['region_name'] = region_name
-                    return AccessInfoV3(token, **body['token'])
+                    return AccessInfoV3(auth_token, **body['token'])
                 else:
-                    return AccessInfoV3(token, **kwargs)
+                    return AccessInfoV3(auth_token, **kwargs)
             elif AccessInfoV2.is_valid(body, **kwargs):
                 if body:
                     if region_name:
                         body['access']['region_name'] = region_name
-                    return AccessInfoV2(**body['access'])
+                    auth_ref = AccessInfoV2(**body['access'])
                 else:
-                    return AccessInfoV2(**kwargs)
+                    auth_ref = AccessInfoV2(**kwargs)
             else:
                 raise NotImplementedError('Unrecognized auth response')
         else:
-            return AccessInfoV2(**kwargs)
+            auth_ref = AccessInfoV2(**kwargs)
+
+        if auth_token:
+            auth_ref.auth_token = auth_token
+
+        return auth_ref
 
     def __init__(self, *args, **kwargs):
         super(AccessInfo, self).__init__(*args, **kwargs)
@@ -110,7 +118,18 @@ class AccessInfo(dict):
 
         :returns: str
         """
-        raise NotImplementedError()
+        return self['auth_token']
+
+    @auth_token.setter
+    def auth_token(self, value):
+        self['auth_token'] = value
+
+    @auth_token.deleter
+    def auth_token(self):
+        try:
+            del self['auth_token']
+        except KeyError:
+            pass
 
     @property
     def expires(self):
@@ -369,6 +388,14 @@ class AccessInfo(dict):
         """
         raise NotImplementedError()
 
+    @property
+    def is_federated(self):
+        """Returns true if federation was used to get the token.
+
+        :returns: boolean
+        """
+        raise NotImplementedError()
+
 
 class AccessInfoV2(AccessInfo):
     """An object for encapsulating a raw v2 auth token from identity
@@ -395,9 +422,12 @@ class AccessInfoV2(AccessInfo):
     def has_service_catalog(self):
         return 'serviceCatalog' in self
 
-    @property
+    @AccessInfo.auth_token.getter
     def auth_token(self):
-        return self['token']['id']
+        try:
+            return super(AccessInfoV2, self).auth_token
+        except KeyError:
+            return self['token']['id']
 
     @property
     def expires(self):
@@ -554,6 +584,10 @@ class AccessInfoV2(AccessInfo):
     def oauth_consumer_id(self):
         return None
 
+    @property
+    def is_federated(self):
+        return False
+
 
 class AccessInfoV3(AccessInfo):
     """An object for encapsulating a raw v3 auth token from identity
@@ -568,7 +602,7 @@ class AccessInfoV3(AccessInfo):
             token=token,
             region_name=self._region_name)
         if token:
-            self.update(auth_token=token)
+            self.auth_token = token
 
     @classmethod
     def is_valid(cls, body, **kwargs):
@@ -583,8 +617,8 @@ class AccessInfoV3(AccessInfo):
         return 'catalog' in self
 
     @property
-    def auth_token(self):
-        return self['auth_token']
+    def is_federated(self):
+        return 'OS-FEDERATION' in self['user']
 
     @property
     def expires(self):
@@ -600,11 +634,21 @@ class AccessInfoV3(AccessInfo):
 
     @property
     def user_domain_id(self):
-        return self['user']['domain']['id']
+        try:
+            return self['user']['domain']['id']
+        except KeyError:
+            if self.is_federated:
+                return None
+            raise
 
     @property
     def user_domain_name(self):
-        return self['user']['domain']['name']
+        try:
+            return self['user']['domain']['name']
+        except KeyError:
+            if self.is_federated:
+                return None
+            raise
 
     @property
     def role_ids(self):

@@ -11,14 +11,17 @@
 # under the License.
 
 import abc
+import datetime
 import uuid
 
-import httpretty
 import six
 
+from keystoneclient import access
+from keystoneclient.auth import base
 from keystoneclient.auth.identity import v2
 from keystoneclient.auth.identity import v3
-from keystoneclient.openstack.common import jsonutils
+from keystoneclient import fixture
+from keystoneclient.openstack.common import timeutils
 from keystoneclient import session
 from keystoneclient.tests import utils
 
@@ -38,45 +41,14 @@ class CommonIdentityTests(object):
     def setUp(self):
         super(CommonIdentityTests, self).setUp()
 
-        httpretty.reset()
-        httpretty.enable()
-        self.addCleanup(httpretty.disable)
-
         self.TEST_URL = '%s%s' % (self.TEST_ROOT_URL, self.version)
         self.TEST_ADMIN_URL = '%s%s' % (self.TEST_ROOT_ADMIN_URL, self.version)
-
-        disc_v2 = {
-            'id': 'v2.0',
-            'links': [
-                {
-                    'href': '%sv2.0' % self.TEST_ROOT_URL,
-                    'rel': 'self'
-                },
-            ],
-            'status': 'stable',
-            'updated': '2014-04-17T00:00:00Z'
-        }
-
-        disc_v3 = {
-            'id': 'v3.0',
-            'links': [
-                {
-                    'href': '%sv3' % self.TEST_ROOT_URL,
-                    'rel': 'self'
-                }
-            ],
-            'status': 'stable',
-            'updated': '2013-03-06T00:00:00Z'
-        }
-
-        self.TEST_DISCOVERY = {
-            'versions': [disc_v2, disc_v3]
-        }
+        self.TEST_DISCOVERY = fixture.DiscoveryList(href=self.TEST_ROOT_URL)
 
         self.stub_auth_data()
 
     @abc.abstractmethod
-    def create_auth_plugin(self):
+    def create_auth_plugin(self, **kwargs):
         """Create an auth plugin that makes sense for the auth data.
 
         It doesn't really matter what auth mechanism is used but it should be
@@ -84,27 +56,30 @@ class CommonIdentityTests(object):
         """
 
     @abc.abstractmethod
-    def stub_auth_data(self):
-        """Stub out authentication data.
+    def get_auth_data(self, **kwargs):
+        """Return fake authentication data.
 
         This should register a valid token response and ensure that the compute
         endpoints are set to TEST_COMPUTE_PUBLIC, _INTERNAL and _ADMIN.
         """
+
+    def stub_auth_data(self, **kwargs):
+        token = self.get_auth_data(**kwargs)
+        self.stub_auth(json=token)
 
     @abc.abstractproperty
     def version(self):
         """The API version being tested."""
 
     def test_discovering(self):
-        self.stub_url(httpretty.GET, [],
+        self.stub_url('GET', [],
                       base_url=self.TEST_COMPUTE_ADMIN,
                       json=self.TEST_DISCOVERY)
 
         body = 'SUCCESS'
 
         # which gives our sample values
-        self.stub_url(httpretty.GET, ['path'],
-                      body=body, status=200)
+        self.stub_url('GET', ['path'], text=body)
 
         a = self.create_auth_plugin()
         s = session.Session(auth=a)
@@ -118,9 +93,9 @@ class CommonIdentityTests(object):
 
         new_body = 'SC SUCCESS'
         # if we don't specify a version, we use the URL from the SC
-        self.stub_url(httpretty.GET, ['path'],
+        self.stub_url('GET', ['path'],
                       base_url=self.TEST_COMPUTE_ADMIN,
-                      body=new_body, status=200)
+                      text=new_body)
 
         resp = s.get('/path', endpoint_filter={'service_type': 'compute',
                                                'interface': 'admin'})
@@ -131,15 +106,11 @@ class CommonIdentityTests(object):
     def test_discovery_uses_session_cache(self):
         # register responses such that if the discovery URL is hit more than
         # once then the response will be invalid and not point to COMPUTE_ADMIN
-        disc_body = jsonutils.dumps(self.TEST_DISCOVERY)
-        disc_responses = [httpretty.Response(body=disc_body, status=200),
-                          httpretty.Response(body='', status=500)]
-        httpretty.register_uri(httpretty.GET,
-                               self.TEST_COMPUTE_ADMIN,
-                               responses=disc_responses)
+        resps = [{'json': self.TEST_DISCOVERY}, {'status_code': 500}]
+        self.requests.register_uri('GET', self.TEST_COMPUTE_ADMIN, resps)
 
         body = 'SUCCESS'
-        self.stub_url(httpretty.GET, ['path'], body=body, status=200)
+        self.stub_url('GET', ['path'], text=body)
 
         # now either of the two plugins I use, it should not cause a second
         # request to the discovery url.
@@ -160,15 +131,11 @@ class CommonIdentityTests(object):
     def test_discovery_uses_plugin_cache(self):
         # register responses such that if the discovery URL is hit more than
         # once then the response will be invalid and not point to COMPUTE_ADMIN
-        disc_body = jsonutils.dumps(self.TEST_DISCOVERY)
-        disc_responses = [httpretty.Response(body=disc_body, status=200),
-                          httpretty.Response(body='', status=500)]
-        httpretty.register_uri(httpretty.GET,
-                               self.TEST_COMPUTE_ADMIN,
-                               responses=disc_responses)
+        resps = [{'json': self.TEST_DISCOVERY}, {'status_code': 500}]
+        self.requests.register_uri('GET', self.TEST_COMPUTE_ADMIN, resps)
 
         body = 'SUCCESS'
-        self.stub_url(httpretty.GET, ['path'], body=body, status=200)
+        self.stub_url('GET', ['path'], text=body)
 
         # now either of the two sessions I use, it should not cause a second
         # request to the discovery url.
@@ -189,14 +156,14 @@ class CommonIdentityTests(object):
     def test_discovering_with_no_data(self):
         # which returns discovery information pointing to TEST_URL but there is
         # no data there.
-        self.stub_url(httpretty.GET, [],
+        self.stub_url('GET', [],
                       base_url=self.TEST_COMPUTE_ADMIN,
-                      status=400)
+                      status_code=400)
 
         # so the url that will be used is the same TEST_COMPUTE_ADMIN
         body = 'SUCCESS'
-        self.stub_url(httpretty.GET, ['path'],
-                      base_url=self.TEST_COMPUTE_ADMIN, body=body, status=200)
+        self.stub_url('GET', ['path'], base_url=self.TEST_COMPUTE_ADMIN,
+                      text=body, status_code=200)
 
         a = self.create_auth_plugin()
         s = session.Session(auth=a)
@@ -208,6 +175,52 @@ class CommonIdentityTests(object):
         self.assertEqual(200, resp.status_code)
         self.assertEqual(body, resp.text)
 
+    def test_asking_for_auth_endpoint_ignores_checks(self):
+        a = self.create_auth_plugin()
+        s = session.Session(auth=a)
+
+        auth_url = s.get_endpoint(service_type='compute',
+                                  interface=base.AUTH_INTERFACE)
+
+        self.assertEqual(self.TEST_URL, auth_url)
+
+    def _create_expired_auth_plugin(self, **kwargs):
+        expires = timeutils.utcnow() - datetime.timedelta(minutes=20)
+        expired_token = self.get_auth_data(expires=expires)
+        expired_auth_ref = access.AccessInfo.factory(body=expired_token)
+
+        body = 'SUCCESS'
+        self.stub_url('GET', ['path'],
+                      base_url=self.TEST_COMPUTE_ADMIN, text=body)
+
+        a = self.create_auth_plugin(**kwargs)
+        a.auth_ref = expired_auth_ref
+        return a
+
+    def test_reauthenticate(self):
+        a = self._create_expired_auth_plugin()
+        expired_auth_ref = a.auth_ref
+        s = session.Session(auth=a)
+        self.assertIsNot(expired_auth_ref, a.get_access(s))
+
+    def test_no_reauthenticate(self):
+        a = self._create_expired_auth_plugin(reauthenticate=False)
+        expired_auth_ref = a.auth_ref
+        s = session.Session(auth=a)
+        self.assertIs(expired_auth_ref, a.get_access(s))
+
+    def test_invalidate(self):
+        a = self.create_auth_plugin()
+        s = session.Session(auth=a)
+
+        # trigger token fetching
+        s.get_token()
+
+        self.assertTrue(a.auth_ref)
+        self.assertTrue(a.invalidate())
+        self.assertIsNone(a.auth_ref)
+        self.assertFalse(a.invalidate())
+
 
 class V3(CommonIdentityTests, utils.TestCase):
 
@@ -215,127 +228,33 @@ class V3(CommonIdentityTests, utils.TestCase):
     def version(self):
         return 'v3'
 
-    def stub_auth_data(self):
-        service_catalog = [{
-            'endpoints': [{
-                'url': 'http://cdn.admin-nets.local:8774/v1.0/',
-                'region': 'RegionOne',
-                'interface': 'public'
-            }, {
-                'url': 'http://127.0.0.1:8774/v1.0',
-                'region': 'RegionOne',
-                'interface': 'internal'
-            }, {
-                'url': 'http://cdn.admin-nets.local:8774/v1.0',
-                'region': 'RegionOne',
-                'interface': 'admin'
-            }],
-            'type': 'nova_compat'
-        }, {
-            'endpoints': [{
-                'url': self.TEST_COMPUTE_PUBLIC,
-                'region': 'RegionOne',
-                'interface': 'public'
-            }, {
-                'url': self.TEST_COMPUTE_INTERNAL,
-                'region': 'RegionOne',
-                'interface': 'internal'
-            }, {
-                'url': self.TEST_COMPUTE_ADMIN,
-                'region': 'RegionOne',
-                'interface': 'admin'
-            }],
-            'type': 'compute'
-        }, {
-            'endpoints': [{
-                'url': 'http://glance/glanceapi/public',
-                'region': 'RegionOne',
-                'interface': 'public'
-            }, {
-                'url': 'http://glance/glanceapi/internal',
-                'region': 'RegionOne',
-                'interface': 'internal'
-            }, {
-                'url': 'http://glance/glanceapi/admin',
-                'region': 'RegionOne',
-                'interface': 'admin'
-            }],
-            'type': 'image',
-            'name': 'glance'
-        }, {
-            'endpoints': [{
-                'url': 'http://127.0.0.1:5000/v3',
-                'region': 'RegionOne',
-                'interface': 'public'
-            }, {
-                'url': 'http://127.0.0.1:5000/v3',
-                'region': 'RegionOne',
-                'interface': 'internal'
-            }, {
-                'url': self.TEST_ADMIN_URL,
-                'region': 'RegionOne',
-                'interface': 'admin'
-            }],
-            'type': 'identity'
-        }, {
-            'endpoints': [{
-                'url': 'http://swift/swiftapi/public',
-                'region': 'RegionOne',
-                'interface': 'public'
-            }, {
-                'url': 'http://swift/swiftapi/internal',
-                'region': 'RegionOne',
-                'interface': 'internal'
-            }, {
-                'url': 'http://swift/swiftapi/admin',
-                'region': 'RegionOne',
-                'interface': 'admin'
-            }],
-            'type': 'object-store'
-        }]
+    def get_auth_data(self, **kwargs):
+        token = fixture.V3Token(**kwargs)
+        region = 'RegionOne'
 
-        token = {
-            'token': {
-                'methods': [
-                    'token',
-                    'password'
-                ],
+        svc = token.add_service('identity')
+        svc.add_standard_endpoints(admin=self.TEST_ADMIN_URL, region=region)
 
-                'expires_at': '2020-01-01T00:00:10.000123Z',
-                'project': {
-                    'domain': {
-                        'id': self.TEST_DOMAIN_ID,
-                        'name': self.TEST_DOMAIN_NAME
-                    },
-                    'id': self.TEST_TENANT_ID,
-                    'name': self.TEST_TENANT_NAME
-                },
-                'user': {
-                    'domain': {
-                        'id': self.TEST_DOMAIN_ID,
-                        'name': self.TEST_DOMAIN_NAME
-                    },
-                    'id': self.TEST_USER,
-                    'name': self.TEST_USER
-                },
-                'issued_at': '2013-05-29T16:55:21.468960Z',
-                'catalog': service_catalog
-            },
-        }
+        svc = token.add_service('compute')
+        svc.add_standard_endpoints(admin=self.TEST_COMPUTE_ADMIN,
+                                   public=self.TEST_COMPUTE_PUBLIC,
+                                   internal=self.TEST_COMPUTE_INTERNAL,
+                                   region=region)
 
-        self.stub_auth(json=token)
+        return token
 
     def stub_auth(self, subject_token=None, **kwargs):
         if not subject_token:
             subject_token = self.TEST_TOKEN
 
-        self.stub_url(httpretty.POST, ['auth', 'tokens'],
-                      X_Subject_Token=subject_token, **kwargs)
+        kwargs.setdefault('headers', {})['X-Subject-Token'] = subject_token
+        self.stub_url('POST', ['auth', 'tokens'], **kwargs)
 
-    def create_auth_plugin(self):
-        return v3.Password(self.TEST_URL,
-                           username=self.TEST_USER,
-                           password=self.TEST_PASS)
+    def create_auth_plugin(self, **kwargs):
+        kwargs.setdefault('auth_url', self.TEST_URL)
+        kwargs.setdefault('username', self.TEST_USER)
+        kwargs.setdefault('password', self.TEST_PASS)
+        return v3.Password(**kwargs)
 
 
 class V2(CommonIdentityTests, utils.TestCase):
@@ -344,76 +263,94 @@ class V2(CommonIdentityTests, utils.TestCase):
     def version(self):
         return 'v2.0'
 
-    def create_auth_plugin(self):
-        return v2.Password(self.TEST_URL,
-                           username=self.TEST_USER,
-                           password=self.TEST_PASS)
+    def create_auth_plugin(self, **kwargs):
+        kwargs.setdefault('auth_url', self.TEST_URL)
+        kwargs.setdefault('username', self.TEST_USER)
+        kwargs.setdefault('password', self.TEST_PASS)
+        return v2.Password(**kwargs)
 
-    def stub_auth_data(self):
-        service_catalog = [{
-            'endpoints': [{
-                'adminURL': 'http://cdn.admin-nets.local:8774/v1.0',
-                'region': 'RegionOne',
-                'internalURL': 'http://127.0.0.1:8774/v1.0',
-                'publicURL': 'http://cdn.admin-nets.local:8774/v1.0/'
-            }],
-            'type': 'nova_compat',
-            'name': 'nova_compat'
-        }, {
-            'endpoints': [{
-                'adminURL': self.TEST_COMPUTE_ADMIN,
-                'region': 'RegionOne',
-                'internalURL': self.TEST_COMPUTE_INTERNAL,
-                'publicURL': self.TEST_COMPUTE_PUBLIC
-            }],
-            'type': 'compute',
-            'name': 'nova'
-        }, {
-            'endpoints': [{
-                'adminURL': 'http://glance/glanceapi/admin',
-                'region': 'RegionOne',
-                'internalURL': 'http://glance/glanceapi/internal',
-                'publicURL': 'http://glance/glanceapi/public'
-            }],
-            'type': 'image',
-            'name': 'glance'
-        }, {
-            'endpoints': [{
-                'adminURL': self.TEST_ADMIN_URL,
-                'region': 'RegionOne',
-                'internalURL': 'http://127.0.0.1:5000/v2.0',
-                'publicURL': 'http://127.0.0.1:5000/v2.0'
-            }],
-            'type': 'identity',
-            'name': 'keystone'
-        }, {
-            'endpoints': [{
-                'adminURL': 'http://swift/swiftapi/admin',
-                'region': 'RegionOne',
-                'internalURL': 'http://swift/swiftapi/internal',
-                'publicURL': 'http://swift/swiftapi/public'
-            }],
-            'type': 'object-store',
-            'name': 'swift'
-        }]
+    def get_auth_data(self, **kwargs):
+        token = fixture.V2Token(**kwargs)
+        region = 'RegionOne'
 
-        token = {
-            'access': {
-                'token': {
-                    'expires': '2020-01-01T00:00:10.000123Z',
-                    'id': self.TEST_TOKEN,
-                    'tenant': {
-                        'id': self.TEST_TENANT_ID
-                    },
-                },
-                'user': {
-                    'id': self.TEST_USER
-                },
-                'serviceCatalog': service_catalog,
-            },
-        }
+        svc = token.add_service('identity')
+        svc.add_endpoint(self.TEST_ADMIN_URL, region=region)
 
-        self.stub_auth(json=token)
+        svc = token.add_service('compute')
+        svc.add_endpoint(public=self.TEST_COMPUTE_PUBLIC,
+                         internal=self.TEST_COMPUTE_INTERNAL,
+                         admin=self.TEST_COMPUTE_ADMIN,
+                         region=region)
+
+        return token
 
     def stub_auth(self, **kwargs):
-        self.stub_url(httpretty.POST, ['tokens'], **kwargs)
+        self.stub_url('POST', ['tokens'], **kwargs)
+
+
+class CatalogHackTests(utils.TestCase):
+
+    TEST_URL = 'http://keystone.server:5000/v2.0'
+    OTHER_URL = 'http://other.server:5000/path'
+
+    IDENTITY = 'identity'
+
+    BASE_URL = 'http://keystone.server:5000/'
+    V2_URL = BASE_URL + 'v2.0'
+    V3_URL = BASE_URL + 'v3'
+
+    def test_getting_endpoints(self):
+        disc = fixture.DiscoveryList(href=self.BASE_URL)
+        self.stub_url('GET',
+                      ['/'],
+                      base_url=self.BASE_URL,
+                      json=disc)
+
+        token = fixture.V2Token()
+        service = token.add_service(self.IDENTITY)
+        service.add_endpoint(public=self.V2_URL,
+                             admin=self.V2_URL,
+                             internal=self.V2_URL)
+
+        self.stub_url('POST',
+                      ['tokens'],
+                      base_url=self.V2_URL,
+                      json=token)
+
+        v2_auth = v2.Password(self.V2_URL,
+                              username=uuid.uuid4().hex,
+                              password=uuid.uuid4().hex)
+
+        sess = session.Session(auth=v2_auth)
+
+        endpoint = sess.get_endpoint(service_type=self.IDENTITY,
+                                     interface='public',
+                                     version=(3, 0))
+
+        self.assertEqual(self.V3_URL, endpoint)
+
+    def test_returns_original_when_discover_fails(self):
+        token = fixture.V2Token()
+        service = token.add_service(self.IDENTITY)
+        service.add_endpoint(public=self.V2_URL,
+                             admin=self.V2_URL,
+                             internal=self.V2_URL)
+
+        self.stub_url('POST',
+                      ['tokens'],
+                      base_url=self.V2_URL,
+                      json=token)
+
+        self.stub_url('GET', [], base_url=self.BASE_URL, status_code=404)
+
+        v2_auth = v2.Password(self.V2_URL,
+                              username=uuid.uuid4().hex,
+                              password=uuid.uuid4().hex)
+
+        sess = session.Session(auth=v2_auth)
+
+        endpoint = sess.get_endpoint(service_type=self.IDENTITY,
+                                     interface='public',
+                                     version=(3, 0))
+
+        self.assertEqual(self.V2_URL, endpoint)

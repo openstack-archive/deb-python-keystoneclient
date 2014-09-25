@@ -26,8 +26,9 @@ class Adapter(object):
 
     @utils.positional()
     def __init__(self, session, service_type=None, service_name=None,
-                 interface=None, region_name=None, auth=None,
-                 user_agent=None):
+                 interface=None, region_name=None, endpoint_override=None,
+                 version=None, auth=None, user_agent=None,
+                 connect_retries=None):
         """Create a new adapter.
 
         :param Session session: The session object to wrap.
@@ -35,37 +36,86 @@ class Adapter(object):
         :param str service_name: The default service_name for URL discovery.
         :param str interface: The default interface for URL discovery.
         :param str region_name: The default region_name for URL discovery.
+        :param str endpoint_override: Always use this endpoint URL for requests
+                                      for this client.
+        :param tuple version: The version that this API targets.
         :param auth.BaseAuthPlugin auth: An auth plugin to use instead of the
                                          session one.
         :param str user_agent: The User-Agent string to set.
+        :param int connect_retries: the maximum number of retries that should
+                                    be attempted for connection errors.
+                                    Default None - use session default which
+                                    is don't retry.
         """
-
         self.session = session
         self.service_type = service_type
         self.service_name = service_name
         self.interface = interface
         self.region_name = region_name
+        self.endpoint_override = endpoint_override
+        self.version = version
         self.user_agent = user_agent
         self.auth = auth
+        self.connect_retries = connect_retries
+
+    def _set_endpoint_filter_kwargs(self, kwargs):
+        if self.service_type:
+            kwargs.setdefault('service_type', self.service_type)
+        if self.service_name:
+            kwargs.setdefault('service_name', self.service_name)
+        if self.interface:
+            kwargs.setdefault('interface', self.interface)
+        if self.region_name:
+            kwargs.setdefault('region_name', self.region_name)
+        if self.version:
+            kwargs.setdefault('version', self.version)
 
     def request(self, url, method, **kwargs):
         endpoint_filter = kwargs.setdefault('endpoint_filter', {})
+        self._set_endpoint_filter_kwargs(endpoint_filter)
 
-        if self.service_type:
-            endpoint_filter.setdefault('service_type', self.service_type)
-        if self.service_name:
-            endpoint_filter.setdefault('service_name', self.service_name)
-        if self.interface:
-            endpoint_filter.setdefault('interface', self.interface)
-        if self.region_name:
-            endpoint_filter.setdefault('region_name', self.region_name)
+        if self.endpoint_override:
+            kwargs.setdefault('endpoint_override', self.endpoint_override)
 
         if self.auth:
             kwargs.setdefault('auth', self.auth)
         if self.user_agent:
             kwargs.setdefault('user_agent', self.user_agent)
+        if self.connect_retries is not None:
+            kwargs.setdefault('connect_retries', self.connect_retries)
 
         return self.session.request(url, method, **kwargs)
+
+    def get_token(self, auth=None):
+        """Return a token as provided by the auth plugin.
+
+        :param auth: The auth plugin to use for token. Overrides the plugin
+                     on the session. (optional)
+        :type auth: :class:`keystoneclient.auth.base.BaseAuthPlugin`
+
+        :raises AuthorizationFailure: if a new token fetch fails.
+
+        :returns string: A valid token.
+        """
+        return self.session.get_token(auth or self.auth)
+
+    def get_endpoint(self, auth=None, **kwargs):
+        """Get an endpoint as provided by the auth plugin.
+
+        :param auth: The auth plugin to use for token. Overrides the plugin on
+                     the session. (optional)
+        :type auth: :class:`keystoneclient.auth.base.BaseAuthPlugin`
+
+        :raises MissingAuthPlugin: if a plugin is not available.
+
+        :returns string: An endpoint if available or None.
+        """
+        self._set_endpoint_filter_kwargs(kwargs)
+        return self.session.get_endpoint(auth or self.auth, **kwargs)
+
+    def invalidate(self, auth=None):
+        """Invalidate an authentication plugin."""
+        return self.session.invalidate(auth or self.auth)
 
     def get(self, url, **kwargs):
         return self.request(url, 'GET', **kwargs)

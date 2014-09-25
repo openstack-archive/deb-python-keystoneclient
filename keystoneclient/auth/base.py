@@ -11,11 +11,17 @@
 # under the License.
 
 import abc
+import os
 
 import six
 import stevedore
 
 from keystoneclient import exceptions
+
+# NOTE(jamielennox): The AUTH_INTERFACE is a special value that can be
+# requested from get_endpoint. If a plugin receives this as the value of
+# 'interface' it should return the initial URL that was passed to the plugin.
+AUTH_INTERFACE = object()
 
 PLUGIN_NAMESPACE = 'keystoneclient.auth.plugin'
 
@@ -116,3 +122,90 @@ class BaseAuthPlugin(object):
         to create the plugin.
         """
         return cls(**kwargs)
+
+    @classmethod
+    def register_argparse_arguments(cls, parser):
+        """Register the CLI options provided by a specific plugin.
+
+        Given a plugin class convert it's options into argparse arguments and
+        add them to a parser.
+
+        :param AuthPlugin plugin: an auth plugin class.
+        :param argparse.ArgumentParser: the parser to attach argparse options.
+        """
+
+        # NOTE(jamielennox): ideally oslo.config would be smart enough to
+        # handle all the Opt manipulation that goes on in this file. However it
+        # is currently not.  Options are handled in as similar a way as
+        # possible to oslo.config such that when available we should be able to
+        # transition.
+
+        for opt in cls.get_options():
+            args = []
+            envs = []
+
+            for o in [opt] + opt.deprecated_opts:
+                args.append('--os-%s' % o.name)
+                envs.append('OS_%s' % o.name.replace('-', '_').upper())
+
+            default = opt.default
+            if default is None:
+                # select the first ENV that is not false-y or return None
+                env_vars = (os.environ.get(e) for e in envs)
+                default = six.next(six.moves.filter(None, env_vars), None)
+
+            parser.add_argument(*args,
+                                default=default,
+                                metavar=opt.metavar,
+                                help=opt.help,
+                                dest='os_%s' % opt.dest)
+
+    @classmethod
+    def load_from_argparse_arguments(cls, namespace, **kwargs):
+        """Load a specific plugin object from an argparse result.
+
+        Convert the results of a parse into the specified plugin.
+
+        :param AuthPlugin plugin: an auth plugin class.
+        :param Namespace namespace: The result from CLI parsing.
+
+        :returns: An auth plugin, or None if a name is not provided.
+        """
+        for opt in cls.get_options():
+            val = getattr(namespace, 'os_%s' % opt.dest)
+            if val is not None:
+                val = opt.type(val)
+            kwargs.setdefault(opt.dest, val)
+
+        return cls.load_from_options(**kwargs)
+
+    @classmethod
+    def register_conf_options(cls, conf, group):
+        """Register the oslo.config options that are needed for a plugin.
+
+        :param conf: An oslo.config conf object.
+        :param string group: The group name that options should be read from.
+        """
+        plugin_opts = cls.get_options()
+        conf.register_opts(plugin_opts, group=group)
+
+    @classmethod
+    def load_from_conf_options(cls, conf, group, **kwargs):
+        """Load the plugin from a CONF object.
+
+        Convert the options already registered into a real plugin.
+
+        :param conf: An oslo.config conf object.
+        :param string group: The group name that options should be read from.
+
+        :returns plugin: An authentication Plugin.
+        """
+        plugin_opts = cls.get_options()
+
+        for opt in plugin_opts:
+            val = conf[group][opt.dest]
+            if val is not None:
+                val = opt.type(val)
+            kwargs.setdefault(opt.dest, val)
+
+        return cls.load_from_options(**kwargs)

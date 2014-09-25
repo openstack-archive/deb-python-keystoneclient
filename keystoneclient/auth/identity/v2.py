@@ -43,15 +43,20 @@ class Auth(base.BaseIdentityPlugin):
     def __init__(self, auth_url,
                  trust_id=None,
                  tenant_id=None,
-                 tenant_name=None):
+                 tenant_name=None,
+                 reauthenticate=True):
         """Construct an Identity V2 Authentication Plugin.
 
         :param string auth_url: Identity service endpoint for authorization.
         :param string trust_id: Trust ID for trust scoping.
         :param string tenant_id: Tenant ID for project scoping.
         :param string tenant_name: Tenant name for project scoping.
+        :param bool reauthenticate: Allow fetching a new token if the current
+                                    one is going to expire.
+                                    (optional) default True
         """
-        super(Auth, self).__init__(auth_url=auth_url)
+        super(Auth, self).__init__(auth_url=auth_url,
+                                   reauthenticate=reauthenticate)
 
         self.trust_id = trust_id
         self.tenant_id = tenant_id
@@ -90,22 +95,49 @@ class Auth(base.BaseIdentityPlugin):
         """
 
 
+_NOT_PASSED = object()
+
+
 class Password(Auth):
 
-    def __init__(self, auth_url, username, password, **kwargs):
+    @utils.positional(4)
+    def __init__(self, auth_url, username=_NOT_PASSED, password=None,
+                 user_id=_NOT_PASSED, **kwargs):
         """A plugin for authenticating with a username and password.
+
+        A username or user_id must be provided.
 
         :param string auth_url: Identity service endpoint for authorization.
         :param string username: Username for authentication.
         :param string password: Password for authentication.
+        :param string user_id: User ID for authentication.
+
+        :raises TypeError: if a user_id or username is not provided.
         """
         super(Password, self).__init__(auth_url, **kwargs)
+
+        if username is _NOT_PASSED and user_id is _NOT_PASSED:
+            msg = 'You need to specify either a username or user_id'
+            raise TypeError(msg)
+
+        if username is _NOT_PASSED:
+            username = None
+        if user_id is _NOT_PASSED:
+            user_id = None
+
+        self.user_id = user_id
         self.username = username
         self.password = password
 
     def get_auth_data(self, headers=None):
-        return {'passwordCredentials': {'username': self.username,
-                                        'password': self.password}}
+        auth = {'password': self.password}
+
+        if self.username:
+            auth['username'] = self.username
+        elif self.user_id:
+            auth['userId'] = self.user_id
+
+        return {'passwordCredentials': auth}
 
     @classmethod
     def get_options(cls):
@@ -116,7 +148,8 @@ class Password(Auth):
                        dest='username',
                        deprecated_name='username',
                        help='Username to login with'),
-            cfg.StrOpt('password', help='Password to use'),
+            cfg.StrOpt('user-id', help='User ID to longin with'),
+            cfg.StrOpt('password', secret=True, help='Password to use'),
         ])
 
         return options
@@ -143,7 +176,7 @@ class Token(Auth):
         options = super(Token, cls).get_options()
 
         options.extend([
-            cfg.StrOpt('token', help='Token'),
+            cfg.StrOpt('token', secret=True, help='Token'),
         ])
 
         return options

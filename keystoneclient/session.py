@@ -11,8 +11,10 @@
 # under the License.
 
 import argparse
+import functools
 import logging
 import os
+import time
 
 from oslo.config import cfg
 import requests
@@ -47,22 +49,6 @@ def _positive_non_zero_float(argument_value):
 
 def request(url, method='GET', **kwargs):
     return Session().request(url, method=method, **kwargs)
-
-
-class _FakeRequestSession(object):
-    """This object is a temporary hack that should be removed later.
-
-    Keystoneclient has a cyclical dependency with its managers which is
-    preventing it from being cleaned up correctly. This is always bad but when
-    we switched to doing connection pooling this object wasn't getting cleaned
-    either and so we had left over TCP connections hanging around.
-
-    Until we can fix the client cleanup we rollback the use of a requests
-    session and do individual connections like we used to.
-    """
-
-    def request(self, *args, **kwargs):
-        return requests.request(*args, **kwargs)
 
 
 class Session(object):
@@ -113,7 +99,7 @@ class Session(object):
                                   for forever/never. (optional, default to 30)
         """
         if not session:
-            session = _FakeRequestSession()
+            session = requests.Session()
 
         self.auth = auth
         self.session = session
@@ -139,6 +125,13 @@ class Session(object):
             # debug log.
             return
 
+        def process_header(header):
+            secure_headers = ('authorization', 'x-auth-token',
+                              'x-subject-token',)
+            if header[0].lower() in secure_headers:
+                return (header[0], 'TOKEN_REDACTED')
+            return header
+
         string_parts = ['REQ: curl -i']
 
         # NOTE(jamielennox): None means let requests do its default validation
@@ -153,7 +146,7 @@ class Session(object):
 
         if headers:
             for header in six.iteritems(headers):
-                string_parts.append('-H "%s: %s"' % header)
+                string_parts.append('-H "%s: %s"' % process_header(header))
         if json:
             data = jsonutils.dumps(json)
         if data:
@@ -192,7 +185,8 @@ class Session(object):
     def request(self, url, method, json=None, original_ip=None,
                 user_agent=None, redirect=None, authenticated=None,
                 endpoint_filter=None, auth=None, requests_auth=None,
-                raise_exc=True, allow_reauth=True, log=True, **kwargs):
+                raise_exc=True, allow_reauth=True, log=True,
+                endpoint_override=None, connect_retries=0, **kwargs):
         """Send an HTTP request with the specified characteristics.
 
         Wrapper around `requests.Session.request` to handle tasks such as
@@ -218,6 +212,9 @@ class Session(object):
                                   can be followed by a request. Either an
                                   integer for a specific count or True/False
                                   for forever/never. (optional)
+        :param int connect_retries: the maximum number of retries that should
+                                    be attempted for connection errors.
+                                    (optional, defaults to 0 - never retry).
         :param bool authenticated: True if a token should be attached to this
                                    request, False if not or None for attach if
                                    an auth_plugin is available.
@@ -227,6 +224,11 @@ class Session(object):
                                      endpoint to use for this request. If not
                                      provided then URL is expected to be a
                                      fully qualified URL. (optional)
+        :param str endpoint_override: The URL to use instead of looking up the
+                                      endpoint in the auth plugin. This will be
+                                      ignored if a fully qualified URL is
+                                      provided but take priority over an
+                                      endpoint_filter. (optional)
         :param auth: The auth plugin to use when authenticating this request.
                      This will override the plugin that is attached to the
                      session (if any). (optional)
@@ -275,9 +277,13 @@ class Session(object):
         # should ignore the filter. This will make it easier for clients who
         # want to overrule the default endpoint_filter data added to all client
         # requests. We check fully qualified here by the presence of a host.
-        url_data = urllib.parse.urlparse(url)
-        if endpoint_filter and not url_data.netloc:
-            base_url = self.get_endpoint(auth, **endpoint_filter)
+        if not urllib.parse.urlparse(url).netloc:
+            base_url = None
+
+            if endpoint_override:
+                base_url = endpoint_override
+            elif endpoint_filter:
+                base_url = self.get_endpoint(auth, **endpoint_filter)
 
             if not base_url:
                 raise exceptions.EndpointNotFound()
@@ -321,7 +327,9 @@ class Session(object):
         if redirect is None:
             redirect = self.redirect
 
-        resp = self._send_request(url, method, redirect, log, **kwargs)
+        send = functools.partial(self._send_request,
+                                 url, method, redirect, log, connect_retries)
+        resp = send(**kwargs)
 
         # handle getting a 401 Unauthorized response by invalidating the plugin
         # and then retrying the request. This is only tried once.
@@ -330,8 +338,7 @@ class Session(object):
                 token = self.get_token(auth)
                 if token:
                     headers['X-Auth-Token'] = token
-                    resp = self._send_request(url, method, redirect, log,
-                                              **kwargs)
+                    resp = send(**kwargs)
 
         if raise_exc and resp.status_code >= 400:
             _logger.debug('Request returned failure status: %s',
@@ -340,23 +347,44 @@ class Session(object):
 
         return resp
 
-    def _send_request(self, url, method, redirect, log, **kwargs):
+    def _send_request(self, url, method, redirect, log, connect_retries,
+                      connect_retry_delay=0.5, **kwargs):
         # NOTE(jamielennox): We handle redirection manually because the
         # requests lib follows some browser patterns where it will redirect
         # POSTs as GETs for certain statuses which is not want we want for an
         # API. See: https://en.wikipedia.org/wiki/Post/Redirect/Get
 
+        # NOTE(jamielennox): The interaction between retries and redirects are
+        # handled naively. We will attempt only a maximum number of retries and
+        # redirects rather than per request limits. Otherwise the extreme case
+        # could be redirects * retries requests. This will be sufficient in
+        # most cases and can be fixed properly if there's ever a need.
+
         try:
-            resp = self.session.request(method, url, **kwargs)
-        except requests.exceptions.SSLError:
-            msg = 'SSL exception connecting to %s' % url
-            raise exceptions.SSLError(msg)
-        except requests.exceptions.Timeout:
-            msg = 'Request to %s timed out' % url
-            raise exceptions.RequestTimeout(msg)
-        except requests.exceptions.ConnectionError:
-            msg = 'Unable to establish connection to %s' % url
-            raise exceptions.ConnectionRefused(msg)
+            try:
+                resp = self.session.request(method, url, **kwargs)
+            except requests.exceptions.SSLError:
+                msg = 'SSL exception connecting to %s' % url
+                raise exceptions.SSLError(msg)
+            except requests.exceptions.Timeout:
+                msg = 'Request to %s timed out' % url
+                raise exceptions.RequestTimeout(msg)
+            except requests.exceptions.ConnectionError:
+                msg = 'Unable to establish connection to %s' % url
+                raise exceptions.ConnectionRefused(msg)
+        except (exceptions.RequestTimeout, exceptions.ConnectionRefused) as e:
+            if connect_retries <= 0:
+                raise
+
+            _logger.info('Failure: %s. Retrying in %.1fs.',
+                         e, connect_retry_delay)
+            time.sleep(connect_retry_delay)
+
+            return self._send_request(
+                url, method, redirect, log,
+                connect_retries=connect_retries - 1,
+                connect_retry_delay=connect_retry_delay * 2,
+                **kwargs)
 
         if log:
             self._http_log_response(response=resp)
@@ -378,8 +406,12 @@ class Session(object):
                 _logger.warn("Failed to redirect request to %s as new "
                              "location was not provided.", resp.url)
             else:
-                new_resp = self._send_request(location, method, redirect, log,
-                                              **kwargs)
+                # NOTE(jamielennox): We don't pass through connect_retry_delay.
+                # This request actually worked so we can reset the delay count.
+                new_resp = self._send_request(
+                    location, method, redirect, log,
+                    connect_retries=connect_retries,
+                    **kwargs)
 
                 if not isinstance(new_resp.history, list):
                     new_resp.history = list(new_resp.history)
