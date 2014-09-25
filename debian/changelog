@@ -1,3 +1,10 @@
+python-keystoneclient (1:0.11.1-1) experimental; urgency=medium
+
+  * New upstream release.
+  * Updated (build-)depends for this release.
+
+ -- Thomas Goirand <zigo@debian.org>  Thu, 25 Sep 2014 14:51:59 +0000
+
 python-keystoneclient (1:0.10.1-1) experimental; urgency=medium
 
   * New upstream release.
