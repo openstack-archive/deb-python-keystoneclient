@@ -10,16 +10,27 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+import uuid
+
 import httpretty
 
 from keystoneclient import exceptions
+from keystoneclient import fixture
 from keystoneclient.tests.v2_0 import utils
+from keystoneclient.v2_0 import client
 from keystoneclient.v2_0 import tenants
+from keystoneclient.v2_0 import users
 
 
 class TenantTests(utils.TestCase):
     def setUp(self):
         super(TenantTests, self).setUp()
+
+        self.INVIS_ID = uuid.uuid4().hex
+        self.DEMO_ID = uuid.uuid4().hex
+        self.ADMIN_ID = uuid.uuid4().hex
+        self.EXTRAS_ID = uuid.uuid4().hex
+
         self.TEST_TENANTS = {
             "tenants": {
                 "values": [
@@ -27,26 +38,26 @@ class TenantTests(utils.TestCase):
                         "enabled": True,
                         "description": "A description change!",
                         "name": "invisible_to_admin",
-                        "id": 3,
+                        "id": self.INVIS_ID,
                     },
                     {
                         "enabled": True,
                         "description": "None",
                         "name": "demo",
-                        "id": 2,
+                        "id": self.DEMO_ID,
                     },
                     {
                         "enabled": True,
                         "description": "None",
                         "name": "admin",
-                        "id": 1,
+                        "id": self.ADMIN_ID,
                     },
                     {
                         "extravalue01": "metadata01",
                         "enabled": True,
                         "description": "For testing extras",
                         "name": "test_extras",
-                        "id": 4,
+                        "id": self.EXTRAS_ID,
                     }
                 ],
                 "links": [],
@@ -63,11 +74,12 @@ class TenantTests(utils.TestCase):
                 "extravalue01": "metadata01",
             },
         }
+        id_ = uuid.uuid4().hex
         resp_body = {
             "tenant": {
                 "name": "tenantX",
                 "enabled": True,
-                "id": 4,
+                "id": id_,
                 "description": "Like tenant 9, but better.",
                 "extravalue01": "metadata01",
             }
@@ -81,7 +93,7 @@ class TenantTests(utils.TestCase):
             extravalue01=req_body['tenant']['extravalue01'],
             name="don't overwrite priors")
         self.assertIsInstance(tenant, tenants.Tenant)
-        self.assertEqual(tenant.id, 4)
+        self.assertEqual(tenant.id, id_)
         self.assertEqual(tenant.name, "tenantX")
         self.assertEqual(tenant.description, "Like tenant 9, but better.")
         self.assertEqual(tenant.extravalue01, "metadata01")
@@ -114,17 +126,17 @@ class TenantTests(utils.TestCase):
 
     @httpretty.activate
     def test_delete(self):
-        self.stub_url(httpretty.DELETE, ['tenants', '1'], status=204)
-        self.client.tenants.delete(1)
+        self.stub_url(httpretty.DELETE, ['tenants', self.ADMIN_ID], status=204)
+        self.client.tenants.delete(self.ADMIN_ID)
 
     @httpretty.activate
     def test_get(self):
         resp = {'tenant': self.TEST_TENANTS['tenants']['values'][2]}
-        self.stub_url(httpretty.GET, ['tenants', '1'], json=resp)
+        self.stub_url(httpretty.GET, ['tenants', self.ADMIN_ID], json=resp)
 
-        t = self.client.tenants.get(1)
+        t = self.client.tenants.get(self.ADMIN_ID)
         self.assertIsInstance(t, tenants.Tenant)
-        self.assertEqual(t.id, 1)
+        self.assertEqual(t.id, self.ADMIN_ID)
         self.assertEqual(t.name, 'admin')
 
     @httpretty.activate
@@ -162,25 +174,26 @@ class TenantTests(utils.TestCase):
     def test_update(self):
         req_body = {
             "tenant": {
-                "id": 4,
+                "id": self.EXTRAS_ID,
                 "name": "tenantX",
                 "description": "I changed you!",
                 "enabled": False,
                 "extravalue01": "metadataChanged",
-                #"extraname": "dontoverwrite!",
+                # "extraname": "dontoverwrite!",
             },
         }
         resp_body = {
             "tenant": {
                 "name": "tenantX",
                 "enabled": False,
-                "id": 4,
+                "id": self.EXTRAS_ID,
                 "description": "I changed you!",
                 "extravalue01": "metadataChanged",
             },
         }
 
-        self.stub_url(httpretty.POST, ['tenants', '4'], json=resp_body)
+        self.stub_url(httpretty.POST, ['tenants', self.EXTRAS_ID],
+                      json=resp_body)
 
         tenant = self.client.tenants.update(
             req_body['tenant']['id'],
@@ -191,7 +204,7 @@ class TenantTests(utils.TestCase):
             name="don't overwrite priors")
         self.assertIsInstance(tenant, tenants.Tenant)
         self.assertRequestBodyIs(json=req_body)
-        self.assertEqual(tenant.id, 4)
+        self.assertEqual(tenant.id, self.EXTRAS_ID)
         self.assertEqual(tenant.name, "tenantX")
         self.assertEqual(tenant.description, "I changed you!")
         self.assertFalse(tenant.enabled)
@@ -201,7 +214,7 @@ class TenantTests(utils.TestCase):
     def test_update_empty_description(self):
         req_body = {
             "tenant": {
-                "id": 4,
+                "id": self.EXTRAS_ID,
                 "name": "tenantX",
                 "description": "",
                 "enabled": False,
@@ -211,11 +224,12 @@ class TenantTests(utils.TestCase):
             "tenant": {
                 "name": "tenantX",
                 "enabled": False,
-                "id": 4,
+                "id": self.EXTRAS_ID,
                 "description": "",
             },
         }
-        self.stub_url(httpretty.POST, ['tenants', '4'], json=resp_body)
+        self.stub_url(httpretty.POST, ['tenants', self.EXTRAS_ID],
+                      json=resp_body)
 
         tenant = self.client.tenants.update(req_body['tenant']['id'],
                                             req_body['tenant']['name'],
@@ -223,35 +237,37 @@ class TenantTests(utils.TestCase):
                                             req_body['tenant']['enabled'])
         self.assertIsInstance(tenant, tenants.Tenant)
         self.assertRequestBodyIs(json=req_body)
-        self.assertEqual(tenant.id, 4)
+        self.assertEqual(tenant.id, self.EXTRAS_ID)
         self.assertEqual(tenant.name, "tenantX")
         self.assertEqual(tenant.description, "")
         self.assertFalse(tenant.enabled)
 
     @httpretty.activate
     def test_add_user(self):
-        self.stub_url(httpretty.PUT, ['tenants', '4', 'users', 'foo', 'roles',
-                                      'OS-KSADM', 'barrr'], status=204)
+        self.stub_url(httpretty.PUT,
+                      ['tenants', self.EXTRAS_ID, 'users', 'foo', 'roles',
+                       'OS-KSADM', 'barrr'],
+                      status=204)
 
-        self.client.tenants.add_user('4', 'foo', 'barrr')
+        self.client.tenants.add_user(self.EXTRAS_ID, 'foo', 'barrr')
 
     @httpretty.activate
     def test_remove_user(self):
-        self.stub_url(httpretty.DELETE, ['tenants', '4', 'users', 'foo',
-                                         'roles', 'OS-KSADM', 'barrr'],
+        self.stub_url(httpretty.DELETE, ['tenants', self.EXTRAS_ID, 'users',
+                                         'foo', 'roles', 'OS-KSADM', 'barrr'],
                       status=204)
 
-        self.client.tenants.remove_user('4', 'foo', 'barrr')
+        self.client.tenants.remove_user(self.EXTRAS_ID, 'foo', 'barrr')
 
     @httpretty.activate
     def test_tenant_add_user(self):
-        self.stub_url(httpretty.PUT, ['tenants', '4', 'users', 'foo', 'roles',
-                                      'OS-KSADM', 'barrr'],
+        self.stub_url(httpretty.PUT, ['tenants', self.EXTRAS_ID, 'users',
+                                      'foo', 'roles', 'OS-KSADM', 'barrr'],
                       status=204)
 
         req_body = {
             "tenant": {
-                "id": 4,
+                "id": self.EXTRAS_ID,
                 "name": "tenantX",
                 "description": "I changed you!",
                 "enabled": False,
@@ -265,13 +281,13 @@ class TenantTests(utils.TestCase):
 
     @httpretty.activate
     def test_tenant_remove_user(self):
-        self.stub_url(httpretty.DELETE, ['tenants', '4', 'users', 'foo',
-                                         'roles', 'OS-KSADM', 'barrr'],
+        self.stub_url(httpretty.DELETE, ['tenants', self.EXTRAS_ID, 'users',
+                                         'foo', 'roles', 'OS-KSADM', 'barrr'],
                       status=204)
 
         req_body = {
             "tenant": {
-                "id": 4,
+                "id": self.EXTRAS_ID,
                 "name": "tenantX",
                 "description": "I changed you!",
                 "enabled": False,
@@ -283,3 +299,86 @@ class TenantTests(utils.TestCase):
                                                     req_body['tenant'])
         tenant.remove_user('foo', 'barrr')
         self.assertIsInstance(tenant, tenants.Tenant)
+
+    @httpretty.activate
+    def test_tenant_list_users(self):
+        tenant_id = uuid.uuid4().hex
+        user_id1 = uuid.uuid4().hex
+        user_id2 = uuid.uuid4().hex
+
+        tenant_resp = {
+            'tenant': {
+                'name': uuid.uuid4().hex,
+                'enabled': True,
+                'id': tenant_id,
+                'description': 'test tenant',
+            }
+        }
+
+        users_resp = {
+            'users': {
+                'values': [
+                    {
+                        'email': uuid.uuid4().hex,
+                        'enabled': True,
+                        'id': user_id1,
+                        'name': uuid.uuid4().hex,
+                    },
+                    {
+                        'email': uuid.uuid4().hex,
+                        'enabled': True,
+                        'id': user_id2,
+                        'name': uuid.uuid4().hex,
+                    },
+                ]
+            }
+        }
+
+        self.stub_url(httpretty.GET, ['tenants', tenant_id], json=tenant_resp)
+        self.stub_url(httpretty.GET,
+                      ['tenants', tenant_id, 'users'],
+                      json=users_resp)
+
+        tenant = self.client.tenants.get(tenant_id)
+        user_objs = tenant.list_users()
+
+        for u in user_objs:
+            self.assertIsInstance(u, users.User)
+
+        self.assertEqual(set([user_id1, user_id2]),
+                         set([u.id for u in user_objs]))
+
+    @httpretty.activate
+    def test_list_tenants_use_admin_url(self):
+        self.stub_url(httpretty.GET, ['tenants'], json=self.TEST_TENANTS)
+
+        self.assertEqual(self.TEST_URL, self.client.management_url)
+
+        tenant_list = self.client.tenants.list()
+        [self.assertIsInstance(t, tenants.Tenant) for t in tenant_list]
+
+        self.assertEqual(len(self.TEST_TENANTS['tenants']['values']),
+                         len(tenant_list))
+
+    @httpretty.activate
+    def test_list_tenants_fallback_to_auth_url(self):
+        new_auth_url = 'http://keystone.test:5000/v2.0'
+
+        token = fixture.V2Token(token_id=self.TEST_TOKEN,
+                                user_name=self.TEST_USER,
+                                user_id=self.TEST_USER_ID)
+
+        self.stub_auth(base_url=new_auth_url, json=token)
+        self.stub_url(httpretty.GET, ['tenants'], base_url=new_auth_url,
+                      json=self.TEST_TENANTS)
+
+        c = client.Client(username=self.TEST_USER,
+                          auth_url=new_auth_url,
+                          password=uuid.uuid4().hex)
+
+        self.assertIsNone(c.management_url)
+        tenant_list = c.tenants.list()
+        [self.assertIsInstance(t, tenants.Tenant) for t in tenant_list]
+
+        self.assertEqual(len(self.TEST_TENANTS['tenants']['values']),
+                         len(tenant_list))

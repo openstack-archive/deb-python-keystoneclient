@@ -11,8 +11,10 @@
 #    under the License.
 
 import datetime
+import uuid
 
 from keystoneclient import access
+from keystoneclient import fixture
 from keystoneclient.openstack.common import timeutils
 from keystoneclient.tests.v3 import client_fixtures
 from keystoneclient.tests.v3 import utils
@@ -40,6 +42,7 @@ class AccessInfoTest(utils.TestCase):
         self.assertEqual(auth_ref.username, 'exampleuser')
         self.assertEqual(auth_ref.user_id, 'c4da488862bd435c9e6c0275a0d0e49a')
 
+        self.assertEqual(auth_ref.role_ids, [])
         self.assertEqual(auth_ref.role_names, [])
 
         self.assertIsNone(auth_ref.project_name)
@@ -60,6 +63,11 @@ class AccessInfoTest(utils.TestCase):
 
         self.assertEqual(auth_ref.expires, timeutils.parse_isotime(
                          UNSCOPED_TOKEN['token']['expires_at']))
+        self.assertEqual(auth_ref.issued, timeutils.parse_isotime(
+                         UNSCOPED_TOKEN['token']['issued_at']))
+
+        self.assertEqual(auth_ref.expires, UNSCOPED_TOKEN.expires)
+        self.assertEqual(auth_ref.issued, UNSCOPED_TOKEN.issued)
 
     def test_will_expire_soon(self):
         expires = timeutils.utcnow() + datetime.timedelta(minutes=5)
@@ -84,6 +92,7 @@ class AccessInfoTest(utils.TestCase):
         self.assertEqual(auth_ref.username, 'exampleuser')
         self.assertEqual(auth_ref.user_id, 'c4da488862bd435c9e6c0275a0d0e49a')
 
+        self.assertEqual(auth_ref.role_ids, ['76e72a', 'f4f392'])
         self.assertEqual(auth_ref.role_names, ['admin', 'member'])
 
         self.assertEqual(auth_ref.domain_name, 'anotherdomain')
@@ -117,6 +126,7 @@ class AccessInfoTest(utils.TestCase):
         self.assertEqual(auth_ref.username, 'exampleuser')
         self.assertEqual(auth_ref.user_id, 'c4da488862bd435c9e6c0275a0d0e49a')
 
+        self.assertEqual(auth_ref.role_ids, ['76e72a', 'f4f392'])
         self.assertEqual(auth_ref.role_names, ['admin', 'member'])
 
         self.assertIsNone(auth_ref.domain_name)
@@ -144,3 +154,21 @@ class AccessInfoTest(utils.TestCase):
 
         self.assertFalse(auth_ref.domain_scoped)
         self.assertTrue(auth_ref.project_scoped)
+
+    def test_oauth_access(self):
+        consumer_id = uuid.uuid4().hex
+        access_token_id = uuid.uuid4().hex
+
+        token = fixture.V3Token()
+        token.set_project_scope()
+        token.set_oauth(access_token_id=access_token_id,
+                        consumer_id=consumer_id)
+
+        auth_ref = access.AccessInfo.factory(body=token)
+
+        self.assertEqual(consumer_id, auth_ref.oauth_consumer_id)
+        self.assertEqual(access_token_id, auth_ref.oauth_access_token_id)
+
+        self.assertEqual(consumer_id, auth_ref['OS-OAUTH1']['consumer_id'])
+        self.assertEqual(access_token_id,
+                         auth_ref['OS-OAUTH1']['access_token_id'])

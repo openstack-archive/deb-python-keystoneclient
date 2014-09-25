@@ -51,8 +51,5 @@ class OAuthMethod(v3.AuthMethod):
         return 'oauth1', {}
 
 
-class OAuth(v3._AuthConstructor):
+class OAuth(v3.AuthConstructor):
     _auth_method_class = OAuthMethod
-
-    def __init__(self, auth_url, **kwargs):
-        super(OAuth, self).__init__(auth_url, **kwargs)
