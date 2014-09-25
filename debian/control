@@ -9,16 +9,13 @@ Build-Depends: debhelper (>= 9),
                openstack-pkg-tools,
                python-all (>= 2.6.6-3~),
                python-pbr (>= 0.8),
-               python-setuptools,
-               python-sphinx,
-               python3-all (>= 3.2),
-               python3-pbr (>= 0.8),
-               python3-setuptools
+               python-setuptools
 Build-Depends-Indep: memcached,
                      python-babel (>= 1.3),
                      python-coverage (>= 3.6),
                      python-crypto,
                      python-fixtures (>= 0.3.14),
+                     python-hacking (>= 0.8.0),
                      python-httpretty (>= 0.8.0),
                      python-iso8601 (>= 0.1.9),
                      python-keyring (>= 2.1),
@@ -39,27 +36,6 @@ Build-Depends-Indep: memcached,
                      python-testresources (>= 0.2.4),
                      python-testtools (>= 0.9.34),
                      python-webob (>= 1.2.3),
-                     python3-babel (>= 1.3),
-                     python3-crypto,
-                     python3-httpretty (>= 0.8.0),
-                     python3-iso8601 (>= 0.1.9),
-                     python3-keyring,
-                     python3-mock (>= 1.0),
-                     python3-mox3,
-                     python3-netaddr,
-                     python3-oauthlib (>= 0.6),
-                     python3-oslo.config (>= 1:1.2.1),
-                     python3-pkg-resources,
-                     python3-prettytable (>= 0.7),
-                     python3-requests (>= 1.1),
-                     python3-simplejson (>= 2.0.9),
-                     python3-six (>= 1.6.0),
-                     python3-stevedore (>= 0.14),
-                     python3-subunit (>= 0.0.18),
-                     python3-testrepository (>= 0.0.18),
-                     python3-testresources (>= 0.2.4),
-                     python3-testtools (>= 0.9.34),
-                     python3-webob (>= 1.2.3),
                      subunit (>= 0.0.18),
                      testrepository (>= 0.0.18)
 Standards-Version: 3.9.5
@@ -87,7 +63,7 @@ Depends: python-babel (>= 1.3),
          ${misc:Depends},
          ${python:Depends},
          ${sphinxdoc:Depends}
-Description: client library for the OpenStack Keystone API - Python 2.x
+Description: client library for the OpenStack Keystone API
  This is the identity service used by OpenStack for authentication (authN)
  and high-level authorization (authZ). It currently supports token-based
  authN with user/service authZ, and is scalable to support OAuth, SAML,
@@ -99,57 +75,3 @@ Description: client library for the OpenStack Keystone API - Python 2.x
  .
  Installing this package gets you a shell command, that you can use to
  interact with Keystone's API.
- .
- This package provides the Python 2.x module and middleware.
-
-Package: python3-keystoneclient
-Architecture: all
-Pre-Depends: dpkg (>= 1.15.6~)
-Depends: python3-babel (>= 1.3),
-         python3-iso8601 (>= 0.1.9),
-         python3-keyring,
-         python3-netaddr,
-         python3-oslo.config (>= 1:1.2.1),
-         python3-pbr (>= 0.8),
-         python3-pkg-resources,
-         python3-prettytable (>= 0.7),
-         python3-requests (>= 1.1),
-         python3-simplejson (>= 2.0.9),
-         python3-six (>= 1.6.0),
-         python3-stevedore (>= 0.14),
-         ${misc:Depends},
-         ${python3:Depends}
-Description: client library for the OpenStack Keystone API - Python 3.x
- This is the identity service used by OpenStack for authentication (authN)
- and high-level authorization (authZ). It currently supports token-based
- authN with user/service authZ, and is scalable to support OAuth, SAML,
- and OpenID in future versions. Out of the box, Keystone uses SQLite for
- its identity store database, with the option to connect to external LDAP.
- .
- This is a client for the OpenStack Keystone API. There's a Python API
- (the "keystoneclient" module), and a command-line script ("keystone").
- .
- Installing this package gets you a shell command, that you can use to
- interact with Keystone's API.
- .
- This package provides the Python 3.x module and middleware.
-
-Package: python-keystoneclient-doc
-Architecture: all
-Pre-Depends: dpkg (>= 1.15.6~)
-Section: doc
-Depends: ${misc:Depends}, ${sphinxdoc:Depends}
-Description: client library for the OpenStack Keystone API - doc
- This is the identity service used by OpenStack for authentication (authN)
- and high-level authorization (authZ). It currently supports token-based
- authN with user/service authZ, and is scalable to support OAuth, SAML,
- and OpenID in future versions. Out of the box, Keystone uses SQLite for
- its identity store database, with the option to connect to external LDAP.
- .
- This is a client for the OpenStack Keystone API. There's a Python API
- (the "keystoneclient" module), and a command-line script ("keystone").
- .
- Installing this package gets you a shell command, that you can use to
- interact with Keystone's API.
- .
- This package provides the documentation.
