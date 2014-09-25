@@ -1,2 +1,1 @@
 no-intersphinx.patch
-do-not-call-TestCase.setUp-twice.patch

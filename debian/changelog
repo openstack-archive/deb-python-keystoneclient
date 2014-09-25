@@ -1,7 +1,10 @@
 python-keystoneclient (1:0.11.1-1) experimental; urgency=medium
 
-  * New upstream release.
+  * New upstream release:
+    - This fixes CVE-2014-7144 (Closes: #762749).
   * Updated (build-)depends for this release.
+  * Refreshed no-intersphinx.patch.
+  * Removed do-not-call-TestCase.setUp-twice.patch, not needed anymore.
 
  -- Thomas Goirand <zigo@debian.org>  Thu, 25 Sep 2014 14:51:59 +0000
 
