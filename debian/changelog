@@ -1,6 +1,7 @@
 python-keystoneclient (1:1.0.0-1) UNRELEASED; urgency=medium
 
   * New upstream release.
+  * Fixed (build-)depends for this release.
 
  -- Thomas Goirand <zigo@debian.org>  Sun, 08 Feb 2015 18:35:45 +0100
 
