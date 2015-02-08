@@ -16,6 +16,7 @@ import six
 
 from keystoneclient import _discover
 from keystoneclient import exceptions
+from keystoneclient.i18n import _
 from keystoneclient import session as client_session
 from keystoneclient import utils
 from keystoneclient.v2_0 import client as v2_client
@@ -27,6 +28,46 @@ _logger = logging.getLogger(__name__)
 
 _CLIENT_VERSIONS = {2: v2_client.Client,
                     3: v3_client.Client}
+
+
+# functions needed from the private file that can be made public
+
+def normalize_version_number(version):
+    """Turn a version representation into a tuple.
+
+    Takes a string, tuple or float which represent version formats we can
+    handle and converts them into a (major, minor) version tuple that we can
+    actually use for discovery.
+
+    e.g. 'v3.3' gives (3, 3)
+         3.1 gives (3, 1)
+
+    :param version: Inputted version number to try and convert.
+
+    :returns: A usable version tuple
+    :rtype: tuple
+
+    :raises TypeError: if the inputted version cannot be converted to tuple.
+    """
+    return _discover.normalize_version_number(version)
+
+
+def version_match(required, candidate):
+    """Test that an available version is a suitable match for a required
+    version.
+
+    To be suitable a version must be of the same major version as required
+    and be at least a match in minor/patch level.
+
+    eg. 3.3 is a match for a required 3.1 but 4.1 is not.
+
+    :param tuple required: the version that must be met.
+    :param tuple candidate: the version to test against required.
+
+    :returns: True if candidate is suitable False otherwise.
+    :rtype: bool
+    """
+    return _discover.version_match(required, candidate)
 
 
 def available_versions(url, session=None, **kwargs):
@@ -43,69 +84,63 @@ class Discover(_discover.Discover):
 
     Querying the server is done on object creation and every subsequent method
     operates upon the data that was retrieved.
+
+    The connection parameters associated with this method are the same format
+    and name as those used by a client (see
+    :py:class:`keystoneclient.v2_0.client.Client` and
+    :py:class:`keystoneclient.v3.client.Client`). If not overridden in
+    subsequent methods they will also be what is passed to the constructed
+    client.
+
+    In the event that auth_url and endpoint is provided then auth_url will be
+    used in accordance with how the client operates.
+
+    :param session: A session object that will be used for communication.
+                    Clients will also be constructed with this session.
+    :type session: keystoneclient.session.Session
+    :param string auth_url: Identity service endpoint for authorization.
+                            (optional)
+    :param string endpoint: A user-supplied endpoint URL for the identity
+                            service. (optional)
+    :param string original_ip: The original IP of the requesting user which
+                               will be sent to identity service in a
+                               'Forwarded' header. (optional) DEPRECATED: use
+                               the session object. This is ignored if a session
+                               is provided.
+    :param boolean debug: Enables debug logging of all request and responses to
+                          the identity service. default False (optional)
+                          DEPRECATED: use the session object. This is ignored
+                          if a session is provided.
+    :param string cacert: Path to the Privacy Enhanced Mail (PEM) file which
+                          contains the trusted authority X.509 certificates
+                          needed to established SSL connection with the
+                          identity service. (optional) DEPRECATED: use the
+                          session object. This is ignored if a session is
+                          provided.
+    :param string key: Path to the Privacy Enhanced Mail (PEM) file which
+                       contains the unencrypted client private key needed to
+                       established two-way SSL connection with the identity
+                       service. (optional) DEPRECATED: use the session object.
+                       This is ignored if a session is provided.
+    :param string cert: Path to the Privacy Enhanced Mail (PEM) file which
+                        contains the corresponding X.509 client certificate
+                        needed to established two-way SSL connection with the
+                        identity service. (optional) DEPRECATED: use the
+                        session object. This is ignored if a session is
+                        provided.
+    :param boolean insecure: Does not perform X.509 certificate validation when
+                             establishing SSL connection with identity service.
+                             default: False (optional) DEPRECATED: use the
+                             session object. This is ignored if a session is
+                             provided.
+    :param bool authenticated: Should a token be used to perform the initial
+                               discovery operations. default: None (attach a
+                               token if an auth plugin is available).
+
     """
 
     @utils.positional(2)
     def __init__(self, session=None, authenticated=None, **kwargs):
-        """Construct a new discovery object.
-
-        The connection parameters associated with this method are the same
-        format and name as those used by a client (see
-        keystoneclient.v2_0.client.Client and keystoneclient.v3.client.Client).
-        If not overridden in subsequent methods they will also be what is
-        passed to the constructed client.
-
-        In the event that auth_url and endpoint is provided then auth_url will
-        be used in accordance with how the client operates.
-
-        The initialization process also queries the server.
-
-        :param Session session: A session object that will be used for
-                                communication. Clients will also be constructed
-                                with this session.
-        :param string auth_url: Identity service endpoint for authorization.
-                                (optional)
-        :param string endpoint: A user-supplied endpoint URL for the identity
-                                service. (optional)
-        :param string original_ip: The original IP of the requesting user
-                                   which will be sent to identity service in a
-                                   'Forwarded' header. (optional)
-                                   DEPRECATED: use the session object. This is
-                                   ignored if a session is provided.
-        :param boolean debug: Enables debug logging of all request and
-                              responses to the identity service.
-                              default False (optional)
-                              DEPRECATED: use the session object. This is
-                              ignored if a session is provided.
-        :param string cacert: Path to the Privacy Enhanced Mail (PEM) file
-                              which contains the trusted authority X.509
-                              certificates needed to established SSL connection
-                              with the identity service. (optional)
-                              DEPRECATED: use the session object. This is
-                              ignored if a session is provided.
-        :param string key: Path to the Privacy Enhanced Mail (PEM) file which
-                           contains the unencrypted client private key needed
-                           to established two-way SSL connection with the
-                           identity service. (optional)
-                           DEPRECATED: use the session object. This is
-                           ignored if a session is provided.
-        :param string cert: Path to the Privacy Enhanced Mail (PEM) file which
-                            contains the corresponding X.509 client certificate
-                            needed to established two-way SSL connection with
-                            the identity service. (optional)
-                            DEPRECATED: use the session object. This is
-                            ignored if a session is provided.
-        :param boolean insecure: Does not perform X.509 certificate validation
-                                 when establishing SSL connection with identity
-                                 service. default: False (optional)
-                                 DEPRECATED: use the session object. This is
-                                 ignored if a session is provided.
-        :param bool authenticated: Should a token be used to perform the
-                                   initial discovery operations.
-                                   default: None (attach a token if an auth
-                                   plugin is available).
-        """
-
         if not session:
             session = client_session.Session.construct(kwargs)
         kwargs['session'] = session
@@ -122,9 +157,9 @@ class Discover(_discover.Discover):
             url = auth_url
 
         if not url:
-            raise exceptions.DiscoveryFailure('Not enough information to '
-                                              'determine URL. Provide either '
-                                              'auth_url or endpoint')
+            raise exceptions.DiscoveryFailure(
+                _('Not enough information to determine URL. Provide either '
+                  'auth_url or endpoint'))
 
         self._client_kwargs = kwargs
         super(Discover, self).__init__(session, url,
@@ -163,8 +198,9 @@ class Discover(_discover.Discover):
         :param bool allow_deprecated: Allow deprecated version endpoints.
         :param bool allow_unknown: Allow endpoints with an unrecognised status.
 
-        :returns list: The endpoints returned from the server that match the
-                       criteria.
+        :returns: The endpoints returned from the server that match the
+                  criteria.
+        :rtype: list
 
         Example::
 
@@ -213,10 +249,11 @@ class Discover(_discover.Discover):
                 version_data = all_versions[-1]
 
         if not version_data:
-            msg = 'Could not find a suitable endpoint'
+            msg = _('Could not find a suitable endpoint')
 
             if version:
-                msg += ' for client version: %s' % str(version)
+                msg = _('Could not find a suitable endpoint for client '
+                        'version: %s') % str(version)
 
             raise exceptions.VersionNotAvailable(msg)
 
@@ -228,7 +265,7 @@ class Discover(_discover.Discover):
             client_class = _CLIENT_VERSIONS[version_data['version'][0]]
         except KeyError:
             version = '.'.join(str(v) for v in version_data['version'])
-            msg = 'No client available for version: %s' % version
+            msg = _('No client available for version: %s') % version
             raise exceptions.DiscoveryFailure(msg)
 
         # kwargs should take priority over stored kwargs.
@@ -261,8 +298,10 @@ class Discover(_discover.Discover):
 
         :returns: An instantiated identity client object.
 
-        :raises: DiscoveryFailure if the server response is invalid
-        :raises: VersionNotAvailable if a suitable client cannot be found.
+        :raises keystoneclient.exceptions.DiscoveryFailure: if the server
+                                                            response is invalid
+        :raises keystoneclient.exceptions.VersionNotAvailable: if a suitable
+            client cannot be found.
         """
         version_data = self._calculate_version(version, unstable)
         return self._create_client(version_data, **kwargs)

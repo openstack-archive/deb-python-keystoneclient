@@ -15,6 +15,7 @@ from __future__ import unicode_literals
 
 from six.moves.urllib import parse as urlparse
 
+from keystoneclient import auth
 from keystoneclient import base
 from keystoneclient.v3.contrib.oauth1 import utils
 
@@ -57,13 +58,14 @@ class RequestTokenManager(base.CrudManager):
 
     def create(self, consumer_key, consumer_secret, project):
         endpoint = utils.OAUTH_PATH + '/request_token'
-        headers = {'requested_project_id': base.getid(project)}
+        headers = {'requested-project-id': base.getid(project)}
         oauth_client = oauth1.Client(consumer_key,
                                      client_secret=consumer_secret,
                                      signature_method=oauth1.SIGNATURE_HMAC,
                                      callback_uri="oob")
-        url = self.client.auth_url.rstrip("/") + endpoint
-        url, headers, body = oauth_client.sign(url, http_method='POST',
+        url = self.api.get_endpoint(interface=auth.AUTH_INTERFACE).rstrip("/")
+        url, headers, body = oauth_client.sign(url + endpoint,
+                                               http_method='POST',
                                                headers=headers)
         resp, body = self.client.post(endpoint, headers=headers)
         token = utils.get_oauth_token_from_body(resp.content)

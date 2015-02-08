@@ -16,6 +16,12 @@
 """
 TOKEN-BASED AUTH MIDDLEWARE
 
+.. warning::
+
+  This module is DEPRECATED. The auth_token middleware has been moved to the
+  `keystonemiddleware repository
+  <http://docs.openstack.org/developer/keystonemiddleware/>`_.
+
 This WSGI component:
 
 * Verifies that incoming client requests have valid tokens by validating
@@ -25,9 +31,6 @@ This WSGI component:
   component (usually the OpenStack service)
 * Collects and forwards identity information based on a valid token
   such as user name, tenant, etc
-
-Refer to: http://docs.openstack.org/developer/python-keystoneclient/
-middlewarearchitecture.html
 
 HEADERS
 -------
@@ -155,6 +158,8 @@ import time
 
 import netaddr
 from oslo.config import cfg
+from oslo.serialization import jsonutils
+from oslo.utils import timeutils
 import requests
 import six
 from six.moves import urllib
@@ -163,9 +168,7 @@ from keystoneclient import access
 from keystoneclient.common import cms
 from keystoneclient import exceptions
 from keystoneclient.middleware import memcache_crypt
-from keystoneclient.openstack.common import jsonutils
 from keystoneclient.openstack.common import memorycache
-from keystoneclient.openstack.common import timeutils
 
 
 # alternative middleware configuration in the main application's
@@ -1110,7 +1113,7 @@ class AuthProtocol(object):
         :param retry: flag that forces the middleware to retry
                       user authentication when an indeterminate
                       response is received. Optional.
-        :return: token object received from keystone on success
+        :returns: token object received from keystone on success
         :raise InvalidUserToken: if token is rejected
         :raise ServiceError: if unable to authenticate token
 

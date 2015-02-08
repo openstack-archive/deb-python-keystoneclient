@@ -25,7 +25,9 @@ import functools
 import six
 from six.moves import urllib
 
+from keystoneclient import auth
 from keystoneclient import exceptions
+from keystoneclient.i18n import _
 from keystoneclient.openstack.common.apiclient import base
 
 
@@ -77,14 +79,13 @@ class Manager(object):
 
     Managers interact with a particular type of API (servers, flavors, images,
     etc.) and provide CRUD operations for them.
+
+    :param client: instance of BaseClient descendant for HTTP requests
+
     """
     resource_class = None
 
     def __init__(self, client):
-        """Initializes Manager with `client`.
-
-        :param client: instance of BaseClient descendant for HTTP requests
-        """
         super(Manager, self).__init__()
         self.client = client
 
@@ -209,16 +210,15 @@ class Manager(object):
         return self.client.delete(url, **kwargs)
 
     def _update(self, url, body=None, response_key=None, method="PUT",
-                management=True, **kwargs):
+                **kwargs):
         methods = {"PUT": self.client.put,
                    "POST": self.client.post,
                    "PATCH": self.client.patch}
         try:
             resp, body = methods[method](url, body=body,
-                                         management=management,
                                          **kwargs)
         except KeyError:
-            raise exceptions.ClientException("Invalid update method: %s"
+            raise exceptions.ClientException(_("Invalid update method: %s")
                                              % method)
         # PUT requests may not return a body
         if body:
@@ -243,7 +243,8 @@ class ManagerWithFind(Manager):
         num = len(rl)
 
         if num == 0:
-            msg = "No %s matching %s." % (self.resource_class.__name__, kwargs)
+            msg = _("No %(name)s matching %(kwargs)s.") % {
+                'name': self.resource_class.__name__, 'kwargs': kwargs}
             raise exceptions.NotFound(404, msg)
         elif num > 1:
             raise exceptions.NoUniqueMatch
@@ -336,20 +337,27 @@ class CrudManager(Manager):
     def head(self, **kwargs):
         return self._head(self.build_url(dict_args_in_out=kwargs))
 
+    def _build_query(self, params):
+        return '?%s' % urllib.parse.urlencode(params) if params else ''
+
     @filter_kwargs
-    def list(self, **kwargs):
+    def list(self, fallback_to_auth=False, **kwargs):
         url = self.build_url(dict_args_in_out=kwargs)
 
-        if kwargs:
-            query = '?%s' % urllib.parse.urlencode(kwargs)
-        else:
-            query = ''
-        return self._list(
-            '%(url)s%(query)s' % {
-                'url': url,
-                'query': query,
-            },
-            self.collection_key)
+        try:
+            query = self._build_query(kwargs)
+            url_query = '%(url)s%(query)s' % {'url': url, 'query': query}
+            return self._list(
+                url_query,
+                self.collection_key)
+        except exceptions.EmptyCatalog:
+            if fallback_to_auth:
+                return self._list(
+                    url_query,
+                    self.collection_key,
+                    endpoint_filter={'interface': auth.AUTH_INTERFACE})
+            else:
+                raise
 
     @filter_kwargs
     def put(self, **kwargs):
@@ -377,10 +385,7 @@ class CrudManager(Manager):
         """Find a single item with attributes matching ``**kwargs``."""
         url = self.build_url(dict_args_in_out=kwargs)
 
-        if kwargs:
-            query = '?%s' % urllib.parse.urlencode(kwargs)
-        else:
-            query = ''
+        query = self._build_query(kwargs)
         rl = self._list(
             '%(url)s%(query)s' % {
                 'url': url,
@@ -390,7 +395,8 @@ class CrudManager(Manager):
         num = len(rl)
 
         if num == 0:
-            msg = "No %s matching %s." % (self.resource_class.__name__, kwargs)
+            msg = _("No %(name)s matching %(kwargs)s.") % {
+                'name': self.resource_class.__name__, 'kwargs': kwargs}
             raise exceptions.NotFound(404, msg)
         elif num > 1:
             raise exceptions.NoUniqueMatch

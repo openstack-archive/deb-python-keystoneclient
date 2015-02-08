@@ -14,6 +14,9 @@
 
 from keystoneclient import base
 from keystoneclient import exceptions
+from keystoneclient.i18n import _
+from keystoneclient.v3 import endpoints
+from keystoneclient.v3 import projects
 
 
 class EndpointFilterManager(base.Manager):
@@ -31,7 +34,7 @@ class EndpointFilterManager(base.Manager):
         elif endpoint_id:
             api_path = '/endpoints/%s/projects' % (endpoint_id)
         else:
-            msg = 'Must specify a project, an endpoint, or both'
+            msg = _('Must specify a project, an endpoint, or both')
             raise exceptions.ValidationError(msg)
 
         return self.OS_EP_FILTER_EXT + api_path
@@ -39,7 +42,7 @@ class EndpointFilterManager(base.Manager):
     def add_endpoint_to_project(self, project, endpoint):
         """Create a project-endpoint association."""
         if not (project and endpoint):
-            raise ValueError('project and endpoint are required')
+            raise ValueError(_('project and endpoint are required'))
 
         base_url = self._build_base_url(project=project,
                                         endpoint=endpoint)
@@ -48,7 +51,7 @@ class EndpointFilterManager(base.Manager):
     def delete_endpoint_from_project(self, project, endpoint):
         """Remove a project-endpoint association."""
         if not (project and endpoint):
-            raise ValueError('project and endpoint are required')
+            raise ValueError(_('project and endpoint are required'))
 
         base_url = self._build_base_url(project=project,
                                         endpoint=endpoint)
@@ -57,7 +60,7 @@ class EndpointFilterManager(base.Manager):
     def check_endpoint_in_project(self, project, endpoint):
         """Checks if project-endpoint association exist."""
         if not (project and endpoint):
-            raise ValueError('project and endpoint are required')
+            raise ValueError(_('project and endpoint are required'))
 
         base_url = self._build_base_url(project=project,
                                         endpoint=endpoint)
@@ -66,21 +69,21 @@ class EndpointFilterManager(base.Manager):
     def list_endpoints_for_project(self, project):
         """List all endpoints for a given project."""
         if not project:
-            raise ValueError('project is required')
+            raise ValueError(_('project is required'))
 
         base_url = self._build_base_url(project=project)
         return super(EndpointFilterManager, self)._list(
             base_url,
-            self.client.endpoints.collection_key,
-            obj_class=self.client.endpoints.resource_class)
+            endpoints.EndpointManager.collection_key,
+            obj_class=endpoints.EndpointManager.resource_class)
 
     def list_projects_for_endpoint(self, endpoint):
         """List all projects for a given endpoint."""
         if not endpoint:
-            raise ValueError('endpoint is required')
+            raise ValueError(_('endpoint is required'))
 
         base_url = self._build_base_url(endpoint=endpoint)
         return super(EndpointFilterManager, self)._list(
             base_url,
-            self.client.projects.collection_key,
-            obj_class=self.client.projects.resource_class)
+            projects.ProjectManager.collection_key,
+            obj_class=projects.ProjectManager.resource_class)

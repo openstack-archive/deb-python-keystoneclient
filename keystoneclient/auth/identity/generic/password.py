@@ -14,10 +14,10 @@ import logging
 
 from oslo.config import cfg
 
-from keystoneclient import _discover
 from keystoneclient.auth.identity.generic import base
 from keystoneclient.auth.identity import v2
 from keystoneclient.auth.identity import v3
+from keystoneclient import discover
 from keystoneclient import utils
 
 LOG = logging.getLogger(__name__)
@@ -25,6 +25,7 @@ LOG = logging.getLogger(__name__)
 
 def get_options():
     return [
+        cfg.StrOpt('user-id', help='User id'),
         cfg.StrOpt('user-name', dest='username', help='Username',
                    deprecated_name='username'),
         cfg.StrOpt('user-domain-id', help="User's domain id"),
@@ -34,19 +35,19 @@ def get_options():
 
 
 class Password(base.BaseGenericPlugin):
-    """A common user/password authentication plugin."""
+    """A common user/password authentication plugin.
+
+    :param string username: Username for authentication.
+    :param string user_id: User ID for authentication.
+    :param string password: Password for authentication.
+    :param string user_domain_id: User's domain ID for authentication.
+    :param string user_domain_name: User's domain name for authentication.
+
+    """
 
     @utils.positional()
     def __init__(self, auth_url, username=None, user_id=None, password=None,
                  user_domain_id=None, user_domain_name=None, **kwargs):
-        """Construct plugin.
-
-        :param string username: Username for authentication.
-        :param string user_id: User ID for authentication.
-        :param string password: Password for authentication.
-        :param string user_domain_id: User's domain ID for authentication.
-        :param string user_domain_name: User's domain name for authentication.
-        """
         super(Password, self).__init__(auth_url=auth_url, **kwargs)
 
         self._username = username
@@ -56,7 +57,7 @@ class Password(base.BaseGenericPlugin):
         self._user_domain_name = user_domain_name
 
     def create_plugin(self, session, version, url, raw_status=None):
-        if _discover.version_match((2,), version):
+        if discover.version_match((2,), version):
             if self._user_domain_id or self._user_domain_name:
                 # If you specify any domain parameters it won't work so quit.
                 return None
@@ -67,7 +68,7 @@ class Password(base.BaseGenericPlugin):
                                password=self._password,
                                **self._v2_params)
 
-        elif _discover.version_match((3,), version):
+        elif discover.version_match((3,), version):
             return v3.Password(auth_url=url,
                                user_id=self._user_id,
                                username=self._username,

@@ -15,10 +15,12 @@
 
 import logging
 
+from oslo.serialization import jsonutils
+
 from keystoneclient.auth.identity import v3 as v3_auth
 from keystoneclient import exceptions
 from keystoneclient import httpclient
-from keystoneclient.openstack.common import jsonutils
+from keystoneclient.i18n import _
 from keystoneclient.v3.contrib import endpoint_filter
 from keystoneclient.v3.contrib import endpoint_policy
 from keystoneclient.v3.contrib import federation
@@ -167,23 +169,26 @@ EndpointPolicyManager`
         """Initialize a new client for the Keystone v3 API."""
         super(Client, self).__init__(**kwargs)
 
-        self.credentials = credentials.CredentialManager(self)
-        self.endpoint_filter = endpoint_filter.EndpointFilterManager(self)
-        self.endpoint_policy = endpoint_policy.EndpointPolicyManager(self)
-        self.endpoints = endpoints.EndpointManager(self)
-        self.domains = domains.DomainManager(self)
-        self.federation = federation.FederationManager(self)
-        self.groups = groups.GroupManager(self)
-        self.oauth1 = oauth1.create_oauth_manager(self)
-        self.policies = policies.PolicyManager(self)
-        self.projects = projects.ProjectManager(self)
-        self.regions = regions.RegionManager(self)
-        self.role_assignments = role_assignments.RoleAssignmentManager(self)
-        self.roles = roles.RoleManager(self)
-        self.services = services.ServiceManager(self)
-        self.tokens = tokens.TokenManager(self)
-        self.trusts = trusts.TrustManager(self)
-        self.users = users.UserManager(self)
+        self.credentials = credentials.CredentialManager(self._adapter)
+        self.endpoint_filter = endpoint_filter.EndpointFilterManager(
+            self._adapter)
+        self.endpoint_policy = endpoint_policy.EndpointPolicyManager(
+            self._adapter)
+        self.endpoints = endpoints.EndpointManager(self._adapter)
+        self.domains = domains.DomainManager(self._adapter)
+        self.federation = federation.FederationManager(self._adapter)
+        self.groups = groups.GroupManager(self._adapter)
+        self.oauth1 = oauth1.create_oauth_manager(self._adapter)
+        self.policies = policies.PolicyManager(self._adapter)
+        self.projects = projects.ProjectManager(self._adapter)
+        self.regions = regions.RegionManager(self._adapter)
+        self.role_assignments = (
+            role_assignments.RoleAssignmentManager(self._adapter))
+        self.roles = roles.RoleManager(self._adapter)
+        self.services = services.ServiceManager(self._adapter)
+        self.tokens = tokens.TokenManager(self._adapter)
+        self.trusts = trusts.TrustManager(self._adapter)
+        self.users = users.UserManager(self._adapter)
 
         # DEPRECATED: if session is passed then we go to the new behaviour of
         # authenticating on the first required call.
@@ -202,7 +207,7 @@ EndpointPolicyManager`
         if self.auth_ref.domain_scoped:
             if not self.auth_ref.domain_id:
                 raise exceptions.AuthorizationFailure(
-                    "Token didn't provide domain_id")
+                    _("Token didn't provide domain_id"))
             self._process_management_url(kwargs.get('region_name'))
             self.domain_name = self.auth_ref.domain_name
             self.domain_id = self.auth_ref.domain_id
@@ -227,14 +232,15 @@ EndpointPolicyManager`
         be used in the request.
 
         :returns: access.AccessInfo if authentication was successful.
-        :raises: AuthorizationFailure if unable to authenticate or validate
-                 the existing authorization token
-        :raises: Unauthorized if authentication fails due to invalid token
+        :raises keystoneclient.exceptions.AuthorizationFailure: if unable to
+            authenticate or validate the existing authorization token.
+        :raises keystoneclient.exceptions.Unauthorized: if authentication fails
+            due to invalid token.
 
         """
         try:
             if auth_url is None:
-                raise ValueError("Cannot authenticate without an auth_url")
+                raise ValueError(_("Cannot authenticate without an auth_url"))
 
             auth_methods = []
 
@@ -250,7 +256,7 @@ EndpointPolicyManager`
                 auth_methods.append(m)
 
             if not auth_methods:
-                msg = 'A user and password or token is required.'
+                msg = _('A user and password or token is required.')
                 raise exceptions.AuthorizationFailure(msg)
 
             plugin = v3_auth.Auth(auth_url, auth_methods,
@@ -267,8 +273,9 @@ EndpointPolicyManager`
             _logger.debug('Authorization failed.')
             raise
         except exceptions.EndpointNotFound:
-            msg = 'There was no suitable authentication url for this request'
+            msg = _('There was no suitable authentication url for this'
+                    ' request')
             raise exceptions.AuthorizationFailure(msg)
         except Exception as e:
-            raise exceptions.AuthorizationFailure('Authorization failed: '
-                                                  '%s' % e)
+            raise exceptions.AuthorizationFailure(
+                _('Authorization failed: %s') % e)

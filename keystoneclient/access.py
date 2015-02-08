@@ -17,7 +17,9 @@
 
 import datetime
 
-from keystoneclient.openstack.common import timeutils
+from oslo.utils import timeutils
+
+from keystoneclient.i18n import _
 from keystoneclient import service_catalog
 
 
@@ -62,7 +64,7 @@ class AccessInfo(dict):
                 else:
                     auth_ref = AccessInfoV2(**kwargs)
             else:
-                raise NotImplementedError('Unrecognized auth response')
+                raise NotImplementedError(_('Unrecognized auth response'))
         else:
             auth_ref = AccessInfoV2(**kwargs)
 
@@ -83,7 +85,8 @@ class AccessInfo(dict):
     def will_expire_soon(self, stale_duration=None):
         """Determines if expiration is about to occur.
 
-        :return: boolean : true if expiration is within the given duration
+        :returns: true if expiration is within the given duration
+        :rtype: boolean
 
         """
         stale_duration = (STALE_TOKEN_DURATION if stale_duration is None
@@ -100,7 +103,8 @@ class AccessInfo(dict):
         """Determines if processing v2 or v3 token given a successful
         auth body or a user-provided dict.
 
-        :return: boolean : true if auth body matches implementing class
+        :returns: true if auth body matches implementing class
+        :rtype: boolean
         """
         raise NotImplementedError()
 

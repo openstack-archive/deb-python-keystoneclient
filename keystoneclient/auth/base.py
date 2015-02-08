@@ -17,6 +17,8 @@ import six
 import stevedore
 
 from keystoneclient import exceptions
+from keystoneclient.i18n import _
+
 
 # NOTE(jamielennox): The AUTH_INTERFACE is a special value that can be
 # requested from get_endpoint. If a plugin receives this as the value of
@@ -33,14 +35,15 @@ def get_plugin_class(name):
 
     :returns: An auth plugin class.
 
-    :raises exceptions.NoMatchingPlugin: if a plugin cannot be created.
+    :raises keystoneclient.exceptions.NoMatchingPlugin: if a plugin cannot be
+                                                        created.
     """
     try:
         mgr = stevedore.DriverManager(namespace=PLUGIN_NAMESPACE,
                                       name=name,
                                       invoke_on_load=False)
     except RuntimeError:
-        msg = 'The plugin %s could not be found' % name
+        msg = _('The plugin %s could not be found') % name
         raise exceptions.NoMatchingPlugin(msg)
 
     return mgr.driver
@@ -64,7 +67,8 @@ class BaseAuthPlugin(object):
         Returning None will indicate that no token was able to be retrieved.
 
         :param session: A session object so the plugin can make HTTP calls.
-        :return string: A token to use.
+        :return: A token to use.
+        :rtype: string
         """
 
     def get_endpoint(self, session, **kwargs):
@@ -83,8 +87,9 @@ class BaseAuthPlugin(object):
         :param Session session: The session object that the auth_plugin
                                 belongs to.
 
-        :returns string: The base URL that will be used to talk to the
-                         required service or None if not available.
+        :returns: The base URL that will be used to talk to the required
+                  service or None if not available.
+        :rtype: string
         """
 
     def invalidate(self):
@@ -96,9 +101,10 @@ class BaseAuthPlugin(object):
         returned to indicate that the token may have been revoked or is
         otherwise now invalid.
 
-        :returns bool: True if there was something that the plugin did to
-                       invalidate. This means that it makes sense to try again.
-                       If nothing happens returns False to indicate give up.
+        :returns: True if there was something that the plugin did to
+                  invalidate. This means that it makes sense to try again. If
+                  nothing happens returns False to indicate give up.
+        :rtype: bool
         """
         return False
 
@@ -108,8 +114,9 @@ class BaseAuthPlugin(object):
 
         This list may be used to generate CLI or config arguments.
 
-        :returns list: A list of Param objects describing available plugin
-                       parameters.
+        :returns: A list of Param objects describing available plugin
+                  parameters.
+        :rtype: list
         """
         return []
 
@@ -148,14 +155,12 @@ class BaseAuthPlugin(object):
                 args.append('--os-%s' % o.name)
                 envs.append('OS_%s' % o.name.replace('-', '_').upper())
 
-            default = opt.default
-            if default is None:
-                # select the first ENV that is not false-y or return None
-                env_vars = (os.environ.get(e) for e in envs)
-                default = six.next(six.moves.filter(None, env_vars), None)
+            # select the first ENV that is not false-y or return None
+            env_vars = (os.environ.get(e) for e in envs)
+            default = six.next(six.moves.filter(None, env_vars), None)
 
             parser.add_argument(*args,
-                                default=default,
+                                default=default or opt.default,
                                 metavar=opt.metavar,
                                 help=opt.help,
                                 dest='os_%s' % opt.dest)
@@ -198,7 +203,8 @@ class BaseAuthPlugin(object):
         :param conf: An oslo.config conf object.
         :param string group: The group name that options should be read from.
 
-        :returns plugin: An authentication Plugin.
+        :returns: An authentication Plugin.
+        :rtype: plugin:
         """
         plugin_opts = cls.get_options()
 

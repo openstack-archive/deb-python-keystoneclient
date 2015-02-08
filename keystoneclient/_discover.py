@@ -25,6 +25,7 @@ import logging
 import re
 
 from keystoneclient import exceptions
+from keystoneclient.i18n import _, _LI, _LW
 from keystoneclient import utils
 
 
@@ -65,7 +66,7 @@ def get_version_data(session, url, authenticated=None):
             pass
 
     err_text = resp.text[:50] + '...' if len(resp.text) > 50 else resp.text
-    msg = 'Invalid Response - Bad version data returned: %s' % err_text
+    msg = _('Invalid Response - Bad version data returned: %s') % err_text
     raise exceptions.DiscoveryFailure(msg)
 
 
@@ -99,7 +100,7 @@ def normalize_version_number(version):
     except Exception:
         pass
 
-    raise TypeError('Invalid version specified: %s' % version)
+    raise TypeError(_('Invalid version specified: %s') % version)
 
 
 def version_match(required, candidate):
@@ -114,7 +115,8 @@ def version_match(required, candidate):
     :param tuple required: the version that must be met.
     :param tuple candidate: the version to test against required.
 
-    :returns bool: True if candidate is suitable False otherwise.
+    :returns: True if candidate is suitable False otherwise.
+    :rtype: bool
     """
     # major versions must be the same (e.g. even though v2 is a lower
     # version than v3 we can't use it if v2 was requested)
@@ -151,16 +153,17 @@ class Discover(object):
         :param bool allow_deprecated: Allow deprecated version endpoints.
         :param bool allow_unknown: Allow endpoints with an unrecognised status.
 
-        :returns list: The endpoints returned from the server that match the
-                       criteria.
+        :returns: The endpoints returned from the server that match the
+                  criteria.
+        :rtype: list
         """
         versions = []
         for v in self._data:
             try:
                 status = v['status']
             except KeyError:
-                _LOGGER.warning('Skipping over invalid version data. '
-                                'No stability status in version.')
+                _LOGGER.warning(_LW('Skipping over invalid version data. '
+                                    'No stability status in version.'))
                 continue
 
             status = status.lower()
@@ -183,13 +186,14 @@ class Discover(object):
 
         Return version data in a structured way.
 
-        :returns list(dict): A list of version data dictionaries sorted by
-                             version number. Each data element in the returned
-                             list is a dictionary consisting of at least:
+        :returns: A list of version data dictionaries sorted by version number.
+                  Each data element in the returned list is a dictionary
+                  consisting of at least:
 
           :version tuple: The normalized version of the endpoint.
           :url str: The url for the endpoint.
           :raw_status str: The status as provided by the server
+        :rtype: list(dict)
         """
         data = self.raw_version_data(**kwargs)
         versions = []
@@ -198,13 +202,14 @@ class Discover(object):
             try:
                 version_str = v['id']
             except KeyError:
-                _LOGGER.info('Skipping invalid version data. Missing ID.')
+                _LOGGER.info(_LI('Skipping invalid version data. Missing ID.'))
                 continue
 
             try:
                 links = v['links']
             except KeyError:
-                _LOGGER.info('Skipping invalid version data. Missing links')
+                _LOGGER.info(
+                    _LI('Skipping invalid version data. Missing links'))
                 continue
 
             version_number = normalize_version_number(version_str)
@@ -214,15 +219,15 @@ class Discover(object):
                     rel = link['rel']
                     url = link['href']
                 except (KeyError, TypeError):
-                    _LOGGER.info('Skipping invalid version link. '
-                                 'Missing link URL or relationship.')
+                    _LOGGER.info(_LI('Skipping invalid version link. '
+                                     'Missing link URL or relationship.'))
                     continue
 
                 if rel.lower() == 'self':
                     break
             else:
-                _LOGGER.info('Skipping invalid version data. '
-                             'Missing link to endpoint.')
+                _LOGGER.info(_LI('Skipping invalid version data. '
+                                 'Missing link to endpoint.'))
                 continue
 
             versions.append({'version': version_number,
@@ -239,9 +244,10 @@ class Discover(object):
             same major release as there should be no compatibility issues with
             using a version newer than the one asked for.
 
-        :returns dict: the endpoint data for a URL that matches the required
-                       version (the format is described in version_data)
-                       or None if no match.
+        :returns: the endpoint data for a URL that matches the required version
+                  (the format is described in version_data) or None if no
+                  match.
+        :rtype: dict
         """
         version = normalize_version_number(version)
         version_data = self.version_data(**kwargs)
@@ -259,7 +265,8 @@ class Discover(object):
             same major release as there should be no compatibility issues with
             using a version newer than the one asked for.
 
-        :returns str: The url for the specified version or None if no match.
+        :returns: The url for the specified version or None if no match.
+        :rtype: str
         """
         data = self.data_for(version, **kwargs)
         return data['url'] if data else None
@@ -291,7 +298,8 @@ class _VersionHacks(object):
         :param str service_type: the service_type to look up.
         :param str url: The original url that came from a service_catalog.
 
-        :return: Either the unversioned url or the one from the catalog to try.
+        :returns: Either the unversioned url or the one from the catalog
+                  to try.
         """
         for old, new in self._discovery_data.get(service_type, []):
             new_string, number_of_subs_made = old.subn(new, url)
@@ -313,6 +321,6 @@ def get_catalog_discover_hack(service_type, url):
     :param str service_type: the service_type to look up.
     :param str url: The original url that came from a service_catalog.
 
-    :return: Either the unversioned url or the one from the catalog to try.
+    :returns: Either the unversioned url or the one from the catalog to try.
     """
     return _VERSION_HACKS.get_discover_hack(service_type, url)

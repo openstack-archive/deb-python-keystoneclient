@@ -18,6 +18,7 @@ import logging
 from keystoneclient.auth.identity import v2 as v2_auth
 from keystoneclient import exceptions
 from keystoneclient import httpclient
+from keystoneclient.i18n import _
 from keystoneclient.v2_0 import ec2
 from keystoneclient.v2_0 import endpoints
 from keystoneclient.v2_0 import extensions
@@ -129,17 +130,19 @@ class Client(httpclient.HTTPClient):
     def __init__(self, **kwargs):
         """Initialize a new client for the Keystone v2.0 API."""
         super(Client, self).__init__(**kwargs)
-        self.endpoints = endpoints.EndpointManager(self)
-        self.extensions = extensions.ExtensionManager(self)
-        self.roles = roles.RoleManager(self)
-        self.services = services.ServiceManager(self)
-        self.tokens = tokens.TokenManager(self)
-        self.users = users.UserManager(self, self.roles)
 
-        self.tenants = tenants.TenantManager(self, self.roles, self.users)
+        self.endpoints = endpoints.EndpointManager(self._adapter)
+        self.extensions = extensions.ExtensionManager(self._adapter)
+        self.roles = roles.RoleManager(self._adapter)
+        self.services = services.ServiceManager(self._adapter)
+        self.tokens = tokens.TokenManager(self._adapter)
+        self.users = users.UserManager(self._adapter, self.roles)
+
+        self.tenants = tenants.TenantManager(self._adapter,
+                                             self.roles, self.users)
 
         # extensions
-        self.ec2 = ec2.CredentialsManager(self)
+        self.ec2 = ec2.CredentialsManager(self._adapter)
 
         # DEPRECATED: if session is passed then we go to the new behaviour of
         # authenticating on the first required call.
@@ -158,12 +161,12 @@ class Client(httpclient.HTTPClient):
         password.
 
         :returns: access.AccessInfo if authentication was successful.
-        :raises: AuthorizationFailure if unable to authenticate or validate
-                 the existing authorization token
+        :raises keystoneclient.exceptions.AuthorizationFailure: if unable to
+            authenticate or validate the existing authorization token
         """
         try:
             if auth_url is None:
-                raise ValueError("Cannot authenticate without an auth_url")
+                raise ValueError(_("Cannot authenticate without an auth_url"))
 
             new_kwargs = {'trust_id': trust_id,
                           'tenant_id': project_id or tenant_id,
@@ -175,7 +178,7 @@ class Client(httpclient.HTTPClient):
                 plugin = v2_auth.Password(auth_url, username, password,
                                           **new_kwargs)
             else:
-                msg = 'A username and password or token is required.'
+                msg = _('A username and password or token is required.')
                 raise exceptions.AuthorizationFailure(msg)
 
             return plugin.get_auth_ref(self.session)
@@ -183,8 +186,9 @@ class Client(httpclient.HTTPClient):
             _logger.debug("Authorization Failed.")
             raise
         except exceptions.EndpointNotFound:
-            msg = 'There was no suitable authentication url for this request'
+            msg = (
+                _('There was no suitable authentication url for this request'))
             raise exceptions.AuthorizationFailure(msg)
         except Exception as e:
-            raise exceptions.AuthorizationFailure("Authorization Failed: "
-                                                  "%s" % e)
+            raise exceptions.AuthorizationFailure(
+                _("Authorization Failed: %s") % e)

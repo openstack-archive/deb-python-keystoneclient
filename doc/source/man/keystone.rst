@@ -1,6 +1,6 @@
-========================================
-:program:`keystone` command line utility
-========================================
+==============================================================
+:program:`keystone` command line utility (pending deprecation)
+==============================================================
 
 .. program:: keystone
 .. highlight:: bash
@@ -18,13 +18,21 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
+.. WARNING::
+
+    The :program:`keystone` command line utility is pending deprecation. The
+    `OpenStackClient unified command line utility
+    <http://docs.openstack.org/developer/python-openstackclient/>`_ should be
+    used instead. The :program:`keystone` command line utility only supports V2
+    of the Identity API whereas the OSC program supports both V2 and V3.
+
 The :program:`keystone` command line utility interacts with services providing
 OpenStack Identity API (e.g. Keystone).
 
 To communicate with the API, you will need to be authenticated - and the
 :program:`keystone` provides multiple options for this.
 
-While bootstrapping keystone the authentication is accomplished with a
+While bootstrapping Keystone the authentication is accomplished with a
 shared secret token and the location of the Identity API endpoint. The
 shared secret token is configured in keystone.conf as "admin_token".
 
@@ -33,7 +41,7 @@ and :option:`--os-endpoint`, or set them in environment variables:
 
 .. envvar:: OS_SERVICE_TOKEN
 
-    Your keystone administrative token
+    Your Keystone administrative token
 
 .. envvar:: OS_SERVICE_ENDPOINT
 

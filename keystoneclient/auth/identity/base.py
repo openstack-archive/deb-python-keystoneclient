@@ -19,6 +19,7 @@ import six
 from keystoneclient import _discover
 from keystoneclient.auth import base
 from keystoneclient import exceptions
+from keystoneclient.i18n import _LW
 from keystoneclient import utils
 
 LOG = logging.getLogger(__name__)
@@ -73,10 +74,14 @@ class BaseIdentityPlugin(base.BaseAuthPlugin):
         when invoked. If you are looking to just retrieve the current auth
         data then you should use get_access.
 
-        :raises InvalidResponse: The response returned wasn't appropriate.
-        :raises HttpError: An error from an invalid HTTP response.
+        :raises keystoneclient.exceptions.InvalidResponse: The response
+                                                           returned wasn't
+                                                           appropriate.
+        :raises keystoneclient.exceptions.HttpError: An error from an invalid
+                                                     HTTP response.
 
-        :returns AccessInfo: Token access information.
+        :returns: Token access information.
+        :rtype: :py:class:`keystoneclient.access.AccessInfo`
         """
 
     def get_token(self, session, **kwargs):
@@ -84,9 +89,11 @@ class BaseIdentityPlugin(base.BaseAuthPlugin):
 
         If a valid token is not present then a new one will be fetched.
 
-        :raises HttpError: An error from an invalid HTTP response.
+        :raises keystoneclient.exceptions.HttpError: An error from an invalid
+                                                     HTTP response.
 
-        :return string: A valid token.
+        :return: A valid token.
+        :rtype: string
         """
         return self.get_access(session).auth_token
 
@@ -118,9 +125,11 @@ class BaseIdentityPlugin(base.BaseAuthPlugin):
         If a valid AccessInfo is present then it is returned otherwise a new
         one will be fetched.
 
-        :raises HttpError: An error from an invalid HTTP response.
+        :raises keystoneclient.exceptions.HttpError: An error from an invalid
+                                                     HTTP response.
 
-        :returns AccessInfo: Valid AccessInfo
+        :returns: Valid AccessInfo
+        :rtype: :py:class:`keystoneclient.access.AccessInfo`
         """
         if self._needs_reauthenticate():
             self.auth_ref = self.get_auth_ref(session)
@@ -136,9 +145,10 @@ class BaseIdentityPlugin(base.BaseAuthPlugin):
         returned to indicate that the token may have been revoked or is
         otherwise now invalid.
 
-        :returns bool: True if there was something that the plugin did to
-                       invalidate. This means that it makes sense to try again.
-                       If nothing happens returns False to indicate give up.
+        :returns: True if there was something that the plugin did to
+                  invalidate. This means that it makes sense to try again. If
+                  nothing happens returns False to indicate give up.
+        :rtype: bool
         """
         if self.auth_ref:
             self.auth_ref = None
@@ -169,9 +179,11 @@ class BaseIdentityPlugin(base.BaseAuthPlugin):
         :param tuple version: The minimum version number required for this
                               endpoint. (optional)
 
-        :raises HttpError: An error from an invalid HTTP response.
+        :raises keystoneclient.exceptions.HttpError: An error from an invalid
+                                                     HTTP response.
 
-        :return string or None: A valid endpoint URL or None if not available.
+        :return: A valid endpoint URL or None if not available.
+        :rtype: string or None
         """
         # NOTE(jamielennox): if you specifically ask for requests to be sent to
         # the auth url then we can ignore the rest of the checks. Typically if
@@ -181,9 +193,9 @@ class BaseIdentityPlugin(base.BaseAuthPlugin):
             return self.auth_url
 
         if not service_type:
-            LOG.warn('Plugin cannot return an endpoint without knowing the '
-                     'service type that is required. Add service_type to '
-                     'endpoint filtering data.')
+            LOG.warn(_LW('Plugin cannot return an endpoint without knowing '
+                         'the service type that is required. Add service_type '
+                         'to endpoint filtering data.'))
             return None
 
         if not interface:
@@ -216,8 +228,9 @@ class BaseIdentityPlugin(base.BaseAuthPlugin):
             # NOTE(jamielennox): Again if we can't contact the server we fall
             # back to just returning the URL from the catalog. This may not be
             # the best default but we need it for now.
-            LOG.warn('Failed to contact the endpoint at %s for discovery. '
-                     'Fallback to using that endpoint as the base url.', url)
+            LOG.warn(_LW('Failed to contact the endpoint at %s for discovery. '
+                         'Fallback to using that endpoint as the base url.'),
+                     url)
         else:
             url = disc.url_for(version)
 
@@ -240,10 +253,12 @@ class BaseIdentityPlugin(base.BaseAuthPlugin):
                                    (optional) Defaults to None (use a token
                                    if a plugin is installed).
 
-        :raises: DiscoveryFailure if for some reason the lookup fails.
-        :raises: HttpError An error from an invalid HTTP response.
+        :raises keystoneclient.exceptions.DiscoveryFailure: if for some reason
+                                                            the lookup fails.
+        :raises keystoneclient.exceptions.HttpError: An error from an invalid
+                                                     HTTP response.
 
-        :return: A discovery object with the results of looking up that URL.
+        :returns: A discovery object with the results of looking up that URL.
         """
         # NOTE(jamielennox): we want to cache endpoints on the session as well
         # so that they maintain sharing between auth plugins. Create a cache on

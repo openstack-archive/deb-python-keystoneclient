@@ -20,8 +20,9 @@ OpenStack Client interface. Handles the REST calls and responses.
 """
 
 import logging
-import pkg_resources
 
+from oslo.serialization import jsonutils
+import pkg_resources
 import requests
 from six.moves.urllib import parse as urlparse
 
@@ -51,10 +52,11 @@ if not hasattr(urlparse, 'parse_qsl'):
 
 
 from keystoneclient import access
+from keystoneclient import adapter
 from keystoneclient.auth import base
 from keystoneclient import baseclient
 from keystoneclient import exceptions
-from keystoneclient.openstack.common import jsonutils
+from keystoneclient.i18n import _, _LW
 from keystoneclient import session as client_session
 from keystoneclient import utils
 
@@ -83,7 +85,121 @@ class _FakeRequestSession(object):
         return requests.request(*args, **kwargs)
 
 
+class _KeystoneAdapter(adapter.LegacyJsonAdapter):
+    """A wrapper layer to interface keystoneclient with a session.
+
+    An adapter provides a generic interface between a client and the session to
+    provide client specific defaults. This object is passed to the managers.
+    Keystoneclient managers have some additional requirements of variables that
+    they expect to be present on the passed object.
+
+    Subclass the existing adapter to provide those values that keystoneclient
+    managers expect.
+    """
+
+    @property
+    def user_id(self):
+        """Best effort to retrieve the user_id from the plugin.
+
+        Some managers rely on being able to get the currently authenticated
+        user id. This is a problem when we are trying to abstract away the
+        details of an auth plugin.
+
+        For example changing a user's password can require access to the
+        currently authenticated user_id.
+
+        Perform a best attempt to fetch this data. It will work in the legacy
+        case and with identity plugins and be None otherwise which is the same
+        as the historical behavior.
+        """
+        # the identity plugin case
+        try:
+            return self.session.auth.get_access(self.session).user_id
+        except AttributeError:
+            pass
+
+        # there is a case that we explicity allow (tested by our unit tests)
+        # that says you should be able to set the user_id on a legacy client
+        # and it should overwrite the one retrieved via authentication. If it's
+        # a legacy then self.session.auth is a client and we retrieve user_id.
+        try:
+            return self.session.auth.user_id
+        except AttributeError:
+            pass
+
+        return None
+
+
 class HTTPClient(baseclient.Client, base.BaseAuthPlugin):
+    """HTTP client
+
+    :param string user_id: User ID for authentication. (optional)
+    :param string username: Username for authentication. (optional)
+    :param string user_domain_id: User's domain ID for authentication.
+                                  (optional)
+    :param string user_domain_name: User's domain name for authentication.
+                                    (optional)
+    :param string password: Password for authentication. (optional)
+    :param string domain_id: Domain ID for domain scoping. (optional)
+    :param string domain_name: Domain name for domain scoping. (optional)
+    :param string project_id: Project ID for project scoping. (optional)
+    :param string project_name: Project name for project scoping. (optional)
+    :param string project_domain_id: Project's domain ID for project scoping.
+                                     (optional)
+    :param string project_domain_name: Project's domain name for project
+                                       scoping. (optional)
+    :param string auth_url: Identity service endpoint for authorization.
+    :param string region_name: Name of a region to select when choosing an
+                               endpoint from the service catalog.
+    :param integer timeout: DEPRECATED: use session. (optional)
+    :param string endpoint: A user-supplied endpoint URL for the identity
+                            service.  Lazy-authentication is possible for API
+                            service calls if endpoint is set at instantiation.
+                            (optional)
+    :param string token: Token for authentication. (optional)
+    :param string cacert: DEPRECATED: use session. (optional)
+    :param string key: DEPRECATED: use session. (optional)
+    :param string cert: DEPRECATED: use session. (optional)
+    :param boolean insecure: DEPRECATED: use session. (optional)
+    :param string original_ip: DEPRECATED: use session. (optional)
+    :param boolean debug: DEPRECATED: use logging configuration. (optional)
+    :param dict auth_ref: To allow for consumers of the client to manage their
+                          own caching strategy, you may initialize a client
+                          with a previously captured auth_reference (token). If
+                          there are keyword arguments passed that also exist in
+                          auth_ref, the value from the argument will take
+                          precedence.
+    :param boolean use_keyring: Enables caching auth_ref into keyring.
+                                default: False (optional)
+    :param boolean force_new_token: Keyring related parameter, forces request
+                                    for new token. default: False (optional)
+    :param integer stale_duration: Gap in seconds to determine if token from
+                                   keyring is about to expire. default: 30
+                                   (optional)
+    :param string tenant_name: Tenant name. (optional) The tenant_name keyword
+                               argument is deprecated, use project_name
+                               instead.
+    :param string tenant_id: Tenant id. (optional) The tenant_id keyword
+                             argument is deprecated, use project_id instead.
+    :param string trust_id: Trust ID for trust scoping. (optional)
+    :param object session: A Session object to be used for
+                           communicating with the identity service.
+    :type session: keystoneclient.session.Session
+    :param string service_name: The default service_name for URL discovery.
+                                default: None (optional)
+    :param string interface: The default interface for URL discovery.
+                             default: admin (optional)
+    :param string endpoint_override: Always use this endpoint URL for requests
+                                     for this client. (optional)
+    :param auth: An auth plugin to use instead of the session one. (optional)
+    :type auth: keystoneclient.auth.base.BaseAuthPlugin
+    :param string user_agent: The User-Agent string to set.
+                              default: python-keystoneclient (optional)
+    :param int connect_retries: the maximum number of retries that should
+                                be attempted for connection errors.
+                                Default None - use session default which
+                                is don't retry. (optional)
+    """
 
     version = None
 
@@ -95,65 +211,9 @@ class HTTPClient(baseclient.Client, base.BaseAuthPlugin):
                  user_domain_id=None, user_domain_name=None, domain_id=None,
                  domain_name=None, project_id=None, project_name=None,
                  project_domain_id=None, project_domain_name=None,
-                 trust_id=None, session=None, **kwargs):
-        """Construct a new http client
-
-        :param string user_id: User ID for authentication. (optional)
-        :param string username: Username for authentication. (optional)
-        :param string user_domain_id: User's domain ID for authentication.
-                                      (optional)
-        :param string user_domain_name: User's domain name for authentication.
-                                        (optional)
-        :param string password: Password for authentication. (optional)
-        :param string domain_id: Domain ID for domain scoping. (optional)
-        :param string domain_name: Domain name for domain scoping. (optional)
-        :param string project_id: Project ID for project scoping. (optional)
-        :param string project_name: Project name for project scoping.
-                                    (optional)
-        :param string project_domain_id: Project's domain ID for project
-                                         scoping. (optional)
-        :param string project_domain_name: Project's domain name for project
-                                           scoping. (optional)
-        :param string auth_url: Identity service endpoint for authorization.
-        :param string region_name: Name of a region to select when choosing an
-                                   endpoint from the service catalog.
-        :param integer timeout: DEPRECATED: use session. (optional)
-        :param string endpoint: A user-supplied endpoint URL for the identity
-                                service.  Lazy-authentication is possible for
-                                API service calls if endpoint is set at
-                                instantiation. (optional)
-        :param string token: Token for authentication. (optional)
-        :param string cacert: DEPRECATED: use session. (optional)
-        :param string key: DEPRECATED: use session. (optional)
-        :param string cert: DEPRECATED: use session. (optional)
-        :param boolean insecure: DEPRECATED: use session. (optional)
-        :param string original_ip: DEPRECATED: use session. (optional)
-        :param boolean debug: DEPRECATED: use logging configuration. (optional)
-        :param dict auth_ref: To allow for consumers of the client to manage
-                              their own caching strategy, you may initialize a
-                              client with a previously captured auth_reference
-                              (token). If there are keyword arguments passed
-                              that also exist in auth_ref, the value from the
-                              argument will take precedence.
-        :param boolean use_keyring: Enables caching auth_ref into keyring.
-                                    default: False (optional)
-        :param boolean force_new_token: Keyring related parameter, forces
-                                       request for new token.
-                                       default: False (optional)
-        :param integer stale_duration: Gap in seconds to determine if token
-                                       from keyring is about to expire.
-                                       default: 30 (optional)
-        :param string tenant_name: Tenant name. (optional)
-                                   The tenant_name keyword argument is
-                                   deprecated, use project_name instead.
-        :param string tenant_id: Tenant id. (optional)
-                                 The tenant_id keyword argument is
-                                 deprecated, use project_id instead.
-        :param string trust_id: Trust ID for trust scoping. (optional)
-        :param object session: A Session object to be used for
-                               communicating with the identity service.
-
-        """
+                 trust_id=None, session=None, service_name=None,
+                 interface='admin', endpoint_override=None, auth=None,
+                 user_agent=USER_AGENT, connect_retries=None, **kwargs):
         # set baseline defaults
         self.user_id = None
         self.username = None
@@ -168,7 +228,6 @@ class HTTPClient(baseclient.Client, base.BaseAuthPlugin):
         self.project_domain_id = None
         self.project_domain_name = None
 
-        self.region_name = None
         self.auth_url = None
         self._endpoint = None
         self._management_url = None
@@ -192,8 +251,8 @@ class HTTPClient(baseclient.Client, base.BaseAuthPlugin):
             self._management_url = self.auth_ref.management_url[0]
             self.auth_token_from_user = self.auth_ref.auth_token
             self.trust_id = self.auth_ref.trust_id
-            if self.auth_ref.has_service_catalog():
-                self.region_name = self.auth_ref.service_catalog.region_name
+            if self.auth_ref.has_service_catalog() and not region_name:
+                region_name = self.auth_ref.service_catalog.region_name
         else:
             self.auth_ref = None
 
@@ -250,8 +309,6 @@ class HTTPClient(baseclient.Client, base.BaseAuthPlugin):
             self.auth_token_from_user = None
         if endpoint:
             self._endpoint = endpoint.rstrip('/')
-        if region_name:
-            self.region_name = region_name
         self._auth_token = None
 
         if not session:
@@ -263,9 +320,23 @@ class HTTPClient(baseclient.Client, base.BaseAuthPlugin):
         self.domain = ''
         self.debug_log = debug
 
+        # NOTE(jamielennox): unfortunately we can't just use **kwargs here as
+        # it would incompatibly limit the kwargs that can be passed to __init__
+        # try and keep this list in sync with adapter.Adapter.__init__
+        self._adapter = _KeystoneAdapter(session,
+                                         service_type='identity',
+                                         service_name=service_name,
+                                         interface=interface,
+                                         region_name=region_name,
+                                         endpoint_override=endpoint_override,
+                                         version=self.version,
+                                         auth=auth,
+                                         user_agent=user_agent,
+                                         connect_retries=connect_retries)
+
         # keyring setup
         if use_keyring and keyring is None:
-            _logger.warning('Failed to load keyring modules.')
+            _logger.warning(_LW('Failed to load keyring modules.'))
         self.use_keyring = use_keyring and keyring is not None
         self.force_new_token = force_new_token
         self.stale_duration = stale_duration or access.STALE_TOKEN_DURATION
@@ -312,7 +383,7 @@ class HTTPClient(baseclient.Client, base.BaseAuthPlugin):
 
     def has_service_catalog(self):
         """Returns True if this client provides a service catalog."""
-        return self.auth_ref.has_service_catalog()
+        return self.auth_ref and self.auth_ref.has_service_catalog()
 
     @property
     def tenant_id(self):
@@ -364,9 +435,10 @@ class HTTPClient(baseclient.Client, base.BaseAuthPlugin):
         self.management_url from the details provided in the token.
 
         :returns: ``True`` if authentication was successful.
-        :raises: AuthorizationFailure if unable to authenticate or validate
-                 the existing authorization token
-        :raises: ValueError if insufficient parameters are used.
+        :raises keystoneclient.exceptions.AuthorizationFailure: if unable to
+            authenticate or validate the existing authorization token
+        :raises keystoneclient.exceptions.ValueError: if insufficient
+                                                      parameters are used.
 
         If keyring is used, token is retrieved from keyring instead.
         Authentication will only be necessary if any of the following
@@ -394,7 +466,7 @@ class HTTPClient(baseclient.Client, base.BaseAuthPlugin):
         project_domain_name = project_domain_name or self.project_domain_name
 
         trust_id = trust_id or self.trust_id
-        region_name = region_name or self.region_name
+        region_name = region_name or self._adapter.region_name
 
         if not token:
             token = self.auth_token_from_user
@@ -476,7 +548,8 @@ class HTTPClient(baseclient.Client, base.BaseAuthPlugin):
                         auth_ref = None
             except Exception as e:
                 auth_ref = None
-                _logger.warning('Unable to retrieve token from keyring %s', e)
+                _logger.warning(
+                    _LW('Unable to retrieve token from keyring %s'), e)
         return (keyring_key, auth_ref)
 
     def store_auth_ref_into_keyring(self, keyring_key):
@@ -489,7 +562,8 @@ class HTTPClient(baseclient.Client, base.BaseAuthPlugin):
                                      keyring_key,
                                      pickle.dumps(self.auth_ref))
             except Exception as e:
-                _logger.warning("Failed to store token into keyring %s", e)
+                _logger.warning(
+                    _LW("Failed to store token into keyring %s"), e)
 
     def _process_management_url(self, region_name):
         try:
@@ -498,7 +572,7 @@ class HTTPClient(baseclient.Client, base.BaseAuthPlugin):
                 endpoint_type='admin',
                 region_name=region_name)
         except exceptions.EndpointNotFound:
-            _logger.warning("Failed to retrieve management_url from token")
+            pass
 
     def process_token(self, region_name=None):
         """Extract and process information from the new auth_ref.
@@ -511,14 +585,14 @@ class HTTPClient(baseclient.Client, base.BaseAuthPlugin):
         if self.auth_ref.project_scoped:
             if not self.auth_ref.tenant_id:
                 raise exceptions.AuthorizationFailure(
-                    "Token didn't provide tenant_id")
+                    _("Token didn't provide tenant_id"))
             self._process_management_url(region_name)
             self.project_name = self.auth_ref.tenant_name
             self.project_id = self.auth_ref.tenant_id
 
         if not self.auth_ref.user_id:
             raise exceptions.AuthorizationFailure(
-                "Token didn't provide user_id")
+                _("Token didn't provide user_id"))
 
         self.user_id = self.auth_ref.user_id
 
@@ -565,82 +639,110 @@ class HTTPClient(baseclient.Client, base.BaseAuthPlugin):
     def serialize(self, entity):
         return jsonutils.dumps(entity)
 
-    @staticmethod
-    def _decode_body(resp):
-        if resp.text:
-            try:
-                body_resp = jsonutils.loads(resp.text)
-            except (ValueError, TypeError):
-                body_resp = None
-                _logger.debug("Could not decode JSON from body: %s",
-                              resp.text)
-        else:
-            _logger.debug("No body was returned.")
-            body_resp = None
-
-        return body_resp
-
-    def request(self, url, method, **kwargs):
+    def request(self, *args, **kwargs):
         """Send an http request with the specified characteristics.
 
         Wrapper around requests.request to handle tasks such as
         setting headers, JSON encoding/decoding, and error handling.
+
+        .. warning::
+            *DEPRECATED*: This function is no longer used. It was designed to
+            be used only by the managers and the managers now receive an
+            adapter so this function is no longer on the standard request path.
         """
-
-        try:
-            kwargs['json'] = kwargs.pop('body')
-        except KeyError:
-            pass
-
         kwargs.setdefault('authenticated', False)
-        resp = super(HTTPClient, self).request(url, method, **kwargs)
-        return resp, self._decode_body(resp)
+        return self._adapter.request(*args, **kwargs)
 
     def _cs_request(self, url, method, management=True, **kwargs):
         """Makes an authenticated request to keystone endpoint by
         concatenating self.management_url and url and passing in method and
         any associated kwargs.
         """
-        # NOTE(jamielennox): remember that if you use the legacy client mode
-        # (you create a client without a session) then this HTTPClient object
-        # is the auth plugin you are using. Values in the endpoint_filter may
-        # be ignored and you should look at get_endpoint to figure out what.
-        interface = 'admin' if management else 'public'
-        endpoint_filter = kwargs.setdefault('endpoint_filter', {})
-        endpoint_filter.setdefault('service_type', 'identity')
-        endpoint_filter.setdefault('interface', interface)
-
-        if self.version:
-            endpoint_filter.setdefault('version', self.version)
-
-        if self.region_name:
-            endpoint_filter.setdefault('region_name', self.region_name)
+        # NOTE(jamielennox): This is deprecated and is no longer a part of the
+        # standard client request path. It now goes via the adapter instead.
+        if not management:
+            endpoint_filter = kwargs.setdefault('endpoint_filter', {})
+            endpoint_filter.setdefault('interface', 'public')
 
         kwargs.setdefault('authenticated', None)
-        try:
-            return self.request(url, method, **kwargs)
-        except exceptions.MissingAuthPlugin:
-            _logger.info('Cannot get authenticated endpoint without an '
-                         'auth plugin')
-            raise exceptions.AuthorizationFailure(
-                'Current authorization does not have a known management url')
+        return self.request(url, method, **kwargs)
 
     def get(self, url, **kwargs):
+        """Perform an authenticated GET request.
+
+        This calls :py:meth:`.request()` with ``method`` set to ``GET`` and an
+        authentication token if one is available.
+
+        .. warning::
+            *DEPRECATED*: This function is no longer used. It was designed to
+            be used by the managers and the managers now receive an adapter so
+            this function is no longer on the standard request path.
+        """
         return self._cs_request(url, 'GET', **kwargs)
 
     def head(self, url, **kwargs):
+        """Perform an authenticated HEAD request.
+
+        This calls :py:meth:`.request()` with ``method`` set to ``HEAD`` and an
+        authentication token if one is available.
+
+        .. warning::
+            *DEPRECATED*: This function is no longer used. It was designed to
+            be used by the managers and the managers now receive an adapter so
+            this function is no longer on the standard request path.
+        """
         return self._cs_request(url, 'HEAD', **kwargs)
 
     def post(self, url, **kwargs):
+        """Perform an authenticate POST request.
+
+        This calls :py:meth:`.request()` with ``method`` set to ``POST`` and an
+        authentication token if one is available.
+
+        .. warning::
+            *DEPRECATED*: This function is no longer used. It was designed to
+            be used by the managers and the managers now receive an adapter so
+            this function is no longer on the standard request path.
+        """
         return self._cs_request(url, 'POST', **kwargs)
 
     def put(self, url, **kwargs):
+        """Perform an authenticate PUT request.
+
+        This calls :py:meth:`.request()` with ``method`` set to ``PUT`` and an
+        authentication token if one is available.
+
+        .. warning::
+            *DEPRECATED*: This function is no longer used. It was designed to
+            be used by the managers and the managers now receive an adapter so
+            this function is no longer on the standard request path.
+        """
         return self._cs_request(url, 'PUT', **kwargs)
 
     def patch(self, url, **kwargs):
+        """Perform an authenticate PATCH request.
+
+        This calls :py:meth:`.request()` with ``method`` set to ``PATCH`` and
+        an authentication token if one is available.
+
+        .. warning::
+            *DEPRECATED*: This function is no longer used. It was designed to
+            be used by the managers and the managers now receive an adapter so
+            this function is no longer on the standard request path.
+        """
         return self._cs_request(url, 'PATCH', **kwargs)
 
     def delete(self, url, **kwargs):
+        """Perform an authenticate DELETE request.
+
+        This calls :py:meth:`.request()` with ``method`` set to ``DELETE`` and
+        an authentication token if one is available.
+
+        .. warning::
+            *DEPRECATED*: This function is no longer used. It was designed to
+            be used by the managers and the managers now receive an adapter so
+            this function is no longer on the standard request path.
+        """
         return self._cs_request(url, 'DELETE', **kwargs)
 
     # DEPRECATIONS: The following methods are no longer directly supported
@@ -651,20 +753,40 @@ class HTTPClient(baseclient.Client, base.BaseAuthPlugin):
                                     'timeout': None,
                                     'verify_cert': 'verify'}
 
+    deprecated_adapter_variables = {'region_name': None}
+
     def __getattr__(self, name):
         # FIXME(jamielennox): provide a proper deprecated warning
         try:
             var_name = self.deprecated_session_variables[name]
         except KeyError:
-            raise AttributeError("Unknown Attribute: %s" % name)
+            pass
+        else:
+            return getattr(self.session, var_name or name)
 
-        return getattr(self.session, var_name or name)
+        try:
+            var_name = self.deprecated_adapter_variables[name]
+        except KeyError:
+            pass
+        else:
+            return getattr(self._adapter, var_name or name)
+
+        raise AttributeError(_("Unknown Attribute: %s") % name)
 
     def __setattr__(self, name, val):
         # FIXME(jamielennox): provide a proper deprecated warning
         try:
             var_name = self.deprecated_session_variables[name]
         except KeyError:
-            super(HTTPClient, self).__setattr__(name, val)
+            pass
         else:
-            setattr(self.session, var_name or name)
+            return setattr(self.session, var_name or name)
+
+        try:
+            var_name = self.deprecated_adapter_variables[name]
+        except KeyError:
+            pass
+        else:
+            return setattr(self._adapter, var_name or name)
+
+        super(HTTPClient, self).__setattr__(name, val)

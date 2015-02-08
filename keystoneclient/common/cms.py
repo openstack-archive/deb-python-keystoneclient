@@ -28,6 +28,7 @@ import zlib
 import six
 
 from keystoneclient import exceptions
+from keystoneclient.i18n import _, _LE, _LW
 
 
 subprocess = None
@@ -36,6 +37,14 @@ PKI_ASN1_PREFIX = 'MII'
 PKIZ_PREFIX = 'PKIZ_'
 PKIZ_CMS_FORM = 'DER'
 PKI_ASN1_FORM = 'PEM'
+
+
+# The openssl cms command exits with these status codes.
+# See https://www.openssl.org/docs/apps/cms.html#EXIT_CODES
+class OpensslCmsExitStatus:
+    SUCCESS = 0
+    INPUT_FILE_READ_ERROR = 2
+    CREATE_CMS_READ_MIME_ERROR = 3
 
 
 def _ensure_subprocess():
@@ -73,19 +82,12 @@ def _check_files_accessible(files):
     except IOError as e:
         # Catching IOError means there is an issue with
         # the given file.
-        err = ('Hit OSError in _process_communicate_handle_oserror()\n'
-               'Likely due to %s: %s') % (try_file, e.strerror)
+        err = _('Hit OSError in _process_communicate_handle_oserror()\n'
+                'Likely due to %(file)s: %(error)s') % {'file': try_file,
+                                                        'error': e.strerror}
         # Emulate openssl behavior, which returns with code 2 when
-        # access to a file failed:
-
-        # You can get more from
-        # http://www.openssl.org/docs/apps/cms.html#EXIT_CODES
-        #
-        # $ openssl cms -verify -certfile not_exist_file -CAfile \
-        #       not_exist_file -inform PEM -nosmimecap -nodetach \
-        #       -nocerts -noattr
-        # Error opening certificate file not_exist_file
-        retcode = 2
+        # access to a file failed.
+        retcode = OpensslCmsExitStatus.INPUT_FILE_READ_ERROR
 
     return retcode, err
 
@@ -122,8 +124,9 @@ def _encoding_for_form(inform):
     elif inform == PKIZ_CMS_FORM:
         encoding = 'hex'
     else:
-        raise ValueError('"inform" must be either %s or %s' %
-                         (PKI_ASN1_FORM, PKIZ_CMS_FORM))
+        raise ValueError(
+            _('"inform" must be one of: %s') % ','.join((PKI_ASN1_FORM,
+                                                         PKIZ_CMS_FORM)))
 
     return encoding
 
@@ -132,8 +135,10 @@ def cms_verify(formatted, signing_cert_file_name, ca_file_name,
                inform=PKI_ASN1_FORM):
     """Verifies the signature of the contents IAW CMS syntax.
 
-    :raises: subprocess.CalledProcessError
-    :raises: CertificateConfigError if certificate is not configured properly.
+    :raises subprocess.CalledProcessError:
+    :raises keystoneclient.exceptions.CertificateConfigError: if certificate
+                                                              is not configured
+                                                              properly.
     """
     _ensure_subprocess()
     if isinstance(formatted, six.string_types):
@@ -148,7 +153,8 @@ def cms_verify(formatted, signing_cert_file_name, ca_file_name,
                                 '-nocerts', '-noattr'],
                                stdin=subprocess.PIPE,
                                stdout=subprocess.PIPE,
-                               stderr=subprocess.PIPE)
+                               stderr=subprocess.PIPE,
+                               close_fds=True)
     output, err, retcode = _process_communicate_handle_oserror(
         process, data, (signing_cert_file_name, ca_file_name))
 
@@ -165,12 +171,12 @@ def cms_verify(formatted, signing_cert_file_name, ca_file_name,
     #       -nocerts -noattr
     # Error opening certificate file not_exist_file
     #
-    if retcode == 2:
+    if retcode == OpensslCmsExitStatus.INPUT_FILE_READ_ERROR:
         if err.startswith('Error reading S/MIME message'):
             raise exceptions.CMSError(err)
         else:
             raise exceptions.CertificateConfigError(err)
-    elif retcode:
+    elif retcode != OpensslCmsExitStatus.SUCCESS:
         # NOTE(dmllr): Python 2.6 compatibility:
         # CalledProcessError did not have output keyword argument
         e = subprocess.CalledProcessError(retcode, 'openssl')
@@ -295,8 +301,8 @@ def is_asn1_token(token):
 
 def is_ans1_token(token):
     """Deprecated. Use is_asn1_token() instead."""
-    LOG.warning('The function is_ans1_token() is deprecated, '
-                'use is_asn1_token() instead.')
+    LOG.warning(_LW('The function is_ans1_token() is deprecated, '
+                    'use is_asn1_token() instead.'))
     return is_asn1_token(token)
 
 
@@ -332,22 +338,23 @@ def cms_sign_data(data_to_sign, signing_cert_file_name, signing_key_file_name,
                                 '-inkey', signing_key_file_name,
                                 '-outform', 'PEM',
                                 '-nosmimecap', '-nodetach',
-                                '-nocerts', '-noattr'],
+                                '-nocerts', '-noattr',
+                                '-md', 'sha256', ],
                                stdin=subprocess.PIPE,
                                stdout=subprocess.PIPE,
-                               stderr=subprocess.PIPE)
+                               stderr=subprocess.PIPE,
+                               close_fds=True)
 
     output, err, retcode = _process_communicate_handle_oserror(
         process, data, (signing_cert_file_name, signing_key_file_name))
 
-    if retcode or ('Error' in err):
-        LOG.error('Signing error: %s', err)
-        if retcode == 3:
-            LOG.error('Signing error: Unable to load certificate - '
-                      'ensure you have configured PKI with '
-                      '"keystone-manage pki_setup"')
+    if retcode != OpensslCmsExitStatus.SUCCESS or ('Error' in err):
+        if retcode == OpensslCmsExitStatus.CREATE_CMS_READ_MIME_ERROR:
+            LOG.error(_LE('Signing error: Unable to load certificate - '
+                          'ensure you have configured PKI with '
+                          '"keystone-manage pki_setup"'))
         else:
-            LOG.error('Signing error: %s', err)
+            LOG.error(_LE('Signing error: %s'), err)
         raise subprocess.CalledProcessError(retcode, 'openssl')
     if outform == PKI_ASN1_FORM:
         return output.decode('utf-8')

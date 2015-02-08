@@ -14,11 +14,11 @@
 import uuid
 
 import mock
+from oslo.utils import timeutils
 import six
 from six.moves.urllib import parse as urlparse
 from testtools import matchers
 
-from keystoneclient.openstack.common import timeutils
 from keystoneclient import session
 from keystoneclient.tests.v3 import client_fixtures
 from keystoneclient.tests.v3 import utils
@@ -182,7 +182,7 @@ class RequestTokenTests(TokenTests):
         self.assertEqual(request_secret, request_token.secret)
 
         # Assert that the project id is in the header
-        self.assertRequestHeaderEqual('requested_project_id', project_id)
+        self.assertRequestHeaderEqual('requested-project-id', project_id)
         req_headers = self.requests.last_request.headers
 
         oauth_client = oauth1.Client(consumer_key,

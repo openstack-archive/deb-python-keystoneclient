@@ -104,6 +104,8 @@ class ShellTests(utils.TestCase):
         self.stub_url('POST', ['users'], json={'user': {}})
 
         with mock.patch('getpass.getpass') as mock_getpass:
+            del(os.environ['OS_PASSWORD'])
+            mock_stdin.isatty = lambda: True
             mock_getpass.return_value = 'newpass'
             self.run_command('user-create --name new-user --pass')
 
@@ -145,10 +147,9 @@ class ShellTests(utils.TestCase):
         self.run_command('user-update --name new-user1'
                          ' --email user@email.com --enabled true 1')
         self.assert_called('PUT', '/users/1')
-        self.assertRequestBodyIs(json={'user': {'id': '1',
-                                       'email': 'user@email.com',
-                                       'enabled': True,
-                                       'name': 'new-user1'}})
+        body = {'user': {'id': '1', 'email': 'user@email.com',
+                         'enabled': True, 'name': 'new-user1'}}
+        self.assertRequestBodyIs(json=body)
 
         required = 'User not updated, no arguments present.'
         out = self.run_command('user-update 1')

@@ -10,7 +10,8 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-from keystoneclient.openstack.common import jsonutils
+from oslo.serialization import jsonutils
+
 from keystoneclient import utils
 
 
@@ -22,6 +23,23 @@ class Adapter(object):
     state such as the service type and region_name that are only relevant to a
     particular client that is using the session. An adapter provides a wrapper
     of client local data around the global session object.
+
+    :param session: The session object to wrap.
+    :type session: keystoneclient.session.Session
+    :param str service_type: The default service_type for URL discovery.
+    :param str service_name: The default service_name for URL discovery.
+    :param str interface: The default interface for URL discovery.
+    :param str region_name: The default region_name for URL discovery.
+    :param str endpoint_override: Always use this endpoint URL for requests
+                                  for this client.
+    :param tuple version: The version that this API targets.
+    :param auth: An auth plugin to use instead of the session one.
+    :type auth: keystoneclient.auth.base.BaseAuthPlugin
+    :param str user_agent: The User-Agent string to set.
+    :param int connect_retries: the maximum number of retries that should
+                                be attempted for connection errors.
+                                Default None - use session default which
+                                is don't retry.
     """
 
     @utils.positional()
@@ -29,24 +47,8 @@ class Adapter(object):
                  interface=None, region_name=None, endpoint_override=None,
                  version=None, auth=None, user_agent=None,
                  connect_retries=None):
-        """Create a new adapter.
-
-        :param Session session: The session object to wrap.
-        :param str service_type: The default service_type for URL discovery.
-        :param str service_name: The default service_name for URL discovery.
-        :param str interface: The default interface for URL discovery.
-        :param str region_name: The default region_name for URL discovery.
-        :param str endpoint_override: Always use this endpoint URL for requests
-                                      for this client.
-        :param tuple version: The version that this API targets.
-        :param auth.BaseAuthPlugin auth: An auth plugin to use instead of the
-                                         session one.
-        :param str user_agent: The User-Agent string to set.
-        :param int connect_retries: the maximum number of retries that should
-                                    be attempted for connection errors.
-                                    Default None - use session default which
-                                    is don't retry.
-        """
+        # NOTE(jamielennox): when adding new parameters to adapter please also
+        # add them to the adapter call in httpclient.HTTPClient.__init__
         self.session = session
         self.service_type = service_type
         self.service_name = service_name
@@ -93,9 +95,11 @@ class Adapter(object):
                      on the session. (optional)
         :type auth: :class:`keystoneclient.auth.base.BaseAuthPlugin`
 
-        :raises AuthorizationFailure: if a new token fetch fails.
+        :raises keystoneclient.exceptions.AuthorizationFailure: if a new token
+            fetch fails.
 
-        :returns string: A valid token.
+        :returns: A valid token.
+        :rtype: string
         """
         return self.session.get_token(auth or self.auth)
 
@@ -106,10 +110,15 @@ class Adapter(object):
                      the session. (optional)
         :type auth: :class:`keystoneclient.auth.base.BaseAuthPlugin`
 
-        :raises MissingAuthPlugin: if a plugin is not available.
+        :raises keystoneclient.exceptions.MissingAuthPlugin: if a plugin is not
+                                                             available.
 
-        :returns string: An endpoint if available or None.
+        :returns: An endpoint if available or None.
+        :rtype: string
         """
+        if self.endpoint_override:
+            return self.endpoint_override
+
         self._set_endpoint_filter_kwargs(kwargs)
         return self.session.get_endpoint(auth or self.auth, **kwargs)
 

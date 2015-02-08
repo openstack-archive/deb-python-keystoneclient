@@ -10,7 +10,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-from keystoneclient.openstack.common import timeutils
+from oslo.utils import timeutils
 
 # The set of attributes common between the RevokeEvent
 # and the dictionaries created from the token Data.
@@ -110,9 +110,9 @@ class RevokeTree(object):
         fields of the revocation event.  The leaf node will always be set to
         the latest 'issued_before' for events that are otherwise identical.
 
-        :param:  Event to add to the tree
+        :param: Event to add to the tree
 
-        :returns:  the event that was passed in.
+        :returns: the event that was passed in.
 
         """
         revoke_map = self.revoke_map

@@ -20,6 +20,7 @@ from six.moves import urllib
 from keystoneclient import access
 from keystoneclient.auth.identity import v3
 from keystoneclient import exceptions
+from keystoneclient.i18n import _
 
 
 class _BaseSAMLPlugin(v3.AuthConstructor):
@@ -30,7 +31,7 @@ class _BaseSAMLPlugin(v3.AuthConstructor):
     @staticmethod
     def _first(_list):
         if len(_list) != 1:
-            raise IndexError("Only single element list is acceptable")
+            raise IndexError(_("Only single element list is acceptable"))
         return _list[0]
 
     @staticmethod
@@ -80,26 +81,44 @@ class Saml2UnscopedTokenAuthMethod(v3.AuthMethod):
     _method_parameters = []
 
     def get_auth_data(self, session, auth, headers, **kwargs):
-        raise exceptions.MethodNotImplemented(('This method should never '
-                                              'be called'))
+        raise exceptions.MethodNotImplemented(_('This method should never '
+                                                'be called'))
 
 
 class Saml2UnscopedToken(_BaseSAMLPlugin):
     """Implement authentication plugin for SAML2 protocol.
 
-    ECP stands for ``Enhanced Client or Proxy`` and is a SAML2 extension
+    ECP stands for `Enhanced Client or Proxy` and is a SAML2 extension
     for federated authentication where a transportation layer consists of
     HTTP protocol and XML SOAP messages.
 
-    Read for more information::
-    ``https://wiki.shibboleth.net/confluence/display/SHIB2/ECP``
+    `Read for more information
+    <https://wiki.shibboleth.net/confluence/display/SHIB2/ECP>`_ on ECP.
 
-    The SAML2 ECP specification can be found at::
-    ``https://www.oasis-open.org/committees/download.php/
-    49979/saml-ecp-v2.0-wd09.pdf``
+    Reference the `SAML2 ECP specification <https://www.oasis-open.org/\
+    committees/download.php/49979/saml-ecp-v2.0-wd09.pdf>`_.
 
     Currently only HTTPBasicAuth mechanism is available for the IdP
     authenication.
+
+    :param auth_url: URL of the Identity Service
+    :type auth_url: string
+
+    :param identity_provider: name of the Identity Provider the client will
+                              authenticate against. This parameter will be used
+                              to build a dynamic URL used to obtain unscoped
+                              OpenStack token.
+    :type identity_provider: string
+
+    :param identity_provider_url: An Identity Provider URL, where the SAML2
+                                  authn request will be sent.
+    :type identity_provider_url: string
+
+    :param username: User's login
+    :type username: string
+
+    :param password: User's password
+    :type password: string
 
     """
 
@@ -148,27 +167,6 @@ class Saml2UnscopedToken(_BaseSAMLPlugin):
                  identity_provider_url,
                  username, password,
                  **kwargs):
-        """Class constructor accepting following parameters:
-        :param auth_url: URL of the Identity Service
-        :type auth_url: string
-
-        :param identity_provider: name of the Identity Provider the client
-                                  will authenticate against. This parameter
-                                  will be used to build a dynamic URL used to
-                                  obtain unscoped OpenStack token.
-        :type identity_provider: string
-
-        :param identity_provider_url: An Identity Provider URL, where the SAML2
-                                      authn request will be sent.
-        :type identity_provider_url: string
-
-        :param username: User's login
-        :type username: string
-
-        :param password: User's password
-        :type password: string
-
-        """
         super(Saml2UnscopedToken, self).__init__(auth_url=auth_url, **kwargs)
         self.identity_provider = identity_provider
         self.identity_provider_url = identity_provider_url
@@ -211,9 +209,9 @@ class Saml2UnscopedToken(_BaseSAMLPlugin):
                          authenticated=False)
 
             # prepare error message and raise an exception.
-            msg = ("Consumer URLs from Service Provider %(service_provider)s "
-                   "%(sp_consumer_url)s and Identity Provider "
-                   "%(identity_provider)s %(idp_consumer_url)s are not equal")
+            msg = _("Consumer URLs from Service Provider %(service_provider)s "
+                    "%(sp_consumer_url)s and Identity Provider "
+                    "%(identity_provider)s %(idp_consumer_url)s are not equal")
             msg = msg % {
                 'service_provider': self.token_url,
                 'sp_consumer_url': sp_response_consumer_url,
@@ -257,8 +255,8 @@ class Saml2UnscopedToken(_BaseSAMLPlugin):
         try:
             self.saml2_authn_request = etree.XML(sp_response.content)
         except etree.XMLSyntaxError as e:
-            msg = ("SAML2: Error parsing XML returned "
-                   "from Service Provider, reason: %s" % e)
+            msg = _("SAML2: Error parsing XML returned "
+                    "from Service Provider, reason: %s") % e
             raise exceptions.AuthorizationFailure(msg)
 
         relay_state = self.saml2_authn_request.xpath(
@@ -288,8 +286,8 @@ class Saml2UnscopedToken(_BaseSAMLPlugin):
         try:
             self.saml2_idp_authn_response = etree.XML(idp_response.content)
         except etree.XMLSyntaxError as e:
-            msg = ("SAML2: Error parsing XML returned "
-                   "from Identity Provider, reason: %s" % e)
+            msg = _("SAML2: Error parsing XML returned "
+                    "from Identity Provider, reason: %s") % e
             raise exceptions.AuthorizationFailure(msg)
 
         idp_response_consumer_url = self.saml2_idp_authn_response.xpath(
@@ -426,8 +424,9 @@ class Saml2UnscopedToken(_BaseSAMLPlugin):
         :param session : a session object to send out HTTP requests.
         :type session: keystoneclient.session.Session
 
-        :return access.AccessInfoV3: an object with scoped token's id and
-                                     unscoped token json included.
+        :return: an object with scoped token's id and unscoped token json
+                 included.
+        :rtype: :py:class:`keystoneclient.access.AccessInfoV3`
 
         """
         token, token_json = self._get_unscoped_token(session)
@@ -436,7 +435,32 @@ class Saml2UnscopedToken(_BaseSAMLPlugin):
 
 
 class ADFSUnscopedToken(_BaseSAMLPlugin):
-    """Authentication plugin for Microsoft ADFS2.0 IdPs."""
+    """Authentication plugin for Microsoft ADFS2.0 IdPs.
+
+    :param auth_url: URL of the Identity Service
+    :type auth_url: string
+
+    :param identity_provider: name of the Identity Provider the client will
+                              authenticate against. This parameter will be used
+                              to build a dynamic URL used to obtain unscoped
+                              OpenStack token.
+    :type identity_provider: string
+
+    :param identity_provider_url: An Identity Provider URL, where the SAML2
+                                  authentication request will be sent.
+    :type identity_provider_url: string
+
+    :param service_provider_endpoint: Endpoint where an assertion is being
+        sent, for instance: ``https://host.domain/Shibboleth.sso/ADFS``
+    :type service_provider_endpoint: string
+
+    :param username: User's login
+    :type username: string
+
+    :param password: User's password
+    :type password: string
+
+    """
 
     _auth_method_class = Saml2UnscopedTokenAuthMethod
 
@@ -462,33 +486,6 @@ class ADFSUnscopedToken(_BaseSAMLPlugin):
 
     def __init__(self, auth_url, identity_provider, identity_provider_url,
                  service_provider_endpoint, username, password, **kwargs):
-        """Constructor for ``ADFSUnscopedToken``.
-
-        :param auth_url: URL of the Identity Service
-        :type auth_url: string
-
-        :param identity_provider: name of the Identity Provider the client
-                                  will authenticate against. This parameter
-                                  will be used to build a dynamic URL used to
-                                  obtain unscoped OpenStack token.
-        :type identity_provider: string
-
-        :param identity_provider_url: An Identity Provider URL, where the SAML2
-                                      authentication request will be sent.
-        :type identity_provider_url: string
-
-        :param service_provider_endpoint: Endpoint where an assertion is being
-            sent, for instance: ``https://host.domain/Shibboleth.sso/ADFS``
-        :type service_provider_endpoint: string
-
-        :param username: User's login
-        :type username: string
-
-        :param password: User's password
-        :type password: string
-
-        """
-
         super(ADFSUnscopedToken, self).__init__(auth_url=auth_url, **kwargs)
         self.identity_provider = identity_provider
         self.identity_provider_url = identity_provider_url
@@ -505,10 +502,6 @@ class ADFSUnscopedToken(_BaseSAMLPlugin):
         ])
         return options
 
-    @property
-    def _uuid4(self):
-        return str(uuid.uuid4())
-
     def _cookies(self, session):
         """Check if cookie jar is not empty.
 
@@ -518,8 +511,8 @@ class ADFSUnscopedToken(_BaseSAMLPlugin):
         and let Python raise the AttributeError.
 
         :param session
-        :return: True if cookie jar is nonempty, False otherwise
-        :raises: AttributeError in case cookies are not find anywhere
+        :returns: True if cookie jar is nonempty, False otherwise
+        :raises AttributeError: in case cookies are not find anywhere
 
         """
         try:
@@ -590,7 +583,7 @@ class ADFSUnscopedToken(_BaseSAMLPlugin):
 
         messageID = etree.SubElement(
             header, '{http://www.w3.org/2005/08/addressing}MessageID')
-        messageID.text = 'urn:uuid:' + self._uuid4
+        messageID.text = 'urn:uuid:' + uuid.uuid4().hex
         replyID = etree.SubElement(
             header, '{http://www.w3.org/2005/08/addressing}ReplyTo')
         address = etree.SubElement(
@@ -631,7 +624,7 @@ class ADFSUnscopedToken(_BaseSAMLPlugin):
                       'wss-wssecurity-secext-1.0.xsd}UsernameToken')
         usernametoken.set(
             ('{http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-'
-             'wssecurity-utility-1.0.xsd}u'), "uuid-%s-1" % self._uuid4)
+             'wssecurity-utility-1.0.xsd}u'), "uuid-%s-1" % uuid.uuid4().hex)
 
         username = etree.SubElement(
             usernametoken, ('{http://docs.oasis-open.org/wss/2004/01/oasis-'
@@ -704,11 +697,12 @@ class ADFSUnscopedToken(_BaseSAMLPlugin):
         :param session : a session object to send out HTTP requests.
         :type session: keystoneclient.session.Session
 
-        :raises: exceptions.AuthorizationFailure when HTTP response from the
-                 ADFS server is not a valid XML ADFS security token.
-        :raises: exceptions.InternalServerError: If response status code is
-                 HTTP 500 and the response XML cannot be recognized.
-
+        :raises keystoneclient.exceptions.AuthorizationFailure: when HTTP
+                 response from the ADFS server is not a valid XML ADFS security
+                 token.
+        :raises keystoneclient.exceptions.InternalServerError: If response
+                 status code is HTTP 500 and the response XML cannot be
+                 recognized.
 
         """
         def _get_failure(e):
@@ -736,8 +730,8 @@ class ADFSUnscopedToken(_BaseSAMLPlugin):
         except exceptions.InternalServerError as e:
             reason = _get_failure(e)
             raise exceptions.AuthorizationFailure(reason)
-        msg = ("Error parsing XML returned from "
-               "the ADFS Identity Provider, reason: %s")
+        msg = _("Error parsing XML returned from "
+                "the ADFS Identity Provider, reason: %s")
         self.adfs_token = self.str_to_xml(response.content, msg)
 
     def _prepare_sp_request(self):
@@ -797,14 +791,15 @@ class ADFSUnscopedToken(_BaseSAMLPlugin):
         :param session : a session object to send out HTTP requests.
         :type session: keystoneclient.session.Session
 
-        :raises: exceptions.AuthorizationFailure: in case session object
-        has empty cookie jar.
+        :raises keystoneclient.exceptions.AuthorizationFailure: in case session
+        object has empty cookie jar.
 
         """
         if self._cookies(session) is False:
             raise exceptions.AuthorizationFailure(
-                "Session object doesn't contain a cookie, therefore you are "
-                "not allowed to enter the Identity Provider's protected area.")
+                _("Session object doesn't contain a cookie, therefore you are "
+                  "not allowed to enter the Identity Provider's protected "
+                  "area."))
         self.authenticated_response = session.get(self.token_url,
                                                   authenticated=False)
 
@@ -841,7 +836,7 @@ class ADFSUnscopedToken(_BaseSAMLPlugin):
         :param session : a session object to send out HTTP requests.
         :type session: keystoneclient.session.Session
 
-        :returns (Unscoped federated token, token JSON body)
+        :returns: (Unscoped federated token, token JSON body)
 
         """
         self._prepare_adfs_request()
@@ -883,4 +878,4 @@ class Saml2ScopedToken(v3.Token):
         super(Saml2ScopedToken, self).__init__(auth_url, token, **kwargs)
         if not (self.project_id or self.domain_id):
             raise exceptions.ValidationError(
-                'Neither project nor domain specified')
+                _('Neither project nor domain specified'))
