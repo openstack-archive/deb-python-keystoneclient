@@ -14,7 +14,7 @@ ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
 		rm -rf .testrepository ; \
 		testr-python$$PYMAJOR init ; \
 		TEMP_REZ=`mktemp -t` && \
-		PYTHONPATH=$(CURDIR) PYTHON=python$$i testr-python$$PYMAJOR run --subunit '(?!keystoneclient.tests.test_auth_token_middleware.*AuthTokenMiddlewareTest.test.*memcache_set_expired)' | tee $$TEMP_REZ | subunit2pyunit ; \
+		PYTHONPATH=$(CURDIR) PYTHON=python$$i testr-python$$PYMAJOR run --subunit '(?!\.*memcache_set_expired)' | tee $$TEMP_REZ | subunit2pyunit ; \
 		cat $$TEMP_REZ | subunit-filter -s --no-passthrough | subunit-stats ; \
 		rm -f $$TEMP_REZ ; \
 		testr-python$$PYMAJOR slowest ; \
