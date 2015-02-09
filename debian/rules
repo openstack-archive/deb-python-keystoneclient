@@ -8,12 +8,17 @@ export OSLO_PACKAGE_VERSION=$(VERSION)
 
 override_dh_auto_test:
 ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
-	set -e && \
-		TEMP_REZ=`mktemp -t` ; \
-		python setup.py testr --slowest --testr-args='--subunit  ' | tee $$TEMP_REZ | subunit2pyunit ; \
+	set -e ; for i in 2.7 ; do \
+		PYMAJOR=`echo $$i | cut -d'.' -f1` ; \
+		echo "===> Testing with python$$i (python$$PYMAJOR)" ; \
+		rm -rf .testrepository ; \
+		testr-python$$PYMAJOR init ; \
+		TEMP_REZ=`mktemp -t` && \
+		PYTHONPATH=$(CURDIR) PYTHON=python$$i testr-python$$PYMAJOR run --subunit '(?!.*('"keystoneclient.tests.test_auth_token_middleware.v2AuthTokenMiddlewareTest.test_memcache_set_expired|keystoneclient.tests.test_auth_token_middleware.v2AuthTokenMiddlewareTest.test_swift_memcache_set_expired|keystoneclient.tests.test_auth_token_middleware.v3AuthTokenMiddlewareTest.test_memcache_set_expired|keystoneclient.tests.test_auth_token_middleware.v3AuthTokenMiddlewareTest.test_swift_memcache_set_expired"'))' | tee $$TEMP_REZ | subunit2pyunit ; \
 		cat $$TEMP_REZ | subunit-filter -s --no-passthrough | subunit-stats ; \
-		rm -f $$TEMP_REZ ;
-#	bash run_tests.sh -N || true
+		rm -f $$TEMP_REZ ; \
+		testr-python$$PYMAJOR slowest ; \
+	done
 endif
 
 override_dh_auto_configure:
