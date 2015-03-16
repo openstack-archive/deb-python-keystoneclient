@@ -10,14 +10,12 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-import abc
 import os
 
 import six
 import stevedore
 
 from keystoneclient import exceptions
-from keystoneclient.i18n import _
 
 
 # NOTE(jamielennox): The AUTH_INTERFACE is a special value that can be
@@ -26,6 +24,7 @@ from keystoneclient.i18n import _
 AUTH_INTERFACE = object()
 
 PLUGIN_NAMESPACE = 'keystoneclient.auth.plugin'
+IDENTITY_AUTH_HEADER_NAME = 'X-Auth-Token'
 
 
 def get_plugin_class(name):
@@ -34,6 +33,7 @@ def get_plugin_class(name):
     :param str name: The name of the object to get.
 
     :returns: An auth plugin class.
+    :rtype: :py:class:`keystoneclient.auth.BaseAuthPlugin`
 
     :raises keystoneclient.exceptions.NoMatchingPlugin: if a plugin cannot be
                                                         created.
@@ -43,17 +43,14 @@ def get_plugin_class(name):
                                       name=name,
                                       invoke_on_load=False)
     except RuntimeError:
-        msg = _('The plugin %s could not be found') % name
-        raise exceptions.NoMatchingPlugin(msg)
+        raise exceptions.NoMatchingPlugin(name)
 
     return mgr.driver
 
 
-@six.add_metaclass(abc.ABCMeta)
 class BaseAuthPlugin(object):
     """The basic structure of an authentication plugin."""
 
-    @abc.abstractmethod
     def get_token(self, session, **kwargs):
         """Obtain a token.
 
@@ -66,10 +63,60 @@ class BaseAuthPlugin(object):
 
         Returning None will indicate that no token was able to be retrieved.
 
+        This function is misplaced as it should only be required for auth
+        plugins that use the 'X-Auth-Token' header. However due to the way
+        plugins evolved this method is required and often called to trigger an
+        authentication request on a new plugin.
+
+        When implementing a new plugin it is advised that you implement this
+        method, however if you don't require the 'X-Auth-Token' header override
+        the `get_headers` method instead.
+
         :param session: A session object so the plugin can make HTTP calls.
+        :type session: keystoneclient.session.Session
+
         :return: A token to use.
         :rtype: string
         """
+        return None
+
+    def get_headers(self, session, **kwargs):
+        """Fetch authentication headers for message.
+
+        This is a more generalized replacement of the older get_token to allow
+        plugins to specify different or additional authentication headers to
+        the OpenStack standard 'X-Auth-Token' header.
+
+        How the authentication headers are obtained is up to the plugin. If the
+        headers are still valid they may be re-used, retrieved from cache or
+        the plugin may invoke an authentication request against a server.
+
+        The default implementation of get_headers calls the `get_token` method
+        to enable older style plugins to continue functioning unchanged.
+        Subclasses should feel free to completely override this function to
+        provide the headers that they want.
+
+        There are no required kwargs. They are passed directly to the auth
+        plugin and they are implementation specific.
+
+        Returning None will indicate that no token was able to be retrieved and
+        that authorization was a failure. Adding no authentication data can be
+        achieved by returning an empty dictionary.
+
+        :param session: The session object that the auth_plugin belongs to.
+        :type session: keystoneclient.session.Session
+
+        :returns: Headers that are set to authenticate a message or None for
+                  failure. Note that when checking this value that the empty
+                  dict is a valid, non-failure response.
+        :rtype: dict
+        """
+        token = self.get_token(session)
+
+        if not token:
+            return None
+
+        return {IDENTITY_AUTH_HEADER_NAME: token}
 
     def get_endpoint(self, session, **kwargs):
         """Return an endpoint for the client.
@@ -84,13 +131,14 @@ class BaseAuthPlugin(object):
         - ``interface``: what visibility the endpoint should have.
         - ``region_name``: the region the endpoint exists in.
 
-        :param Session session: The session object that the auth_plugin
-                                belongs to.
+        :param session: The session object that the auth_plugin belongs to.
+        :type session: keystoneclient.session.Session
 
         :returns: The base URL that will be used to talk to the required
                   service or None if not available.
         :rtype: string
         """
+        return None
 
     def invalidate(self):
         """Invalidate the current authentication data.
@@ -107,6 +155,36 @@ class BaseAuthPlugin(object):
         :rtype: bool
         """
         return False
+
+    def get_user_id(self, session, **kwargs):
+        """Return a unique user identifier of the plugin.
+
+        Wherever possible the user id should be inferred from the token however
+        there are certain URLs and other places that require access to the
+        currently authenticated user id.
+
+        :param session: A session object so the plugin can make HTTP calls.
+        :type session: keystoneclient.session.Session
+
+        :returns: A user identifier or None if one is not available.
+        :rtype: str
+        """
+        return None
+
+    def get_project_id(self, session, **kwargs):
+        """Return the project id that we are authenticated to.
+
+        Wherever possible the project id should be inferred from the token
+        however there are certain URLs and other places that require access to
+        the currently authenticated project id.
+
+        :param session: A session object so the plugin can make HTTP calls.
+        :type session: keystoneclient.session.Session
+
+        :returns: A project identifier or None if one is not available.
+        :rtype: str
+        """
+        return None
 
     @classmethod
     def get_options(cls):
@@ -137,14 +215,14 @@ class BaseAuthPlugin(object):
         Given a plugin class convert it's options into argparse arguments and
         add them to a parser.
 
-        :param AuthPlugin plugin: an auth plugin class.
-        :param argparse.ArgumentParser: the parser to attach argparse options.
+        :param parser: the parser to attach argparse options.
+        :type parser: argparse.ArgumentParser
         """
 
-        # NOTE(jamielennox): ideally oslo.config would be smart enough to
+        # NOTE(jamielennox): ideally oslo_config would be smart enough to
         # handle all the Opt manipulation that goes on in this file. However it
         # is currently not.  Options are handled in as similar a way as
-        # possible to oslo.config such that when available we should be able to
+        # possible to oslo_config such that when available we should be able to
         # transition.
 
         for opt in cls.get_options():
@@ -171,10 +249,11 @@ class BaseAuthPlugin(object):
 
         Convert the results of a parse into the specified plugin.
 
-        :param AuthPlugin plugin: an auth plugin class.
-        :param Namespace namespace: The result from CLI parsing.
+        :param namespace: The result from CLI parsing.
+        :type namespace: argparse.Namespace
 
         :returns: An auth plugin, or None if a name is not provided.
+        :rtype: :py:class:`keystoneclient.auth.BaseAuthPlugin`
         """
         for opt in cls.get_options():
             val = getattr(namespace, 'os_%s' % opt.dest)
@@ -186,9 +265,10 @@ class BaseAuthPlugin(object):
 
     @classmethod
     def register_conf_options(cls, conf, group):
-        """Register the oslo.config options that are needed for a plugin.
+        """Register the oslo_config options that are needed for a plugin.
 
-        :param conf: An oslo.config conf object.
+        :param conf: A config object.
+        :type conf: oslo_config.cfg.ConfigOpts
         :param string group: The group name that options should be read from.
         """
         plugin_opts = cls.get_options()
@@ -200,11 +280,12 @@ class BaseAuthPlugin(object):
 
         Convert the options already registered into a real plugin.
 
-        :param conf: An oslo.config conf object.
+        :param conf: A config object.
+        :type conf: oslo_config.cfg.ConfigOpts
         :param string group: The group name that options should be read from.
 
         :returns: An authentication Plugin.
-        :rtype: plugin:
+        :rtype: :py:class:`keystoneclient.auth.BaseAuthPlugin`
         """
         plugin_opts = cls.get_options()
 

@@ -23,6 +23,7 @@ import base64
 import errno
 import hashlib
 import logging
+import textwrap
 import zlib
 
 import six
@@ -41,7 +42,7 @@ PKI_ASN1_FORM = 'PEM'
 
 # The openssl cms command exits with these status codes.
 # See https://www.openssl.org/docs/apps/cms.html#EXIT_CODES
-class OpensslCmsExitStatus:
+class OpensslCmsExitStatus(object):
     SUCCESS = 0
     INPUT_FILE_READ_ERROR = 2
     CREATE_CMS_READ_MIME_ERROR = 3
@@ -227,20 +228,10 @@ def pkiz_verify(signed_text, signing_cert_file_name, ca_file_name):
 def token_to_cms(signed_text):
     copy_of_text = signed_text.replace('-', '/')
 
-    formatted = '-----BEGIN CMS-----\n'
-    line_length = 64
-    while len(copy_of_text) > 0:
-        if (len(copy_of_text) > line_length):
-            formatted += copy_of_text[:line_length]
-            copy_of_text = copy_of_text[line_length:]
-        else:
-            formatted += copy_of_text
-            copy_of_text = ''
-        formatted += '\n'
-
-    formatted += '-----END CMS-----\n'
-
-    return formatted
+    lines = ['-----BEGIN CMS-----']
+    lines += textwrap.wrap(copy_of_text, 64)
+    lines.append('-----END CMS-----\n')
+    return '\n'.join(lines)
 
 
 def verify_token(token, signing_cert_file_name, ca_file_name):
@@ -291,7 +282,7 @@ def is_asn1_token(token):
       Checking for just M is insufficient
 
     But we will only check for MII:
-    Max length of the content using 2 octets is 7FFF or 32767.
+    Max length of the content using 2 octets is 3FFF or 16383.
 
     It's not practical to support a token of this length or greater in http
     therefore, we will check for MII only and ignore the case of larger tokens

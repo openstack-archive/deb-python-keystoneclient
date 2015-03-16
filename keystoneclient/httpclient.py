@@ -21,7 +21,7 @@ OpenStack Client interface. Handles the REST calls and responses.
 
 import logging
 
-from oslo.serialization import jsonutils
+from oslo_serialization import jsonutils
 import pkg_resources
 import requests
 from six.moves.urllib import parse as urlparse
@@ -361,6 +361,12 @@ class HTTPClient(baseclient.Client, base.BaseAuthPlugin):
             return self.auth_url
         else:
             return self.management_url
+
+    def get_user_id(self, session, **kwargs):
+        return self.auth_ref.user_id
+
+    def get_project_id(self, session, **kwargs):
+        return self.auth_ref.project_id
 
     @auth_token.setter
     def auth_token(self, value):

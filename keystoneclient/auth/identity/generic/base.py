@@ -13,12 +13,12 @@
 import abc
 import logging
 
-from oslo.config import cfg
+from oslo_config import cfg
 import six
 import six.moves.urllib.parse as urlparse
 
+from keystoneclient import _discover
 from keystoneclient.auth.identity import base
-from keystoneclient import discover
 from keystoneclient import exceptions
 from keystoneclient.i18n import _, _LW
 
@@ -81,7 +81,8 @@ class BaseGenericPlugin(base.BaseIdentityPlugin):
         params then it should return it. If not return None and then another
         call will be made with other available URLs.
 
-        :param Session session: A session object.
+        :param session: A session object.
+        :type session: keystoneclient.session.Session
         :param tuple version: A tuple of the API version at the URL.
         :param string url: The base URL for this version.
         :param string raw_status: The status that was in the discovery field.
@@ -147,7 +148,7 @@ class BaseGenericPlugin(base.BaseIdentityPlugin):
             for data in disc_data:
                 version = data['version']
 
-                if (discover.version_match((2,), version) and
+                if (_discover.version_match((2,), version) and
                         self._has_domain_scope):
                     # NOTE(jamielennox): if there are domain parameters there
                     # is no point even trying against v2 APIs.

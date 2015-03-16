@@ -157,9 +157,9 @@ import tempfile
 import time
 
 import netaddr
-from oslo.config import cfg
-from oslo.serialization import jsonutils
-from oslo.utils import timeutils
+from oslo_config import cfg
+from oslo_serialization import jsonutils
+from oslo_utils import timeutils
 import requests
 import six
 from six.moves import urllib
@@ -342,7 +342,7 @@ LIST_OF_VERSIONS_TO_ATTEMPT = ['v2.0', 'v3.0']
 CACHE_KEY_TEMPLATE = 'tokens/%s'
 
 
-class BIND_MODE:
+class BIND_MODE(object):
     DISABLED = 'disabled'
     PERMISSIVE = 'permissive'
     STRICT = 'strict'

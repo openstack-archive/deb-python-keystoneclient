@@ -15,11 +15,12 @@ import functools
 import hashlib
 import logging
 import os
+import socket
 import time
 
-from oslo.config import cfg
-from oslo.serialization import jsonutils
-from oslo.utils import importutils
+from oslo_config import cfg
+from oslo_serialization import jsonutils
+from oslo_utils import importutils
 import requests
 import six
 from six.moves import urllib
@@ -51,6 +52,26 @@ def _positive_non_zero_float(argument_value):
 
 def request(url, method='GET', **kwargs):
     return Session().request(url, method=method, **kwargs)
+
+
+def _remove_service_catalog(body):
+    try:
+        data = jsonutils.loads(body)
+
+        # V3 token
+        if 'token' in data and 'catalog' in data['token']:
+            data['token']['catalog'] = '<removed>'
+            return jsonutils.dumps(data)
+
+        # V2 token
+        if 'serviceCatalog' in data['access']:
+            data['access']['serviceCatalog'] = '<removed>'
+            return jsonutils.dumps(data)
+
+    except Exception:
+        # Don't fail trying to clean up the request body.
+        pass
+    return body
 
 
 class Session(object):
@@ -108,6 +129,9 @@ class Session(object):
                  redirect=_DEFAULT_REDIRECT_LIMIT):
         if not session:
             session = requests.Session()
+            # Use TCPKeepAliveAdapter to fix bug 1323862
+            for scheme in session.adapters.keys():
+                session.mount(scheme, TCPKeepAliveAdapter())
 
         self.auth = auth
         self.session = session
@@ -182,7 +206,7 @@ class Session(object):
             if not headers:
                 headers = response.headers
             if not text:
-                text = response.text
+                text = _remove_service_catalog(response.text)
         if json:
             text = jsonutils.dumps(json)
 
@@ -280,12 +304,13 @@ class Session(object):
             authenticated = bool(auth or self.auth)
 
         if authenticated:
-            token = self.get_token(auth)
+            auth_headers = self.get_auth_headers(auth)
 
-            if not token:
-                raise exceptions.AuthorizationFailure(_("No token Available"))
+            if auth_headers is None:
+                msg = _('No valid authentication is available')
+                raise exceptions.AuthorizationFailure(msg)
 
-            headers['X-Auth-Token'] = token
+            headers.update(auth_headers)
 
         if osprofiler_web:
             headers.update(osprofiler_web.get_trace_id_headers())
@@ -352,9 +377,10 @@ class Session(object):
         # and then retrying the request. This is only tried once.
         if resp.status_code == 401 and authenticated and allow_reauth:
             if self.invalidate(auth):
-                token = self.get_token(auth)
-                if token:
-                    headers['X-Auth-Token'] = token
+                auth_headers = self.get_auth_headers(auth)
+
+                if auth_headers is not None:
+                    headers.update(auth_headers)
                     resp = send(**kwargs)
 
         if raise_exc and resp.status_code >= 400:
@@ -534,6 +560,34 @@ class Session(object):
 
         return cls(verify=verify, cert=cert, **kwargs)
 
+    def _auth_required(self, auth, msg):
+        if not auth:
+            auth = self.auth
+
+        if not auth:
+            msg_fmt = _('An auth plugin is required to %s')
+            raise exceptions.MissingAuthPlugin(msg_fmt % msg)
+
+        return auth
+
+    def get_auth_headers(self, auth=None, **kwargs):
+        """Return auth headers as provided by the auth plugin.
+
+        :param auth: The auth plugin to use for token. Overrides the plugin
+                     on the session. (optional)
+        :type auth: :py:class:`keystoneclient.auth.base.BaseAuthPlugin`
+
+        :raises keystoneclient.exceptions.AuthorizationFailure: if a new token
+                                                                fetch fails.
+        :raises keystoneclient.exceptions.MissingAuthPlugin: if a plugin is not
+                                                             available.
+
+        :returns: Authentication headers or None for failure.
+        :rtype: dict
+        """
+        auth = self._auth_required(auth, 'fetch a token')
+        return auth.get_headers(self, **kwargs)
+
     def get_token(self, auth=None):
         """Return a token as provided by the auth plugin.
 
@@ -546,20 +600,14 @@ class Session(object):
         :raises keystoneclient.exceptions.MissingAuthPlugin: if a plugin is not
                                                              available.
 
+        *DEPRECATED*: This assumes that the only header that is used to
+                      authenticate a message is 'X-Auth-Token'. This may not be
+                      correct. Use get_auth_headers instead.
+
         :returns: A valid token.
         :rtype: string
         """
-        if not auth:
-            auth = self.auth
-
-        if not auth:
-            raise exceptions.MissingAuthPlugin(_("Token Required"))
-
-        try:
-            return auth.get_token(self)
-        except exceptions.HttpError as exc:
-            raise exceptions.AuthorizationFailure(
-                _("Authentication failure: %s") % exc)
+        return (self.get_auth_headers(auth) or {}).get('X-Auth-Token')
 
     def get_endpoint(self, auth=None, **kwargs):
         """Get an endpoint as provided by the auth plugin.
@@ -574,14 +622,7 @@ class Session(object):
         :returns: An endpoint if available or None.
         :rtype: string
         """
-        if not auth:
-            auth = self.auth
-
-        if not auth:
-            raise exceptions.MissingAuthPlugin(
-                _('An auth plugin is required to determine the endpoint '
-                  'URL.'))
-
+        auth = self._auth_required(auth, 'determine endpoint URL')
         return auth.get_endpoint(self, **kwargs)
 
     def invalidate(self, auth=None):
@@ -592,18 +633,46 @@ class Session(object):
         :type auth: :py:class:`keystoneclient.auth.base.BaseAuthPlugin`
 
         """
-        if not auth:
-            auth = self.auth
-
-        if not auth:
-            msg = _('Auth plugin not available to invalidate')
-            raise exceptions.MissingAuthPlugin(msg)
-
+        auth = self._auth_required(auth, 'validate')
         return auth.invalidate()
+
+    def get_user_id(self, auth=None):
+        """Return the authenticated user_id as provided by the auth plugin.
+
+        :param auth: The auth plugin to use for token. Overrides the plugin
+                     on the session. (optional)
+        :type auth: keystoneclient.auth.base.BaseAuthPlugin
+
+        :raises keystoneclient.exceptions.AuthorizationFailure:
+            if a new token fetch fails.
+        :raises keystoneclient.exceptions.MissingAuthPlugin:
+            if a plugin is not available.
+
+        :returns string: Current user_id or None if not supported by plugin.
+        """
+        auth = self._auth_required(auth, 'get user_id')
+        return auth.get_user_id(self)
+
+    def get_project_id(self, auth=None):
+        """Return the authenticated project_id as provided by the auth plugin.
+
+        :param auth: The auth plugin to use for token. Overrides the plugin
+                     on the session. (optional)
+        :type auth: keystoneclient.auth.base.BaseAuthPlugin
+
+        :raises keystoneclient.exceptions.AuthorizationFailure:
+            if a new token fetch fails.
+        :raises keystoneclient.exceptions.MissingAuthPlugin:
+            if a plugin is not available.
+
+        :returns string: Current project_id or None if not supported by plugin.
+        """
+        auth = self._auth_required(auth, 'get project_id')
+        return auth.get_project_id(self)
 
     @utils.positional.classmethod()
     def get_conf_options(cls, deprecated_opts=None):
-        """Get the oslo.config options that are needed for a
+        """Get the oslo_config options that are needed for a
         :py:class:`.Session`.
 
         These may be useful without being registered for config file generation
@@ -627,7 +696,7 @@ class Session(object):
                  old_opt = oslo.cfg.DeprecatedOpt('ca_file', 'old_group')
                  deprecated_opts={'cafile': [old_opt]}
 
-        :returns: A list of oslo.config options.
+        :returns: A list of oslo_config options.
         """
         if deprecated_opts is None:
             deprecated_opts = {}
@@ -653,7 +722,7 @@ class Session(object):
 
     @utils.positional.classmethod()
     def register_conf_options(cls, conf, group, deprecated_opts=None):
-        """Register the oslo.config options that are needed for a session.
+        """Register the oslo_config options that are needed for a session.
 
         The options that are set are:
             :cafile: The certificate authority filename.
@@ -662,7 +731,7 @@ class Session(object):
             :insecure: Whether to ignore SSL verification.
             :timeout: The max time to wait for HTTP connections.
 
-        :param oslo.config.Cfg conf: config object to register with.
+        :param oslo_config.Cfg conf: config object to register with.
         :param string group: The ini group to register options in.
         :param dict deprecated_opts: Deprecated options that should be included
              in the definition of new options. This should be a dict from the
@@ -684,12 +753,12 @@ class Session(object):
 
     @classmethod
     def load_from_conf_options(cls, conf, group, **kwargs):
-        """Create a session object from an oslo.config object.
+        """Create a session object from an oslo_config object.
 
         The options must have been previously registered with
         register_conf_options.
 
-        :param oslo.config.Cfg conf: config object to register with.
+        :param oslo_config.Cfg conf: config object to register with.
         :param string group: The ini group to register options in.
         :param dict kwargs: Additional parameters to pass to session
                             construction.
@@ -763,3 +832,14 @@ class Session(object):
         kwargs['timeout'] = args.timeout
 
         return cls._make(**kwargs)
+
+
+class TCPKeepAliveAdapter(requests.adapters.HTTPAdapter):
+    """The custom adapter used to set TCP Keep-Alive on all connections."""
+    def init_poolmanager(self, *args, **kwargs):
+        if requests.__version__ >= '2.4.1':
+            kwargs.setdefault('socket_options', [
+                (socket.IPPROTO_TCP, socket.TCP_NODELAY, 1),
+                (socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1),
+            ])
+        super(TCPKeepAliveAdapter, self).init_poolmanager(*args, **kwargs)

@@ -6,11 +6,10 @@ There's a Python API (the ``keystoneclient`` module), and a command-line script
 (``keystone``).
 
 Development takes place via the usual OpenStack processes as outlined in the
-`OpenStack wiki <http://wiki.openstack.org/HowToContribute>`_.  The master
-repository is on `GitHub <http://github.com/openstack/python-keystoneclient>`_.
+`developer guide <http://docs.openstack.org/infra/manual/developers.html>`_.  The master
+repository is in `Git <http://git.openstack.org/cgit/openstack/python-keystoneclient>`_.
 
-This code is a fork of `Rackspace's python-novaclient
-<http://github.com/rackspace/python-novaclient>`_ which is in turn a fork of
+This code is a fork of Rackspace's python-novaclient which is in turn a fork of
 `Jacobian's python-cloudservers
 <http://github.com/jacobian/python-cloudservers>`_. ``python-keystoneclient``
 is licensed under the Apache License like the rest of OpenStack.

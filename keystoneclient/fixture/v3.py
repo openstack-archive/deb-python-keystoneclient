@@ -13,7 +13,7 @@
 import datetime
 import uuid
 
-from oslo.utils import timeutils
+from oslo_utils import timeutils
 
 from keystoneclient.fixture import exception
 
@@ -28,7 +28,8 @@ class _Service(dict):
     def add_endpoint(self, interface, url, region=None):
         data = {'interface': interface,
                 'url': url,
-                'region': region}
+                'region': region,
+                'region_id': region}
         self.setdefault('endpoints', []).append(data)
         return data
 

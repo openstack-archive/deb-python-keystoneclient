@@ -26,7 +26,7 @@ import argparse
 import getpass
 import sys
 
-from oslo.utils import strutils
+from oslo_utils import strutils
 import six
 
 from keystoneclient.i18n import _
@@ -248,11 +248,11 @@ def do_tenant_delete(kc, args):
     kc.tenants.delete(tenant)
 
 
-@utils.arg('--name', metavar='<name>', required=True,
-           help='Name of new service (must be unique).')
 @utils.arg('--type', metavar='<type>', required=True,
            help='Service type (one of: identity, compute, network, '
                 'image, object-store, or other service identifier string).')
+@utils.arg('--name', metavar='<name>',
+           help='Name of new service (must be unique).')
 @utils.arg('--description', metavar='<service-description>',
            help='Description of service.')
 def do_service_create(kc, args):
