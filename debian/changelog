@@ -1,4 +1,4 @@
-python-keystoneclient (1:1.0.0-1) UNRELEASED; urgency=medium
+python-keystoneclient (1:1.2.0-1) UNRELEASED; urgency=medium
 
   * New upstream release.
   * Fixed (build-)depends for this release.
