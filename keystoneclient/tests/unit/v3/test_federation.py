@@ -21,6 +21,7 @@ from keystoneclient.v3.contrib.federation import base
 from keystoneclient.v3.contrib.federation import identity_providers
 from keystoneclient.v3.contrib.federation import mappings
 from keystoneclient.v3.contrib.federation import protocols
+from keystoneclient.v3.contrib.federation import service_providers
 from keystoneclient.v3 import domains
 from keystoneclient.v3 import projects
 
@@ -70,14 +71,9 @@ class IdentityProviderTests(utils.TestCase, utils.CrudTests):
             self.assertRaises(TypeError, getattr(self.manager, f_name),
                               *args)
 
-    def test_create(self, ref=None, req_ref=None):
-        ref = ref or self.new_ref()
-
-        # req_ref argument allows you to specify a different
-        # signature for the request when the manager does some
-        # conversion before doing the request (e.g. converting
-        # from datetime object to timestamp string)
-        req_ref = (req_ref or ref).copy()
+    def test_create(self):
+        ref = self.new_ref()
+        req_ref = ref.copy()
         req_ref.pop('id')
 
         self.stub_entity('PUT', entity=ref, id=ref['id'], status_code=201)
@@ -107,16 +103,11 @@ class MappingTests(utils.TestCase, utils.CrudTests):
                                     uuid.uuid4().hex])
         return kwargs
 
-    def test_create(self, ref=None, req_ref=None):
-        ref = ref or self.new_ref()
+    def test_create(self):
+        ref = self.new_ref()
         manager_ref = ref.copy()
         mapping_id = manager_ref.pop('id')
-
-        # req_ref argument allows you to specify a different
-        # signature for the request when the manager does some
-        # conversion before doing the request (e.g. converting
-        # from datetime object to timestamp string)
-        req_ref = (req_ref or ref).copy()
+        req_ref = ref.copy()
 
         self.stub_entity('PUT', entity=req_ref, id=mapping_id,
                          status_code=201)
@@ -349,7 +340,7 @@ class FederationProjectTests(utils.TestCase):
         projects_json = {
             self.collection_key: [self.new_ref(), self.new_ref()]
         }
-        self.requests.get(self.URL, json=projects_json)
+        self.requests_mock.get(self.URL, json=projects_json)
         returned_list = self.manager.list()
 
         self.assertEqual(len(projects_ref), len(returned_list))
@@ -380,7 +371,7 @@ class FederationDomainTests(utils.TestCase):
         domains_json = {
             self.collection_key: domains_ref
         }
-        self.requests.get(self.URL, json=domains_json)
+        self.requests_mock.get(self.URL, json=domains_json)
         returned_list = self.manager.list()
         self.assertEqual(len(domains_ref), len(returned_list))
         for domain in returned_list:
@@ -407,3 +398,72 @@ class FederatedTokenTests(utils.TestCase):
     def test_get_user_domain_id(self):
         """Ensure a federated user's domain ID does not exist."""
         self.assertIsNone(self.federated_token.user_domain_id)
+
+
+class ServiceProviderTests(utils.TestCase, utils.CrudTests):
+    def setUp(self):
+        super(ServiceProviderTests, self).setUp()
+        self.key = 'service_provider'
+        self.collection_key = 'service_providers'
+        self.model = service_providers.ServiceProvider
+        self.manager = self.client.federation.service_providers
+        self.path_prefix = 'OS-FEDERATION'
+
+    def new_ref(self, **kwargs):
+        kwargs.setdefault('auth_url', uuid.uuid4().hex)
+        kwargs.setdefault('description', uuid.uuid4().hex)
+        kwargs.setdefault('enabled', True)
+        kwargs.setdefault('id', uuid.uuid4().hex)
+        kwargs.setdefault('sp_url', uuid.uuid4().hex)
+        return kwargs
+
+    def test_positional_parameters_expect_fail(self):
+        """Ensure CrudManager raises TypeError exceptions.
+
+        After passing wrong number of positional arguments
+        an exception should be raised.
+
+        Operations to be tested:
+            * create()
+            * get()
+            * list()
+            * delete()
+            * update()
+
+        """
+        POS_PARAM_1 = uuid.uuid4().hex
+        POS_PARAM_2 = uuid.uuid4().hex
+        POS_PARAM_3 = uuid.uuid4().hex
+
+        PARAMETERS = {
+            'create': (POS_PARAM_1, POS_PARAM_2),
+            'get': (POS_PARAM_1, POS_PARAM_2),
+            'list': (POS_PARAM_1, POS_PARAM_2),
+            'update': (POS_PARAM_1, POS_PARAM_2, POS_PARAM_3),
+            'delete': (POS_PARAM_1, POS_PARAM_2)
+        }
+
+        for f_name, args in PARAMETERS.items():
+            self.assertRaises(TypeError, getattr(self.manager, f_name),
+                              *args)
+
+    def test_create(self):
+        ref = self.new_ref()
+
+        # req_ref argument allows you to specify a different
+        # signature for the request when the manager does some
+        # conversion before doing the request (e.g. converting
+        # from datetime object to timestamp string)
+        req_ref = ref.copy()
+        req_ref.pop('id')
+
+        self.stub_entity('PUT', entity=ref, id=ref['id'], status_code=201)
+
+        returned = self.manager.create(**ref)
+        self.assertIsInstance(returned, self.model)
+        for attr in req_ref:
+            self.assertEqual(
+                getattr(returned, attr),
+                req_ref[attr],
+                'Expected different %s' % attr)
+        self.assertEntityRequestBodyIs(req_ref)

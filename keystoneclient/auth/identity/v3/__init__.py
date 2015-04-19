@@ -10,16 +10,21 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-from keystoneclient.tests.functional import base
+from keystoneclient.auth.identity.v3.base import *  # noqa
+from keystoneclient.auth.identity.v3.federated import *  # noqa
+from keystoneclient.auth.identity.v3.password import *  # noqa
+from keystoneclient.auth.identity.v3.token import *  # noqa
 
 
-class FakeTests(base.TestCase):
+__all__ = ['Auth',
+           'AuthConstructor',
+           'AuthMethod',
+           'BaseAuth',
 
-    # NOTE(jamielennox): These are purely to have something that passes to
-    # submit to the gate. After that is working this file can be removed and
-    # the real tests can begin to be ported from tempest.
+           'FederatedBaseAuth',
 
-    def test_version(self):
-        # NOTE(jamilennox): lol, 1st bug: version goes to stderr - can't test
-        # value, however it tests that return value = 0 automatically.
-        self.keystone('', flags='--version')
+           'Password',
+           'PasswordMethod',
+
+           'Token',
+           'TokenMethod']
