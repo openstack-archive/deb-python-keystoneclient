@@ -1,14 +1,35 @@
 #!/usr/bin/make -f
 
+PYTHONS:=$(shell pyversions -vr)
+PYTHON3S:=$(shell py3versions -vr)
+
 include /usr/share/openstack-pkg-tools/pkgos.make
 export OSLO_PACKAGE_VERSION=$(VERSION)
 
 %:
-	dh $@ --buildsystem=python_distutils --with python2,sphinxdoc
+	dh $@ --buildsystem=python_distutils --with python2,python3,sphinxdoc
+
+override_dh_install:
+	set -e ; for pyvers in $(PYTHONS); do \
+		python$$pyvers setup.py install --install-layout=deb \
+			--root $(CURDIR)/debian/python-keystoneclient ; \
+	done
+	set -e && for pyvers in $(PYTHON3S); do \
+		python$$pyvers setup.py install --install-layout=deb \
+			--root $(CURDIR)/debian/python3-keystoneclient ; \
+	done
+	mv $(CURDIR)/debian/python-keystoneclient/usr/bin/keystone $(CURDIR)/debian/python-keystoneclient/usr/bin/python2-keystone
+	mv $(CURDIR)/debian/python3-keystoneclient/usr/bin/keystone $(CURDIR)/debian/python3-keystoneclient/usr/bin/python3-keystone
+	rm -f $(CURDIR)/debian/python*/usr/lib/python*/dist-packages/*.pth
+
+override_dh_auto_install:
+	dh_auto_install
+	install -D -m 0644 tools/keystone.bash_completion $(CURDIR)/debian/python-keystoneclient/etc/bash_completion.d/keystone.bash_completion
+	rm -rf $(CURDIR)/debian/python-keystoneclient/usr/keystoneclient
 
 override_dh_auto_test:
 ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
-	set -e ; for i in 2.7 ; do \
+	set -e ; for i in 2.7 $(PYTHON3S) ; do \
 		PYMAJOR=`echo $$i | cut -d'.' -f1` ; \
 		echo "===> Testing with python$$i (python$$PYMAJOR)" ; \
 		rm -rf .testrepository ; \
@@ -21,29 +42,18 @@ ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
 	done
 endif
 
-override_dh_auto_configure:
-	echo $(VERSION) > keystoneclient/versioninfo
-	dh_auto_configure
-
 override_dh_clean:
-	echo $(VERSION) > keystoneclient/versioninfo
 	dh_clean
-	rm -f keystoneclient/versioninfo
 
 override_dh_auto_clean:
-	rm -rf python_keystoneclient.egg-info build doc/man .testrepository
+	rm -rf doc/man .testrepository
 
-override_dh_auto_install:
-	dh_auto_install
-	install -D -m 0644 tools/keystone.bash_completion $(CURDIR)/debian/python-keystoneclient/etc/bash_completion.d/keystone.bash_completion
-	rm -rf $(CURDIR)/debian/python-keystoneclient/usr/keystoneclient
 
 override_dh_sphinxdoc:
 ifeq (,$(findstring nodocs, $(DEB_BUILD_OPTIONS)))
 	sphinx-build -b html doc/source $(CURDIR)/debian/python-keystoneclient/usr/share/doc/python-keystoneclient/html
 	dh_sphinxdoc -O--buildsystem=python_distutils
 endif
-
 
 override_dh_installman:
 ifeq (,$(findstring nodocs, $(DEB_BUILD_OPTIONS)))
