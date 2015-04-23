@@ -3,6 +3,7 @@ python-keystoneclient (1:0.10.1-3) unstable; urgency=high
   * CVE-2015-1852: S3token incorrect condition expression for ssl_insecure.
     Applied upstream patch: Fix s3_token middleware parsing insecure option.
     (Closes: #783164)
+  * Added python-oslo.utils (build-)depends introduce by this patch.
 
  -- Thomas Goirand <zigo@debian.org>  Thu, 23 Apr 2015 10:18:50 +0200
 
