@@ -1,3 +1,4 @@
 no-intersphinx.patch
 do-not-call-TestCase.setUp-twice.patch
 CVE-2014-7144_Fix_the_condition_expression_for_ssl_insecure.patch
+CVE-2015-1852_Fix-s3_token-middleware-parsing-insecure-option.patch
