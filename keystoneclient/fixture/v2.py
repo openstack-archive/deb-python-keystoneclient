@@ -21,12 +21,13 @@ from keystoneclient.fixture import exception
 class _Service(dict):
 
     def add_endpoint(self, public, admin=None, internal=None,
-                     tenant_id=None, region=None):
+                     tenant_id=None, region=None, id=None):
         data = {'tenantId': tenant_id or uuid.uuid4().hex,
                 'publicURL': public,
                 'adminURL': admin or public,
                 'internalURL': internal or public,
-                'region': region}
+                'region': region,
+                'id': id or uuid.uuid4().hex}
 
         self.setdefault('endpoints', []).append(data)
         return data
@@ -43,12 +44,14 @@ class Token(dict):
 
     def __init__(self, token_id=None, expires=None, issued=None,
                  tenant_id=None, tenant_name=None, user_id=None,
-                 user_name=None, trust_id=None, trustee_user_id=None):
+                 user_name=None, trust_id=None, trustee_user_id=None,
+                 audit_id=None, audit_chain_id=None):
         super(Token, self).__init__()
 
         self.token_id = token_id or uuid.uuid4().hex
         self.user_id = user_id or uuid.uuid4().hex
         self.user_name = user_name or uuid.uuid4().hex
+        self.audit_id = audit_id or uuid.uuid4().hex
 
         if not issued:
             issued = timeutils.utcnow() - datetime.timedelta(minutes=2)
@@ -75,6 +78,9 @@ class Token(dict):
             # the token is being issued to the trustee
             self.set_trust(id=trust_id,
                            trustee_user_id=trustee_user_id or user_id)
+
+        if audit_chain_id:
+            self.audit_chain_id = audit_chain_id
 
     @property
     def root(self):
@@ -166,7 +172,7 @@ class Token(dict):
 
     @property
     def trust_id(self):
-        return self.root.setdefault('trust', {})['id']
+        return self.root.setdefault('trust', {}).get('id')
 
     @trust_id.setter
     def trust_id(self, value):
@@ -179,6 +185,30 @@ class Token(dict):
     @trustee_user_id.setter
     def trustee_user_id(self, value):
         self.root.setdefault('trust', {})['trustee_user_id'] = value
+
+    @property
+    def audit_id(self):
+        try:
+            return self._token.get('audit_ids', [])[0]
+        except IndexError:
+            return None
+
+    @audit_id.setter
+    def audit_id(self, value):
+        audit_chain_id = self.audit_chain_id
+        lval = [value] if audit_chain_id else [value, audit_chain_id]
+        self._token['audit_ids'] = lval
+
+    @property
+    def audit_chain_id(self):
+        try:
+            return self._token.get('audit_ids', [])[1]
+        except IndexError:
+            return None
+
+    @audit_chain_id.setter
+    def audit_chain_id(self, value):
+        self._token['audit_ids'] = [self.audit_id, value]
 
     def validate(self):
         scoped = 'tenant' in self.token

@@ -35,6 +35,7 @@ class V2TokenTests(utils.TestCase):
         self.assertEqual(user_id, token['access']['user']['id'])
         self.assertEqual(user_name, token.user_name)
         self.assertEqual(user_name, token['access']['user']['name'])
+        self.assertIsNone(token.trust_id)
 
     def test_tenant_scoped(self):
         tenant_id = uuid.uuid4().hex
@@ -48,6 +49,7 @@ class V2TokenTests(utils.TestCase):
         self.assertEqual(tenant_name, token.tenant_name)
         tn = token['access']['token']['tenant']['name']
         self.assertEqual(tenant_name, tn)
+        self.assertIsNone(token.trust_id)
 
     def test_trust_scoped(self):
         trust_id = uuid.uuid4().hex
@@ -82,6 +84,7 @@ class V2TokenTests(utils.TestCase):
     def test_services(self):
         service_type = uuid.uuid4().hex
         service_name = uuid.uuid4().hex
+        endpoint_id = uuid.uuid4().hex
         region = uuid.uuid4().hex
 
         public = uuid.uuid4().hex
@@ -94,7 +97,8 @@ class V2TokenTests(utils.TestCase):
         svc.add_endpoint(public=public,
                          admin=admin,
                          internal=internal,
-                         region=region)
+                         region=region,
+                         id=endpoint_id)
 
         self.assertEqual(1, len(token['access']['serviceCatalog']))
         service = token['access']['serviceCatalog'][0]['endpoints'][0]
@@ -103,6 +107,7 @@ class V2TokenTests(utils.TestCase):
         self.assertEqual(internal, service['internalURL'])
         self.assertEqual(admin, service['adminURL'])
         self.assertEqual(region, service['region'])
+        self.assertEqual(endpoint_id, service['id'])
 
 
 class V3TokenTests(utils.TestCase):
@@ -216,13 +221,16 @@ class V3TokenTests(utils.TestCase):
     def test_catalog(self):
         service_type = uuid.uuid4().hex
         service_name = uuid.uuid4().hex
+        service_id = uuid.uuid4().hex
         region = uuid.uuid4().hex
         endpoints = {'public': uuid.uuid4().hex,
                      'internal': uuid.uuid4().hex,
                      'admin': uuid.uuid4().hex}
 
         token = fixture.V3Token()
-        svc = token.add_service(type=service_type, name=service_name)
+        svc = token.add_service(type=service_type,
+                                name=service_name,
+                                id=service_id)
         svc.add_standard_endpoints(region=region, **endpoints)
 
         self.assertEqual(1, len(token['token']['catalog']))
@@ -231,6 +239,12 @@ class V3TokenTests(utils.TestCase):
 
         self.assertEqual(service_name, service['name'])
         self.assertEqual(service_type, service['type'])
+        self.assertEqual(service_id, service['id'])
+
+        for endpoint in service['endpoints']:
+            # assert an id exists for each endpoint, remove it to make testing
+            # the endpoint content below easier.
+            self.assertTrue(endpoint.pop('id'))
 
         for interface, url in six.iteritems(endpoints):
             endpoint = {'interface': interface, 'url': url,

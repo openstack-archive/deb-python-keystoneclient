@@ -10,8 +10,11 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+import argparse
 import copy
 import uuid
+
+import mock
 
 from keystoneclient import access
 from keystoneclient.auth.identity import v3
@@ -114,9 +117,8 @@ class V3IdentityPlugin(utils.TestCase):
     def setUp(self):
         super(V3IdentityPlugin, self).setUp()
 
-        V3_URL = "%sv3" % self.TEST_URL
         self.TEST_DISCOVERY_RESPONSE = {
-            'versions': {'values': [fixture.V3Discovery(V3_URL)]}}
+            'versions': {'values': [fixture.V3Discovery(self.TEST_URL)]}}
 
         self.TEST_RESPONSE_DICT = {
             "token": {
@@ -496,3 +498,67 @@ class V3IdentityPlugin(utils.TestCase):
         self.assertIs(v3.AuthMethod, v3_base.AuthMethod)
         self.assertIs(v3.AuthConstructor, v3_base.AuthConstructor)
         self.assertIs(v3.Auth, v3_base.Auth)
+
+    def test_unscoped_request(self):
+        token = fixture.V3Token()
+        self.stub_auth(json=token)
+        password = uuid.uuid4().hex
+
+        a = v3.Password(self.TEST_URL,
+                        user_id=token.user_id,
+                        password=password,
+                        unscoped=True)
+        s = session.Session()
+
+        auth_ref = a.get_access(s)
+
+        self.assertFalse(auth_ref.scoped)
+        body = self.requests_mock.last_request.json()
+
+        ident = body['auth']['identity']
+
+        self.assertEqual(['password'], ident['methods'])
+        self.assertEqual(token.user_id, ident['password']['user']['id'])
+        self.assertEqual(password, ident['password']['user']['password'])
+
+        self.assertEqual({}, body['auth']['scope']['unscoped'])
+
+    def test_unscoped_with_scope_data(self):
+        a = v3.Password(self.TEST_URL,
+                        user_id=uuid.uuid4().hex,
+                        password=uuid.uuid4().hex,
+                        unscoped=True,
+                        project_id=uuid.uuid4().hex)
+
+        s = session.Session()
+
+        self.assertRaises(exceptions.AuthorizationFailure, a.get_auth_ref, s)
+
+    @mock.patch('sys.stdin', autospec=True)
+    def test_prompt_password(self, mock_stdin):
+        parser = argparse.ArgumentParser()
+        v3.Password.register_argparse_arguments(parser)
+
+        username = uuid.uuid4().hex
+        user_domain_id = uuid.uuid4().hex
+        auth_url = uuid.uuid4().hex
+        project_id = uuid.uuid4().hex
+        password = uuid.uuid4().hex
+
+        opts = parser.parse_args(['--os-username', username,
+                                  '--os-auth-url', auth_url,
+                                  '--os-user-domain-id', user_domain_id,
+                                  '--os-project-id', project_id])
+
+        with mock.patch('getpass.getpass') as mock_getpass:
+            mock_getpass.return_value = password
+            mock_stdin.isatty = lambda: True
+
+            plugin = v3.Password.load_from_argparse_arguments(opts)
+
+            self.assertEqual(auth_url, plugin.auth_url)
+            self.assertEqual(username, plugin.auth_methods[0].username)
+            self.assertEqual(project_id, plugin.project_id)
+            self.assertEqual(user_domain_id,
+                             plugin.auth_methods[0].user_domain_id)
+            self.assertEqual(password, plugin.auth_methods[0].password)

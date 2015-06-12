@@ -25,8 +25,9 @@ class _Service(dict):
     this object and then you can add_endpoints to the service.
     """
 
-    def add_endpoint(self, interface, url, region=None):
-        data = {'interface': interface,
+    def add_endpoint(self, interface, url, region=None, id=None):
+        data = {'id': id or uuid.uuid4().hex,
+                'interface': interface,
                 'url': url,
                 'region': region,
                 'region_id': region}
@@ -62,13 +63,14 @@ class Token(dict):
                  project_domain_name=None, domain_id=None, domain_name=None,
                  trust_id=None, trust_impersonation=None, trustee_user_id=None,
                  trustor_user_id=None, oauth_access_token_id=None,
-                 oauth_consumer_id=None):
+                 oauth_consumer_id=None, audit_id=None, audit_chain_id=None):
         super(Token, self).__init__()
 
         self.user_id = user_id or uuid.uuid4().hex
         self.user_name = user_name or uuid.uuid4().hex
         self.user_domain_id = user_domain_id or uuid.uuid4().hex
         self.user_domain_name = user_domain_name or uuid.uuid4().hex
+        self.audit_id = audit_id or uuid.uuid4().hex
 
         if not methods:
             methods = ['password']
@@ -112,6 +114,9 @@ class Token(dict):
         if oauth_access_token_id or oauth_consumer_id:
             self.set_oauth(access_token_id=oauth_access_token_id,
                            consumer_id=oauth_consumer_id)
+
+        if audit_chain_id:
+            self.audit_chain_id = audit_chain_id
 
     @property
     def root(self):
@@ -295,6 +300,30 @@ class Token(dict):
     def oauth_consumer_id(self, value):
         self.root.setdefault('OS-OAUTH1', {})['consumer_id'] = value
 
+    @property
+    def audit_id(self):
+        try:
+            return self.root.get('audit_ids', [])[0]
+        except IndexError:
+            return None
+
+    @audit_id.setter
+    def audit_id(self, value):
+        audit_chain_id = self.audit_chain_id
+        lval = [value] if audit_chain_id else [value, audit_chain_id]
+        self.root['audit_ids'] = lval
+
+    @property
+    def audit_chain_id(self):
+        try:
+            return self.root.get('audit_ids', [])[1]
+        except IndexError:
+            return None
+
+    @audit_chain_id.setter
+    def audit_chain_id(self, value):
+        self.root['audit_ids'] = [self.audit_id, value]
+
     def validate(self):
         project = self.root.get('project')
         domain = self.root.get('domain')
@@ -326,8 +355,8 @@ class Token(dict):
         roles.append(data)
         return data
 
-    def add_service(self, type, name=None):
-        service = _Service(type=type)
+    def add_service(self, type, name=None, id=None):
+        service = _Service(type=type, id=id or uuid.uuid4().hex)
         if name:
             service['name'] = name
         self.root.setdefault('catalog', []).append(service)
