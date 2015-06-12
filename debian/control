@@ -75,6 +75,7 @@ Standards-Version: 3.9.6
 Homepage: https://github.com/openstack/python-keystoneclient
 Vcs-Git: git://anonscm.debian.org/openstack/python-keystoneclient.git
 Vcs-Browser: http://anonscm.debian.org/gitweb/?p=openstack/python-keystoneclient.git;a=summary
+XS-Testsuite: autopkgtest
 
 Package: python-keystoneclient
 Architecture: all
