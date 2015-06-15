@@ -1,0 +1,47 @@
+Description: Work around upstream issue with memcached if running
+             under Python 3.x.
+             https://github.com/linsomniac/python-memcached/issues/70
+Author: Corey Bryant <corey.bryant@canonical.com>
+Forwarded: No
+Last-Update: 2015-06-12
+
+--- a/keystoneclient/tests/unit/test_auth_token_middleware.py
++++ b/keystoneclient/tests/unit/test_auth_token_middleware.py
+@@ -21,6 +21,7 @@
+ import tempfile
+ import time
+ import uuid
++import sys
+ 
+ import fixtures
+ import iso8601
+@@ -89,13 +90,22 @@
+     global MEMCACHED_AVAILABLE
+ 
+     if MEMCACHED_AVAILABLE is None:
+-        try:
+-            import memcache
+-            c = memcache.Client(MEMCACHED_SERVERS)
+-            c.set('ping', 'pong', time=1)
+-            MEMCACHED_AVAILABLE = c.get('ping') == 'pong'
+-        except ImportError:
+-            MEMCACHED_AVAILABLE = False
++        if sys.version_info >= (3, 0):
++            try:
++                import memcache
++                c = memcache.Client(MEMCACHED_SERVERS)
++                c.set('ping', 'pong', time=1)
++                MEMCACHED_AVAILABLE = c.get('ping') == 'pong'
++            except (ImportError, TypeError):
++                MEMCACHED_AVAILABLE = False
++        else:
++            try:
++                import memcache
++                c = memcache.Client(MEMCACHED_SERVERS)
++                c.set('ping', 'pong', time=1)
++                MEMCACHED_AVAILABLE = c.get('ping') == 'pong'
++            except ImportError:
++                MEMCACHED_AVAILABLE = False
+ 
+     return MEMCACHED_AVAILABLE
+ 

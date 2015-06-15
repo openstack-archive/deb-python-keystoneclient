@@ -1,0 +1,31 @@
+From d99c56fa531ba149df84f7a1178ec9a2a740f1ee Mon Sep 17 00:00:00 2001
+From: Corey Bryant <corey.bryant@canonical.com>
+Date: Tue, 9 Jun 2015 13:42:53 -0400
+Subject: [PATCH] Iterate over copy of sys.modules keys in Python2/3
+
+Iterate over a copy of sys.modules keys in both Python 2.x and
+Python 3.x.  In Python 3.x, keys() is not a copy, and therefore
+items can't be popped from it while iterating.
+
+Change-Id: I98c3d7695bbfe3a6a4f23990af45a07dc147f22f
+Closes-Bug: #1463503
+---
+ keystoneclient/tests/unit/utils.py | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/keystoneclient/tests/unit/utils.py b/keystoneclient/tests/unit/utils.py
+index b3405fb..1b45c36 100644
+--- a/keystoneclient/tests/unit/utils.py
++++ b/keystoneclient/tests/unit/utils.py
+@@ -179,7 +179,7 @@ class DisableModuleFixture(fixtures.Fixture):
+ 
+     def clear_module(self):
+         cleared_modules = {}
+-        for fullname in sys.modules.keys():
++        for fullname in list(sys.modules):
+             if (fullname == self.module or
+                     fullname.startswith(self.module + '.')):
+                 cleared_modules[fullname] = sys.modules.pop(fullname)
+-- 
+2.1.4
+
