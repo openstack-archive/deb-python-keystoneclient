@@ -1,3 +1,19 @@
+python-keystoneclient (1:1.6.0-1) UNRELEASED; urgency=medium
+
+  * New upstream release.
+    - d/control: Align requirements with upstream.
+    - d/gbp.conf: Update gbp configuration for liberty branch.
+  * Converge Ubuntu and Debian package:
+    - d/tests/*: Add DEP 8 tests from Ubuntu.
+  * Deal with Python 3.x test issues:
+    - d/rules: Only run Python 2.7 and Python 3.4 tests.
+    - d/p/fix-assertRaisesRegex-python3-tests.patch: Use python-six shim.
+    - d/p/fix-dictionary-iteration-python3-test.patch: Enable dict iteration.
+    - d/p/skip-memcache-python3-test.patch: Work around memcache check.
+    - d/p/skip-pep8-python3-test.patch: Skip PEP8 test for Python 3.x.
+
+ -- Corey Bryant <corey.bryant@canonical.com>  Fri, 12 Jun 2015 13:28:32 -0400
+
 python-keystoneclient (1:1.3.0-1) unstable; urgency=medium
 
   * New upstream release.
