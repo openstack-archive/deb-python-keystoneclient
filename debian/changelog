@@ -13,7 +13,6 @@ python-keystoneclient (1:1.6.0-1) UNRELEASED; urgency=medium
     - d/p/skip-pep8-python3-test.patch: Skip PEP8 test for Python 3.x.
 
   [ Thomas Goirand ]
-  * Now using bzip2 for the orig.tar.
   * Added Corey Bryant <corey.bryant@canonical.com> as Uploaders:.
   * Adds the python3- package.
 
