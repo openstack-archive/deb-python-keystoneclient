@@ -14,7 +14,7 @@ python-keystoneclient (1:1.6.0-1) UNRELEASED; urgency=medium
 
   [ Thomas Goirand ]
   * Added Corey Bryant <corey.bryant@canonical.com> as Uploaders:.
-  * Adds the python3- package.
+  * Adds the python3- and the -doc packages.
 
  -- Corey Bryant <corey.bryant@canonical.com>  Fri, 12 Jun 2015 13:28:32 -0400
 

@@ -95,7 +95,6 @@ Depends: python-babel,
          python-stevedore (>= 1.3.0),
          ${misc:Depends},
          ${python:Depends},
-         ${sphinxdoc:Depends},
 Description: client library for the OpenStack Keystone API - Python 2.x
  This is the identity service used by OpenStack for authentication (authN)
  and high-level authorization (authZ). It currently supports token-based
@@ -130,7 +129,6 @@ Depends: python3-babel,
          python3-stevedore (>= 1.3.0),
          ${misc:Depends},
          ${python3:Depends},
-         ${sphinxdoc:Depends},
 Description: client library for the OpenStack Keystone API - Python 3.x
  This is the identity service used by OpenStack for authentication (authN)
  and high-level authorization (authZ). It currently supports token-based
@@ -147,3 +145,25 @@ Description: client library for the OpenStack Keystone API - Python 3.x
  the "python3-openstackclient" package.
  .
  This package contains the Python 3.x module.
+
+Package: python-keystoneclient-doc
+Section: doc
+Architecture: all
+Depends: ${misc:Depends},
+         ${sphinxdoc:Depends},
+Description: client library for the OpenStack Keystone API - Python 3.x
+ This is the identity service used by OpenStack for authentication (authN)
+ and high-level authorization (authZ). It currently supports token-based
+ authN with user/service authZ, and is scalable to support OAuth, SAML,
+ and OpenID in future versions. Out of the box, Keystone uses SQLite for
+ its identity store database, with the option to connect to external LDAP.
+ .
+ This is a client for the OpenStack Keystone API. There's a Python API
+ (the "keystoneclient" module), and a command-line script ("keystone").
+ .
+ Installing this package gets you a shell command, that you can use to
+ interact with Keystone's API. Note that the "keystone" command line is
+ currently deprecated in favor of the "openstack" one available within
+ the "python3-openstackclient" package.
+ .
+ This package contains the documentation.

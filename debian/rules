@@ -51,7 +51,7 @@ override_dh_auto_clean:
 
 override_dh_sphinxdoc:
 ifeq (,$(findstring nodocs, $(DEB_BUILD_OPTIONS)))
-	sphinx-build -b html doc/source $(CURDIR)/debian/python-keystoneclient/usr/share/doc/python-keystoneclient/html
+	sphinx-build -b html doc/source $(CURDIR)/debian/python-keystoneclient-doc/usr/share/doc/python-keystoneclient-doc/html
 	dh_sphinxdoc -O--buildsystem=python_distutils
 endif
 
