@@ -24,7 +24,7 @@ override_dh_install:
 
 override_dh_auto_install:
 	dh_auto_install
-	install -D -m 0644 tools/keystone.bash_completion $(CURDIR)/debian/python-keystoneclient/etc/bash_completion.d/keystone.bash_completion
+	install -D -m 0644 tools/keystone.bash_completion $(CURDIR)/debian/python-keystoneclient/usr/share/bash-completion/completions/keystone.bash_completion
 	rm -rf $(CURDIR)/debian/python-keystoneclient/usr/keystoneclient
 
 override_dh_auto_test:
