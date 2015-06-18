@@ -1,9 +1,0 @@
-Document: python-keystoneclient
-Title: Keystone Client Documentation
-Author: OpenStack
-Abstract: Sphinx documentation for Keystone Client
-Section: Programming/Python
-
-Format: HTML
-Index: /usr/share/doc/python-keystoneclient/html/index.html
-Files: /usr/share/doc/python-keystoneclient/html/*
