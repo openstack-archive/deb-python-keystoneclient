@@ -1,4 +1,4 @@
-python-keystoneclient (1:1.6.0-1) UNRELEASED; urgency=medium
+python-keystoneclient (1:1.6.0-1) experimental; urgency=medium
 
   * New upstream release.
     - d/control: Align requirements with upstream.
