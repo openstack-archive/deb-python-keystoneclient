@@ -151,7 +151,7 @@ Section: doc
 Architecture: all
 Depends: ${misc:Depends},
          ${sphinxdoc:Depends},
-Description: client library for the OpenStack Keystone API - Python 3.x
+Description: client library for the OpenStack Keystone API - doc
  This is the identity service used by OpenStack for authentication (authN)
  and high-level authorization (authZ). It currently supports token-based
  authN with user/service authZ, and is scalable to support OAuth, SAML,
