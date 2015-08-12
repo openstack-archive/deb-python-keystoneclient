@@ -2,3 +2,4 @@ fix-dictionary-iteration-python3-test.patch
 skip-pep8-python3-test.patch
 fix-assertRaisesRegex-python3-tests.patch
 skip-memcache-python3-test.patch
+fix-key-iteration.patch
