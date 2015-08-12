@@ -1,0 +1,83 @@
+From 7d5d8b343232ee5faf4de3381024095619335929 Mon Sep 17 00:00:00 2001
+From: Boris Bobrov <bbobrov@mirantis.com>
+Date: Wed, 22 Jul 2015 18:52:49 +0300
+Subject: [PATCH] Make OAuth testcase use actual request headers
+
+OAuth test verifies that access_token manager's methods make requests with
+certain parameters. It is supposed to use values from mocked http handler
+and compare them with referential values acquired from oauth client.
+
+But instead of using values from mocked handler, it used the values from
+oauth client and compared them with values from the client acquired using
+attributes, basically testing oauthlib and not access_token manager's
+methods.
+
+Make the test compare correct values and remove check of timestamp,
+which was useless because it is always mocked in tests and not provided in
+actual requests.
+
+As a consequence, use of get_oauth_params, which changed in oauthlib
+1.0 and blocked the gate, was removed.
+
+Closes-Bug: 1477177
+Closes-Bug: 1477247
+Change-Id: I5e049163f84fde5827104fd4a6441222eb08468f
+---
+ keystoneclient/tests/unit/v3/test_oauth1.py | 20 ++++----------------
+ 1 file changed, 4 insertions(+), 16 deletions(-)
+
+diff --git a/keystoneclient/tests/unit/v3/test_oauth1.py b/keystoneclient/tests/unit/v3/test_oauth1.py
+index 48af836..2ebfa50 100644
+--- a/keystoneclient/tests/unit/v3/test_oauth1.py
++++ b/keystoneclient/tests/unit/v3/test_oauth1.py
+@@ -28,7 +28,6 @@ from keystoneclient.v3.contrib.oauth1 import consumers
+ from keystoneclient.v3.contrib.oauth1 import request_tokens
+ 
+ try:
+-    import oauthlib
+     from oauthlib import oauth1
+ except ImportError:
+     oauth1 = None
+@@ -103,16 +102,8 @@ class TokenTests(BaseTest):
+         """
+ 
+         self.assertThat(auth_header, matchers.StartsWith('OAuth '))
+-        auth_header = auth_header[len('OAuth '):]
+-        # NOTE(stevemar): In newer versions of oauthlib there is
+-        # an additional argument for getting oauth parameters.
+-        # Adding a conditional here to revert back to no arguments
+-        # if an earlier version is detected.
+-        if tuple(oauthlib.__version__.split('.')) > ('0', '6', '1'):
+-            header_params = oauth_client.get_oauth_params(None)
+-        else:
+-            header_params = oauth_client.get_oauth_params()
+-        parameters = dict(header_params)
++        parameters = dict(
++            oauth1.rfc5849.utils.parse_authorization_header(auth_header))
+ 
+         self.assertEqual('HMAC-SHA1', parameters['oauth_signature_method'])
+         self.assertEqual('1.0', parameters['oauth_version'])
+@@ -128,9 +119,6 @@ class TokenTests(BaseTest):
+         if oauth_client.callback_uri:
+             self.assertEqual(oauth_client.callback_uri,
+                              parameters['oauth_callback'])
+-        if oauth_client.timestamp:
+-            self.assertEqual(oauth_client.timestamp,
+-                             parameters['oauth_timestamp'])
+         return parameters
+ 
+ 
+@@ -229,8 +217,8 @@ class AccessTokenTests(TokenTests):
+                                      resource_owner_key=request_key,
+                                      resource_owner_secret=request_secret,
+                                      signature_method=oauth1.SIGNATURE_HMAC,
+-                                     verifier=verifier,
+-                                     timestamp=expires_at)
++                                     verifier=verifier)
++
+         self._validate_oauth_headers(req_headers['Authorization'],
+                                      oauth_client)
+ 
+-- 
+2.1.4
+
