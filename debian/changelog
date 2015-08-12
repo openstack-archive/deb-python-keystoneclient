@@ -1,6 +1,7 @@
 python-keystoneclient (1:1.6.0-2) UNRELEASED; urgency=medium
 
   * d/p/fix-key-iteration.patch: Iterate over copy of session.adapters keys.
+  * d/p/fix-1368545.patch: Change http_connect_timeout to IntOpt. (LP: #1368545)
 
  -- Corey Bryant <corey.bryant@canonical.com>  Wed, 12 Aug 2015 09:30:59 -0400
 
