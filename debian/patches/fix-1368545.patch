@@ -12,9 +12,11 @@ Closes-bug: #1368545.
 Origin: upstream, https://review.openstack.org/#/c/126543
 Bug-Ubuntu: https://bugs.launchpad.net/keystonemiddleware/+bug/1368545
 
---- python-keystoneclient-0.7.1.orig/keystoneclient/middleware/auth_token.py
-+++ python-keystoneclient-0.7.1/keystoneclient/middleware/auth_token.py
-@@ -212,7 +212,7 @@ opts = [
+Index: python-keystoneclient/keystoneclient/middleware/auth_token.py
+===================================================================
+--- python-keystoneclient.orig/keystoneclient/middleware/auth_token.py
++++ python-keystoneclient/keystoneclient/middleware/auth_token.py
+@@ -235,7 +235,7 @@ opts = [
                  help='Do not handle authorization requests within the'
                  ' middleware, but delegate the authorization decision to'
                  ' downstream WSGI components'),

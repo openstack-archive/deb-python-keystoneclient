@@ -5,9 +5,11 @@ Author: Corey Bryant <corey.bryant@canonical.com>
 Forwarded: No
 Last-Update: 2015-06-12
 
---- a/keystoneclient/tests/unit/test_auth_token_middleware.py
-+++ b/keystoneclient/tests/unit/test_auth_token_middleware.py
-@@ -21,6 +21,7 @@
+Index: python-keystoneclient/keystoneclient/tests/unit/test_auth_token_middleware.py
+===================================================================
+--- python-keystoneclient.orig/keystoneclient/tests/unit/test_auth_token_middleware.py
++++ python-keystoneclient/keystoneclient/tests/unit/test_auth_token_middleware.py
+@@ -21,6 +21,7 @@ import stat
  import tempfile
  import time
  import uuid
@@ -15,7 +17,7 @@ Last-Update: 2015-06-12
  
  import fixtures
  import iso8601
-@@ -89,13 +90,22 @@
+@@ -90,13 +91,22 @@ def memcached_available():
      global MEMCACHED_AVAILABLE
  
      if MEMCACHED_AVAILABLE is None:

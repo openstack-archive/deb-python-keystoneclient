@@ -4,9 +4,11 @@ Author: Corey Bryant <corey.bryant@canonical.com>
 Forwarded: No
 Last-Update: 2015-06-09
 
---- a/keystoneclient/tests/unit/test_hacking_checks.py
-+++ b/keystoneclient/tests/unit/test_hacking_checks.py
-@@ -44,4 +44,7 @@
+Index: python-keystoneclient/keystoneclient/tests/unit/test_hacking_checks.py
+===================================================================
+--- python-keystoneclient.orig/keystoneclient/tests/unit/test_hacking_checks.py
++++ python-keystoneclient/keystoneclient/tests/unit/test_hacking_checks.py
+@@ -47,4 +47,7 @@ class TestCheckOsloNamespaceImports(test
          code_ex = self.useFixture(client_fixtures.HackingCode())
          code = code_ex.oslo_namespace_imports['code']
          errors = code_ex.oslo_namespace_imports['expected_errors']
