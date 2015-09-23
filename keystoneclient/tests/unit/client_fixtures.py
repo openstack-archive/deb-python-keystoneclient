@@ -12,7 +12,9 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+import contextlib
 import os
+import warnings
 
 import fixtures
 from oslo_serialization import jsonutils
@@ -595,3 +597,25 @@ class HackingCode(fixtures.Fixture):
             (30, 0, 'K333'),
         ],
     }
+
+
+class Deprecations(fixtures.Fixture):
+    def setUp(self):
+        super(Deprecations, self).setUp()
+
+        # If keystoneclient calls any deprecated function this will raise an
+        # exception.
+        warnings.filterwarnings('error', category=DeprecationWarning,
+                                module='^keystoneclient\\.')
+        self.addCleanup(warnings.resetwarnings)
+
+    def expect_deprecations(self):
+        """Call this if the test expects to call deprecated function."""
+        warnings.resetwarnings()
+
+    @contextlib.contextmanager
+    def expect_deprecations_here(self):
+        warnings.resetwarnings()
+        yield
+        warnings.filterwarnings('error', category=DeprecationWarning,
+                                module='^keystoneclient\\.')

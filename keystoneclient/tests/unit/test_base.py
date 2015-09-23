@@ -10,6 +10,8 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+from oslotest import mockpatch
+
 from keystoneclient import base
 from keystoneclient.tests.unit import utils
 from keystoneclient.v2_0 import client
@@ -34,15 +36,15 @@ class BaseTest(utils.TestCase):
         self.assertEqual(base.getid(TmpObject), 4)
 
     def test_resource_lazy_getattr(self):
-        self.client = client.Client(username=self.TEST_USER,
-                                    token=self.TEST_TOKEN,
-                                    tenant_name=self.TEST_TENANT_NAME,
-                                    auth_url='http://127.0.0.1:5000',
-                                    endpoint='http://127.0.0.1:5000')
+        # Creating a Client not using session is deprecated.
+        with self.deprecations.expect_deprecations_here():
+            self.client = client.Client(token=self.TEST_TOKEN,
+                                        auth_url='http://127.0.0.1:5000',
+                                        endpoint='http://127.0.0.1:5000')
 
-        self.client._adapter.get = self.mox.CreateMockAnything()
-        self.client._adapter.get('/OS-KSADM/roles/1').AndRaise(AttributeError)
-        self.mox.ReplayAll()
+        self.useFixture(mockpatch.PatchObject(
+            self.client._adapter, 'get', side_effect=AttributeError,
+            autospec=True))
 
         f = roles.Role(self.client.roles, {'id': 1, 'name': 'Member'})
         self.assertEqual(f.name, 'Member')
@@ -83,79 +85,93 @@ class ManagerTest(utils.TestCase):
 
     def setUp(self):
         super(ManagerTest, self).setUp()
-        self.client = client.Client(username=self.TEST_USER,
-                                    token=self.TEST_TOKEN,
-                                    tenant_name=self.TEST_TENANT_NAME,
-                                    auth_url='http://127.0.0.1:5000',
-                                    endpoint='http://127.0.0.1:5000')
+
+        # Creating a Client not using session is deprecated.
+        with self.deprecations.expect_deprecations_here():
+            self.client = client.Client(token=self.TEST_TOKEN,
+                                        auth_url='http://127.0.0.1:5000',
+                                        endpoint='http://127.0.0.1:5000')
+
         self.mgr = base.Manager(self.client)
         self.mgr.resource_class = base.Resource
 
     def test_api(self):
-        self.assertEqual(self.mgr.api, self.client)
+        with self.deprecations.expect_deprecations_here():
+            self.assertEqual(self.mgr.api, self.client)
 
     def test_get(self):
-        self.client.get = self.mox.CreateMockAnything()
-        self.client.get(self.url).AndReturn((None, self.body))
-        self.mox.ReplayAll()
-
+        get_mock = self.useFixture(mockpatch.PatchObject(
+            self.client, 'get', autospec=True, return_value=(None, self.body))
+        ).mock
         rsrc = self.mgr._get(self.url, "hello")
+        get_mock.assert_called_once_with(self.url)
         self.assertEqual(rsrc.hi, 1)
 
     def test_post(self):
-        self.client.post = self.mox.CreateMockAnything()
-        self.client.post(self.url, body=self.body).AndReturn((None, self.body))
-        self.client.post(self.url, body=self.body).AndReturn((None, self.body))
-        self.mox.ReplayAll()
+        post_mock = self.useFixture(mockpatch.PatchObject(
+            self.client, 'post', autospec=True, return_value=(None, self.body))
+        ).mock
 
         rsrc = self.mgr._post(self.url, self.body, "hello")
+        post_mock.assert_called_once_with(self.url, body=self.body)
         self.assertEqual(rsrc.hi, 1)
 
+        post_mock.reset_mock()
+
         rsrc = self.mgr._post(self.url, self.body, "hello", return_raw=True)
+        post_mock.assert_called_once_with(self.url, body=self.body)
         self.assertEqual(rsrc["hi"], 1)
 
     def test_put(self):
-        self.client.put = self.mox.CreateMockAnything()
-        self.client.put(self.url, body=self.body).AndReturn((None, self.body))
-        self.client.put(self.url, body=self.body).AndReturn((None, self.body))
-        self.mox.ReplayAll()
+        put_mock = self.useFixture(mockpatch.PatchObject(
+            self.client, 'put', autospec=True, return_value=(None, self.body))
+        ).mock
 
         rsrc = self.mgr._put(self.url, self.body, "hello")
+        put_mock.assert_called_once_with(self.url, body=self.body)
         self.assertEqual(rsrc.hi, 1)
 
+        put_mock.reset_mock()
+
         rsrc = self.mgr._put(self.url, self.body)
+        put_mock.assert_called_once_with(self.url, body=self.body)
         self.assertEqual(rsrc.hello["hi"], 1)
 
     def test_patch(self):
-        self.client.patch = self.mox.CreateMockAnything()
-        self.client.patch(self.url, body=self.body).AndReturn(
-            (None, self.body))
-        self.client.patch(self.url, body=self.body).AndReturn(
-            (None, self.body))
-        self.mox.ReplayAll()
+        patch_mock = self.useFixture(mockpatch.PatchObject(
+            self.client, 'patch', autospec=True,
+            return_value=(None, self.body))
+        ).mock
 
         rsrc = self.mgr._patch(self.url, self.body, "hello")
+        patch_mock.assert_called_once_with(self.url, body=self.body)
         self.assertEqual(rsrc.hi, 1)
 
+        patch_mock.reset_mock()
+
         rsrc = self.mgr._patch(self.url, self.body)
+        patch_mock.assert_called_once_with(self.url, body=self.body)
         self.assertEqual(rsrc.hello["hi"], 1)
 
     def test_update(self):
-        self.client.patch = self.mox.CreateMockAnything()
-        self.client.put = self.mox.CreateMockAnything()
-        self.client.patch(
-            self.url, body=self.body, management=False).AndReturn((None,
-                                                                   self.body))
-        self.client.put(self.url, body=None, management=True).AndReturn(
-            (None, self.body))
-        self.mox.ReplayAll()
+        patch_mock = self.useFixture(mockpatch.PatchObject(
+            self.client, 'patch', autospec=True,
+            return_value=(None, self.body))
+        ).mock
+
+        put_mock = self.useFixture(mockpatch.PatchObject(
+            self.client, 'put', autospec=True, return_value=(None, self.body))
+        ).mock
 
         rsrc = self.mgr._update(
             self.url, body=self.body, response_key="hello", method="PATCH",
             management=False)
+        patch_mock.assert_called_once_with(
+            self.url, management=False, body=self.body)
         self.assertEqual(rsrc.hi, 1)
 
         rsrc = self.mgr._update(
             self.url, body=None, response_key="hello", method="PUT",
             management=True)
+        put_mock.assert_called_once_with(self.url, management=True, body=None)
         self.assertEqual(rsrc.hi, 1)

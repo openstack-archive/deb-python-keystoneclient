@@ -14,7 +14,6 @@
 import uuid
 
 import mock
-from oslo_utils import timeutils
 import six
 from six.moves.urllib import parse as urlparse
 from testtools import matchers
@@ -22,13 +21,13 @@ from testtools import matchers
 from keystoneclient import session
 from keystoneclient.tests.unit.v3 import client_fixtures
 from keystoneclient.tests.unit.v3 import utils
+from keystoneclient import utils as client_utils
 from keystoneclient.v3.contrib.oauth1 import access_tokens
 from keystoneclient.v3.contrib.oauth1 import auth
 from keystoneclient.v3.contrib.oauth1 import consumers
 from keystoneclient.v3.contrib.oauth1 import request_tokens
 
 try:
-    import oauthlib
     from oauthlib import oauth1
 except ImportError:
     oauth1 = None
@@ -90,7 +89,7 @@ class TokenTests(BaseTest):
 
     def _new_oauth_token_with_expires_at(self):
         key, secret, token = self._new_oauth_token()
-        expires_at = timeutils.strtime()
+        expires_at = client_utils.strtime()
         params = {'oauth_token': key,
                   'oauth_token_secret': secret,
                   'oauth_expires_at': expires_at}
@@ -103,16 +102,8 @@ class TokenTests(BaseTest):
         """
 
         self.assertThat(auth_header, matchers.StartsWith('OAuth '))
-        auth_header = auth_header[len('OAuth '):]
-        # NOTE(stevemar): In newer versions of oauthlib there is
-        # an additional argument for getting oauth parameters.
-        # Adding a conditional here to revert back to no arguments
-        # if an earlier version is detected.
-        if tuple(oauthlib.__version__.split('.')) > ('0', '6', '1'):
-            header_params = oauth_client.get_oauth_params(None)
-        else:
-            header_params = oauth_client.get_oauth_params()
-        parameters = dict(header_params)
+        parameters = dict(
+            oauth1.rfc5849.utils.parse_authorization_header(auth_header))
 
         self.assertEqual('HMAC-SHA1', parameters['oauth_signature_method'])
         self.assertEqual('1.0', parameters['oauth_version'])
@@ -128,9 +119,6 @@ class TokenTests(BaseTest):
         if oauth_client.callback_uri:
             self.assertEqual(oauth_client.callback_uri,
                              parameters['oauth_callback'])
-        if oauth_client.timestamp:
-            self.assertEqual(oauth_client.timestamp,
-                             parameters['oauth_timestamp'])
         return parameters
 
 
@@ -229,8 +217,8 @@ class AccessTokenTests(TokenTests):
                                      resource_owner_key=request_key,
                                      resource_owner_secret=request_secret,
                                      signature_method=oauth1.SIGNATURE_HMAC,
-                                     verifier=verifier,
-                                     timestamp=expires_at)
+                                     verifier=verifier)
+
         self._validate_oauth_headers(req_headers['Authorization'],
                                      oauth_client)
 
@@ -260,7 +248,8 @@ class AuthenticateWithOAuthTests(TokenTests):
                        access_key=access_key,
                        access_secret=access_secret)
         s = session.Session(auth=a)
-        t = s.get_token()
+        with self.deprecations.expect_deprecations_here():
+            t = s.get_token()
         self.assertEqual(self.TEST_TOKEN, t)
 
         OAUTH_REQUEST_BODY = {

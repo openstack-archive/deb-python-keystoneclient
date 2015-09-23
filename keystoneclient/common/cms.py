@@ -26,10 +26,11 @@ import logging
 import textwrap
 import zlib
 
+from debtcollector import removals
 import six
 
 from keystoneclient import exceptions
-from keystoneclient.i18n import _, _LE, _LW
+from keystoneclient.i18n import _, _LE
 
 
 subprocess = None
@@ -226,8 +227,6 @@ def pkiz_verify(signed_text, signing_cert_file_name, ca_file_name):
                       inform=PKIZ_CMS_FORM)
 
 
-# This function is deprecated and will be removed once the ASN1 token format
-# is no longer required. It is only here to be used for testing.
 def token_to_cms(signed_text):
     """Converts a custom formatted token to a PEM-formatted token.
 
@@ -297,10 +296,14 @@ def is_asn1_token(token):
     return token[:3] == PKI_ASN1_PREFIX
 
 
+@removals.remove(message='Use is_asn1_token() instead.', version='1.7.0',
+                 removal_version='2.0.0')
 def is_ans1_token(token):
-    """Deprecated. Use is_asn1_token() instead."""
-    LOG.warning(_LW('The function is_ans1_token() is deprecated, '
-                    'use is_asn1_token() instead.'))
+    """Deprecated.
+
+    This function is deprecated as of the 1.7.0 release in favor of
+    :func:`is_asn1_token` and may be removed in the 2.0.0 release.
+    """
     return is_asn1_token(token)
 
 

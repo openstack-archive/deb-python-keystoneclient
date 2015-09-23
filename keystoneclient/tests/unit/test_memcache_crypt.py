@@ -14,9 +14,14 @@ import six
 import testtools
 
 from keystoneclient.middleware import memcache_crypt
+from keystoneclient.tests.unit import client_fixtures
 
 
 class MemcacheCryptPositiveTests(testtools.TestCase):
+    def setUp(self):
+        super(MemcacheCryptPositiveTests, self).setUp()
+        self.useFixture(client_fixtures.Deprecations())
+
     def _setup_keys(self, strategy):
         return memcache_crypt.derive_keys(b'token', b'secret', strategy)
 
@@ -49,7 +54,7 @@ class MemcacheCryptPositiveTests(testtools.TestCase):
                          len(keys['MAC']))
         self.assertNotEqual(keys['ENCRYPTION'],
                             keys['MAC'])
-        self.assertIn('strategy', keys.keys())
+        self.assertIn('strategy', keys)
 
     def test_key_strategy_diff(self):
         k1 = self._setup_keys(b'MAC')

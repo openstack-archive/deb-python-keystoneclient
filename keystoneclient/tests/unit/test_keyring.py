@@ -19,6 +19,7 @@ from keystoneclient import access
 from keystoneclient import httpclient
 from keystoneclient.tests.unit import utils
 from keystoneclient.tests.unit.v2_0 import client_fixtures
+from keystoneclient import utils as client_utils
 
 try:
     import keyring  # noqa
@@ -86,8 +87,10 @@ class KeyringTest(utils.TestCase):
         """Ensure that if we don't have use_keyring set in the client that
         the keyring is never accessed.
         """
-        cl = httpclient.HTTPClient(username=USERNAME, password=PASSWORD,
-                                   tenant_id=TENANT_ID, auth_url=AUTH_URL)
+        # Creating a HTTPClient not using session is deprecated.
+        with self.deprecations.expect_deprecations_here():
+            cl = httpclient.HTTPClient(username=USERNAME, password=PASSWORD,
+                                       project_id=TENANT_ID, auth_url=AUTH_URL)
 
         # stub and check that a new token is received
         method = 'get_raw_token_from_identity_service'
@@ -103,8 +106,10 @@ class KeyringTest(utils.TestCase):
         self.assertFalse(self.memory_keyring.set_password_called)
 
     def test_build_keyring_key(self):
-        cl = httpclient.HTTPClient(username=USERNAME, password=PASSWORD,
-                                   tenant_id=TENANT_ID, auth_url=AUTH_URL)
+        # Creating a HTTPClient not using session is deprecated.
+        with self.deprecations.expect_deprecations_here():
+            cl = httpclient.HTTPClient(username=USERNAME, password=PASSWORD,
+                                       project_id=TENANT_ID, auth_url=AUTH_URL)
 
         keyring_key = cl._build_keyring_key(auth_url=AUTH_URL,
                                             username=USERNAME,
@@ -117,14 +122,16 @@ class KeyringTest(utils.TestCase):
                          (AUTH_URL, TENANT_ID, TENANT, TOKEN, USERNAME))
 
     def test_set_and_get_keyring_expired(self):
-        cl = httpclient.HTTPClient(username=USERNAME, password=PASSWORD,
-                                   tenant_id=TENANT_ID, auth_url=AUTH_URL,
-                                   use_keyring=True)
+        # Creating a HTTPClient not using session is deprecated.
+        with self.deprecations.expect_deprecations_here():
+            cl = httpclient.HTTPClient(username=USERNAME, password=PASSWORD,
+                                       project_id=TENANT_ID, auth_url=AUTH_URL,
+                                       use_keyring=True)
 
         # set an expired token into the keyring
         auth_ref = access.AccessInfo.factory(body=PROJECT_SCOPED_TOKEN)
         expired = timeutils.utcnow() - datetime.timedelta(minutes=30)
-        auth_ref['token']['expires'] = timeutils.isotime(expired)
+        auth_ref['token']['expires'] = client_utils.isotime(expired)
         self.memory_keyring.password = pickle.dumps(auth_ref)
 
         # stub and check that a new token is received, so not using expired
@@ -145,14 +152,16 @@ class KeyringTest(utils.TestCase):
                          PROJECT_SCOPED_TOKEN['access']['token']['expires'])
 
     def test_get_keyring(self):
-        cl = httpclient.HTTPClient(username=USERNAME, password=PASSWORD,
-                                   tenant_id=TENANT_ID, auth_url=AUTH_URL,
-                                   use_keyring=True)
+        # Creating a HTTPClient not using session is deprecated.
+        with self.deprecations.expect_deprecations_here():
+            cl = httpclient.HTTPClient(username=USERNAME, password=PASSWORD,
+                                       project_id=TENANT_ID, auth_url=AUTH_URL,
+                                       use_keyring=True)
 
         # set an token into the keyring
         auth_ref = access.AccessInfo.factory(body=PROJECT_SCOPED_TOKEN)
         future = timeutils.utcnow() + datetime.timedelta(minutes=30)
-        auth_ref['token']['expires'] = timeutils.isotime(future)
+        auth_ref['token']['expires'] = client_utils.isotime(future)
         self.memory_keyring.password = pickle.dumps(auth_ref)
 
         # don't stub get_raw_token so will fail if authenticate happens
@@ -161,9 +170,11 @@ class KeyringTest(utils.TestCase):
         self.assertTrue(self.memory_keyring.fetched)
 
     def test_set_keyring(self):
-        cl = httpclient.HTTPClient(username=USERNAME, password=PASSWORD,
-                                   tenant_id=TENANT_ID, auth_url=AUTH_URL,
-                                   use_keyring=True)
+        # Creating a HTTPClient not using session is deprecated.
+        with self.deprecations.expect_deprecations_here():
+            cl = httpclient.HTTPClient(username=USERNAME, password=PASSWORD,
+                                       project_id=TENANT_ID, auth_url=AUTH_URL,
+                                       use_keyring=True)
 
         # stub and check that a new token is received
         method = 'get_raw_token_from_identity_service'

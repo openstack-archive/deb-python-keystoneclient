@@ -129,11 +129,12 @@ class TestCase(UnauthenticatedTestCase):
 
     def setUp(self):
         super(TestCase, self).setUp()
-        self.client = client.Client(username=self.TEST_USER,
-                                    token=self.TEST_TOKEN,
-                                    tenant_name=self.TEST_TENANT_NAME,
-                                    auth_url=self.TEST_URL,
-                                    endpoint=self.TEST_URL)
+
+        # Creating a Client not using session is deprecated.
+        with self.deprecations.expect_deprecations_here():
+            self.client = client.Client(token=self.TEST_TOKEN,
+                                        auth_url=self.TEST_URL,
+                                        endpoint=self.TEST_URL)
 
     def stub_auth(self, subject_token=None, **kwargs):
         if not subject_token:
@@ -244,6 +245,20 @@ class CrudTests(object):
                 expected_path = 'v3/%s' % self.collection_key
 
         return expected_path
+
+    def test_list_by_id(self, ref=None, **filter_kwargs):
+        """Test ``entities.list(id=x)`` being rewritten as ``GET /v3/entities/x``.
+
+        This tests an edge case of each manager's list() implementation, to
+        ensure that it "does the right thing" when users call ``.list()``
+        when they should have used ``.get()``.
+
+        """
+        if 'id' not in filter_kwargs:
+            ref = ref or self.new_ref()
+            filter_kwargs['id'] = ref['id']
+
+        self.assertRaises(TypeError, self.manager.list, **filter_kwargs)
 
     def test_list(self, ref_list=None, expected_path=None,
                   expected_query=None, **filter_kwargs):

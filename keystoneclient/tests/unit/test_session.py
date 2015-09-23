@@ -244,10 +244,77 @@ class SessionTests(utils.TestCase):
         # The exception should contain the URL and details about the SSL error
         msg = _('SSL exception connecting to %(url)s: %(error)s') % {
             'url': self.TEST_URL, 'error': error}
-        self.assertRaisesRegex(exceptions.SSLError,
-                               msg,
-                               session.get,
-                               self.TEST_URL)
+        six.assertRaisesRegex(self,
+                              exceptions.SSLError,
+                              msg,
+                              session.get,
+                              self.TEST_URL)
+
+    def test_mask_password_in_http_log_response(self):
+        session = client_session.Session()
+
+        def fake_debug(msg):
+            self.assertNotIn('verybadpass', msg)
+
+        logger = mock.Mock(isEnabledFor=mock.Mock(return_value=True))
+        logger.debug = mock.Mock(side_effect=fake_debug)
+        body = {
+            "connection_info": {
+                "driver_volume_type": "iscsi",
+                "data": {
+                    "auth_password": "verybadpass",
+                    "target_discovered": False,
+                    "encrypted": False,
+                    "qos_specs": None,
+                    "target_iqn": ("iqn.2010-10.org.openstack:volume-"
+                                   "744d2085-8e78-40a5-8659-ef3cffb2480e"),
+                    "target_portal": "172.99.69.228:3260",
+                    "volume_id": "744d2085-8e78-40a5-8659-ef3cffb2480e",
+                    "target_lun": 1,
+                    "access_mode": "rw",
+                    "auth_username": "verybadusername",
+                    "auth_method": "CHAP"}}}
+        body_json = jsonutils.dumps(body)
+        response = mock.Mock(text=body_json, status_code=200, headers={})
+        session._http_log_response(response, logger)
+        self.assertEqual(1, logger.debug.call_count)
+
+
+class TCPKeepAliveAdapter(utils.TestCase):
+
+    @mock.patch.object(client_session, 'socket')
+    @mock.patch('requests.adapters.HTTPAdapter.init_poolmanager')
+    def test_init_poolmanager_all_options(self, mock_parent_init_poolmanager,
+                                          mock_socket):
+        # properties expected to be in socket.
+        mock_socket.TCP_KEEPIDLE = mock.sentinel.TCP_KEEPIDLE
+        mock_socket.TCP_KEEPCNT = mock.sentinel.TCP_KEEPCNT
+        mock_socket.TCP_KEEPINTVL = mock.sentinel.TCP_KEEPINTVL
+        desired_opts = [mock_socket.TCP_KEEPIDLE, mock_socket.TCP_KEEPCNT,
+                        mock_socket.TCP_KEEPINTVL]
+
+        adapter = client_session.TCPKeepAliveAdapter()
+        adapter.init_poolmanager()
+
+        call_args, call_kwargs = mock_parent_init_poolmanager.call_args
+        called_socket_opts = call_kwargs['socket_options']
+        call_options = [opt for (protocol, opt, value) in called_socket_opts]
+        for opt in desired_opts:
+            self.assertIn(opt, call_options)
+
+    @mock.patch.object(client_session, 'socket')
+    @mock.patch('requests.adapters.HTTPAdapter.init_poolmanager')
+    def test_init_poolmanager(self, mock_parent_init_poolmanager, mock_socket):
+        spec = ['IPPROTO_TCP', 'TCP_NODELAY', 'SOL_SOCKET', 'SO_KEEPALIVE']
+        mock_socket.mock_add_spec(spec)
+        adapter = client_session.TCPKeepAliveAdapter()
+        adapter.init_poolmanager()
+
+        call_args, call_kwargs = mock_parent_init_poolmanager.call_args
+        called_socket_opts = call_kwargs['socket_options']
+        call_options = [opt for (protocol, opt, value) in called_socket_opts]
+        self.assertEqual([mock_socket.TCP_NODELAY, mock_socket.SO_KEEPALIVE],
+                         call_options)
 
 
 class RedirectTests(utils.TestCase):
@@ -336,7 +403,8 @@ class ConstructSessionFromArgsTests(utils.TestCase):
 
     def _s(self, k=None, **kwargs):
         k = k or kwargs
-        return client_session.Session.construct(k)
+        with self.deprecations.expect_deprecations_here():
+            return client_session.Session.construct(k)
 
     def test_verify(self):
         self.assertFalse(self._s(insecure=True).verify)
@@ -364,7 +432,7 @@ class AuthPlugin(base.BaseAuthPlugin):
     Takes Parameters such that it can throw exceptions at the right times.
     """
 
-    TEST_TOKEN = 'aToken'
+    TEST_TOKEN = utils.TestCase.TEST_TOKEN
     TEST_USER_ID = 'aUser'
     TEST_PROJECT_ID = 'aProject'
 
@@ -414,7 +482,7 @@ class CalledAuthPlugin(base.BaseAuthPlugin):
 
     def get_token(self, session):
         self.get_token_called = True
-        return 'aToken'
+        return utils.TestCase.TEST_TOKEN
 
     def get_endpoint(self, session, **kwargs):
         self.get_endpoint_called = True
@@ -800,7 +868,8 @@ class AdapterTest(utils.TestCase):
         sess = client_session.Session()
         adpt = adapter.Adapter(sess, auth=auth)
 
-        self.assertEqual(self.TEST_TOKEN, adpt.get_token())
+        with self.deprecations.expect_deprecations_here():
+            self.assertEqual(self.TEST_TOKEN, adpt.get_token())
         self.assertTrue(auth.get_token_called)
 
     def test_adapter_connect_retries(self):

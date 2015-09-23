@@ -28,8 +28,8 @@ RESPONSE_BODY = '{"hi": "there"}'
 
 def get_client():
     cl = httpclient.HTTPClient(username="username", password="password",
-                               tenant_id="tenant", auth_url="auth_test",
-                               cacert="ca.pem", key="key.pem", cert="cert.pem")
+                               project_id="tenant", auth_url="auth_test",
+                               cacert="ca.pem", cert=('cert.pem', "key.pem"))
     return cl
 
 
@@ -42,19 +42,15 @@ def get_authed_client():
 
 class ClientTest(utils.TestCase):
 
-    def setUp(self):
-        super(ClientTest, self).setUp()
-        self.request_patcher = mock.patch.object(requests, 'request',
-                                                 self.mox.CreateMockAnything())
-        self.request_patcher.start()
-        self.addCleanup(self.request_patcher.stop)
-
     @mock.patch.object(requests, 'request')
     def test_get(self, MOCK_REQUEST):
         MOCK_REQUEST.return_value = FAKE_RESPONSE
-        cl = get_authed_client()
+        # Creating a HTTPClient not using session is deprecated.
+        with self.deprecations.expect_deprecations_here():
+            cl = get_authed_client()
 
-        resp, body = cl.get("/hi")
+        with self.deprecations.expect_deprecations_here():
+            resp, body = cl.get("/hi")
 
         # this may become too tightly couple later
         mock_args, mock_kwargs = MOCK_REQUEST.call_args
@@ -71,9 +67,12 @@ class ClientTest(utils.TestCase):
     @mock.patch.object(requests, 'request')
     def test_post(self, MOCK_REQUEST):
         MOCK_REQUEST.return_value = FAKE_RESPONSE
-        cl = get_authed_client()
+        # Creating a HTTPClient not using session is deprecated.
+        with self.deprecations.expect_deprecations_here():
+            cl = get_authed_client()
 
-        cl.post("/hi", body=[1, 2, 3])
+        with self.deprecations.expect_deprecations_here():
+            cl.post("/hi", body=[1, 2, 3])
 
         # this may become too tightly couple later
         mock_args, mock_kwargs = MOCK_REQUEST.call_args
@@ -88,13 +87,16 @@ class ClientTest(utils.TestCase):
     @mock.patch.object(requests, 'request')
     def test_post_auth(self, MOCK_REQUEST):
         MOCK_REQUEST.return_value = FAKE_RESPONSE
-        cl = httpclient.HTTPClient(
-            username="username", password="password", tenant_id="tenant",
-            auth_url="auth_test", cacert="ca.pem", key="key.pem",
-            cert="cert.pem")
+        # Creating a HTTPClient not using session is deprecated.
+        with self.deprecations.expect_deprecations_here():
+            cl = httpclient.HTTPClient(
+                username="username", password="password", project_id="tenant",
+                auth_url="auth_test", cacert="ca.pem",
+                cert=('cert.pem', 'key.pem'))
         cl.management_url = "https://127.0.0.1:5000"
         cl.auth_token = "token"
-        cl.post("/hi", body=[1, 2, 3])
+        with self.deprecations.expect_deprecations_here():
+            cl.post("/hi", body=[1, 2, 3])
 
         # this may become too tightly couple later
         mock_args, mock_kwargs = MOCK_REQUEST.call_args

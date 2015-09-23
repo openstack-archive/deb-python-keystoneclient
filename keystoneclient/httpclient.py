@@ -20,7 +20,10 @@ OpenStack Client interface. Handles the REST calls and responses.
 """
 
 import logging
+import warnings
 
+from debtcollector import removals
+from debtcollector import renames
 from oslo_serialization import jsonutils
 import pkg_resources
 import requests
@@ -64,10 +67,25 @@ from keystoneclient import utils
 
 _logger = logging.getLogger(__name__)
 
-# These variables are moved and using them via httpclient is deprecated.
-# Maintain here for compatibility.
 USER_AGENT = client_session.USER_AGENT
-request = client_session.request
+"""Default user agent string.
+
+This property is deprecated as of the 1.7.0 release in favor of
+:data:`keystoneclient.session.USER_AGENT` and may be removed in the 2.0.0
+release.
+"""
+
+
+@removals.remove(message='Use keystoneclient.session.request instead.',
+                 version='1.7.0', removal_version='2.0.0')
+def request(*args, **kwargs):
+    """Make a request.
+
+    This function is deprecated as of the 1.7.0 release in favor of
+    :func:`keystoneclient.session.request` and may be removed in the
+    2.0.0 release.
+    """
+    return client_session.request(*args, **kwargs)
 
 
 class _FakeRequestSession(object):
@@ -134,6 +152,12 @@ class _KeystoneAdapter(adapter.LegacyJsonAdapter):
 class HTTPClient(baseclient.Client, base.BaseAuthPlugin):
     """HTTP client
 
+    .. warning::
+
+        Creating an instance of this class without using the session argument
+        is deprecated as of the 1.7.0 release and may be removed in the 2.0.0
+        release.
+
     :param string user_id: User ID for authentication. (optional)
     :param string username: Username for authentication. (optional)
     :param string user_domain_id: User's domain ID for authentication.
@@ -152,18 +176,32 @@ class HTTPClient(baseclient.Client, base.BaseAuthPlugin):
     :param string auth_url: Identity service endpoint for authorization.
     :param string region_name: Name of a region to select when choosing an
                                endpoint from the service catalog.
-    :param integer timeout: DEPRECATED: use session. (optional)
+    :param integer timeout: This argument is deprecated as of the 1.7.0 release
+                            in favor of session and may be removed in the 2.0.0
+                            release. (optional)
     :param string endpoint: A user-supplied endpoint URL for the identity
                             service.  Lazy-authentication is possible for API
                             service calls if endpoint is set at instantiation.
                             (optional)
     :param string token: Token for authentication. (optional)
-    :param string cacert: DEPRECATED: use session. (optional)
-    :param string key: DEPRECATED: use session. (optional)
-    :param string cert: DEPRECATED: use session. (optional)
-    :param boolean insecure: DEPRECATED: use session. (optional)
-    :param string original_ip: DEPRECATED: use session. (optional)
-    :param boolean debug: DEPRECATED: use logging configuration. (optional)
+    :param string cacert: This argument is deprecated as of the 1.7.0 release
+                          in favor of session and may be removed in the 2.0.0
+                          release. (optional)
+    :param string key: This argument is deprecated as of the 1.7.0 release
+                       in favor of session and may be removed in the 2.0.0
+                       release. (optional)
+    :param string cert: This argument is deprecated as of the 1.7.0 release
+                        in favor of session and may be removed in the 2.0.0
+                        release. (optional)
+    :param boolean insecure: This argument is deprecated as of the 1.7.0
+                             release in favor of session and may be removed in
+                             the 2.0.0 release. (optional)
+    :param string original_ip: This argument is deprecated as of the 1.7.0
+                               release in favor of session and may be removed
+                               in the 2.0.0 release. (optional)
+    :param boolean debug: This argument is deprecated as of the 1.7.0 release
+                          in favor of logging configuration and may be removed
+                          in the 2.0.0 release. (optional)
     :param dict auth_ref: To allow for consumers of the client to manage their
                           own caching strategy, you may initialize a client
                           with a previously captured auth_reference (token). If
@@ -178,10 +216,13 @@ class HTTPClient(baseclient.Client, base.BaseAuthPlugin):
                                    keyring is about to expire. default: 30
                                    (optional)
     :param string tenant_name: Tenant name. (optional) The tenant_name keyword
-                               argument is deprecated, use project_name
-                               instead.
+                               argument is deprecated as of the 1.7.0 release
+                               in favor of project_name and may be removed in
+                               the 2.0.0 release.
     :param string tenant_id: Tenant id. (optional) The tenant_id keyword
-                             argument is deprecated, use project_id instead.
+                             argument is deprecated as of the 1.7.0 release in
+                             favor of project_id and may be removed in the
+                             2.0.0 release.
     :param string trust_id: Trust ID for trust scoping. (optional)
     :param object session: A Session object to be used for
                            communicating with the identity service.
@@ -204,6 +245,10 @@ class HTTPClient(baseclient.Client, base.BaseAuthPlugin):
 
     version = None
 
+    @renames.renamed_kwarg('tenant_name', 'project_name', version='1.7.0',
+                           removal_version='2.0.0')
+    @renames.renamed_kwarg('tenant_id', 'project_id', version='1.7.0',
+                           removal_version='2.0.0')
     @utils.positional(enforcement=utils.positional.WARN)
     def __init__(self, username=None, tenant_id=None, tenant_name=None,
                  password=None, auth_url=None, region_name=None, endpoint=None,
@@ -248,12 +293,23 @@ class HTTPClient(baseclient.Client, base.BaseAuthPlugin):
             self.project_id = self.auth_ref.project_id
             self.project_name = self.auth_ref.project_name
             self.project_domain_id = self.auth_ref.project_domain_id
-            self.auth_url = self.auth_ref.auth_url[0]
-            self._management_url = self.auth_ref.management_url[0]
+            auth_urls = self.auth_ref.service_catalog.get_urls(
+                service_type='identity', endpoint_type='public',
+                region_name=region_name)
+            self.auth_url = auth_urls[0]
+            management_urls = self.auth_ref.service_catalog.get_urls(
+                service_type='identity', endpoint_type='admin',
+                region_name=region_name)
+            self._management_url = management_urls[0]
             self.auth_token_from_user = self.auth_ref.auth_token
             self.trust_id = self.auth_ref.trust_id
+
+            # TODO(blk-u): Using self.auth_ref.service_catalog._region_name is
+            # deprecated and this code must be removed when the property is
+            # actually removed.
             if self.auth_ref.has_service_catalog() and not region_name:
-                region_name = self.auth_ref.service_catalog.region_name
+                region_name = self.auth_ref.service_catalog._region_name
+
         else:
             self.auth_ref = None
 
@@ -313,8 +369,14 @@ class HTTPClient(baseclient.Client, base.BaseAuthPlugin):
         self._auth_token = None
 
         if not session:
+
+            warnings.warn(
+                'Constructing an HTTPClient instance without using a session '
+                'is deprecated as of the 1.7.0 release and may be removed in '
+                'the 2.0.0 release.', DeprecationWarning)
+
             kwargs['session'] = _FakeRequestSession()
-            session = client_session.Session.construct(kwargs)
+            session = client_session.Session._construct(kwargs)
             session.auth = self
 
         super(HTTPClient, self).__init__(session=session)
@@ -398,15 +460,35 @@ class HTTPClient(baseclient.Client, base.BaseAuthPlugin):
     @property
     def tenant_id(self):
         """Provide read-only backwards compatibility for tenant_id.
-           This is deprecated, use project_id instead.
+
+        .. warning::
+
+            This is deprecated as of the 1.7.0 release in favor of project_id
+            and may be removed in the 2.0.0 release.
         """
+
+        warnings.warn(
+            'tenant_id is deprecated as of the 1.7.0 release in favor of '
+            'project_id and may be removed in the 2.0.0 release.',
+            DeprecationWarning)
+
         return self.project_id
 
     @property
     def tenant_name(self):
         """Provide read-only backwards compatibility for tenant_name.
-           This is deprecated, use project_name instead.
+
+        .. warning::
+
+            This is deprecated as of the 1.7.0 release in favor of project_name
+            and may be removed in the 2.0.0 release.
         """
+
+        warnings.warn(
+            'tenant_name is deprecated as of the 1.7.0 release in favor of '
+            'project_name and may be removed in the 2.0.0 release.',
+            DeprecationWarning)
+
         return self.project_name
 
     @utils.positional(enforcement=utils.positional.WARN)
@@ -532,7 +614,7 @@ class HTTPClient(baseclient.Client, base.BaseAuthPlugin):
         Returns a slash-separated string of values ordered by key name.
 
         """
-        return '/'.join([kwargs[k] or '?' for k in sorted(kwargs.keys())])
+        return '/'.join([kwargs[k] or '?' for k in sorted(kwargs)])
 
     def get_auth_ref_from_keyring(self, **kwargs):
         """Retrieve auth_ref from keyring.
@@ -552,7 +634,7 @@ class HTTPClient(baseclient.Client, base.BaseAuthPlugin):
                 auth_ref = keyring.get_password("keystoneclient_auth",
                                                 keyring_key)
                 if auth_ref:
-                    auth_ref = pickle.loads(auth_ref)
+                    auth_ref = pickle.loads(auth_ref)  # nosec
                     if auth_ref.will_expire_soon(self.stale_duration):
                         # token has expired, don't use it
                         auth_ref = None
@@ -649,6 +731,7 @@ class HTTPClient(baseclient.Client, base.BaseAuthPlugin):
     def serialize(self, entity):
         return jsonutils.dumps(entity)
 
+    @removals.remove(version='1.7.0', removal_version='2.0.0')
     def request(self, *args, **kwargs):
         """Send an http request with the specified characteristics.
 
@@ -656,10 +739,15 @@ class HTTPClient(baseclient.Client, base.BaseAuthPlugin):
         setting headers, JSON encoding/decoding, and error handling.
 
         .. warning::
+
             *DEPRECATED*: This function is no longer used. It was designed to
             be used only by the managers and the managers now receive an
             adapter so this function is no longer on the standard request path.
+            This may be removed in the 2.0.0 release.
         """
+        return self._request(*args, **kwargs)
+
+    def _request(self, *args, **kwargs):
         kwargs.setdefault('authenticated', False)
         return self._adapter.request(*args, **kwargs)
 
@@ -668,15 +756,14 @@ class HTTPClient(baseclient.Client, base.BaseAuthPlugin):
         concatenating self.management_url and url and passing in method and
         any associated kwargs.
         """
-        # NOTE(jamielennox): This is deprecated and is no longer a part of the
-        # standard client request path. It now goes via the adapter instead.
         if not management:
             endpoint_filter = kwargs.setdefault('endpoint_filter', {})
             endpoint_filter.setdefault('interface', 'public')
 
         kwargs.setdefault('authenticated', None)
-        return self.request(url, method, **kwargs)
+        return self._request(url, method, **kwargs)
 
+    @removals.remove(version='1.7.0', removal_version='2.0.0')
     def get(self, url, **kwargs):
         """Perform an authenticated GET request.
 
@@ -684,12 +771,16 @@ class HTTPClient(baseclient.Client, base.BaseAuthPlugin):
         authentication token if one is available.
 
         .. warning::
-            *DEPRECATED*: This function is no longer used. It was designed to
-            be used by the managers and the managers now receive an adapter so
-            this function is no longer on the standard request path.
+
+            *DEPRECATED*: This function is no longer used and is deprecated as
+            of the 1.7.0 release and may be removed in the 2.0.0 release. It
+            was designed to be used by the managers and the managers now
+            receive an adapter so this function is no longer on the standard
+            request path.
         """
         return self._cs_request(url, 'GET', **kwargs)
 
+    @removals.remove(version='1.7.0', removal_version='2.0.0')
     def head(self, url, **kwargs):
         """Perform an authenticated HEAD request.
 
@@ -697,12 +788,16 @@ class HTTPClient(baseclient.Client, base.BaseAuthPlugin):
         authentication token if one is available.
 
         .. warning::
-            *DEPRECATED*: This function is no longer used. It was designed to
-            be used by the managers and the managers now receive an adapter so
-            this function is no longer on the standard request path.
+
+            *DEPRECATED*: This function is no longer used and is deprecated as
+            of the 1.7.0 release and may be removed in the 2.0.0 release. It
+            was designed to be used by the managers and the managers now
+            receive an adapter so this function is no longer on the standard
+            request path.
         """
         return self._cs_request(url, 'HEAD', **kwargs)
 
+    @removals.remove(version='1.7.0', removal_version='2.0.0')
     def post(self, url, **kwargs):
         """Perform an authenticate POST request.
 
@@ -710,12 +805,16 @@ class HTTPClient(baseclient.Client, base.BaseAuthPlugin):
         authentication token if one is available.
 
         .. warning::
-            *DEPRECATED*: This function is no longer used. It was designed to
-            be used by the managers and the managers now receive an adapter so
-            this function is no longer on the standard request path.
+
+            *DEPRECATED*: This function is no longer used and is deprecated as
+            of the 1.7.0 release and may be removed in the 2.0.0 release. It
+            was designed to be used by the managers and the managers now
+            receive an adapter so this function is no longer on the standard
+            request path.
         """
         return self._cs_request(url, 'POST', **kwargs)
 
+    @removals.remove(version='1.7.0', removal_version='2.0.0')
     def put(self, url, **kwargs):
         """Perform an authenticate PUT request.
 
@@ -723,12 +822,16 @@ class HTTPClient(baseclient.Client, base.BaseAuthPlugin):
         authentication token if one is available.
 
         .. warning::
-            *DEPRECATED*: This function is no longer used. It was designed to
-            be used by the managers and the managers now receive an adapter so
-            this function is no longer on the standard request path.
+
+            *DEPRECATED*: This function is no longer used and is deprecated as
+            of the 1.7.0 release and may be removed in the 2.0.0 release. It
+            was designed to be used by the managers and the managers now
+            receive an adapter so this function is no longer on the standard
+            request path.
         """
         return self._cs_request(url, 'PUT', **kwargs)
 
+    @removals.remove(version='1.7.0', removal_version='2.0.0')
     def patch(self, url, **kwargs):
         """Perform an authenticate PATCH request.
 
@@ -736,12 +839,16 @@ class HTTPClient(baseclient.Client, base.BaseAuthPlugin):
         an authentication token if one is available.
 
         .. warning::
-            *DEPRECATED*: This function is no longer used. It was designed to
-            be used by the managers and the managers now receive an adapter so
-            this function is no longer on the standard request path.
+
+            *DEPRECATED*: This function is no longer used and is deprecated as
+            of the 1.7.0 release and may be removed in the 2.0.0 release. It
+            was designed to be used by the managers and the managers now
+            receive an adapter so this function is no longer on the standard
+            request path.
         """
         return self._cs_request(url, 'PATCH', **kwargs)
 
+    @removals.remove(version='1.7.0', removal_version='2.0.0')
     def delete(self, url, **kwargs):
         """Perform an authenticate DELETE request.
 
@@ -749,14 +856,14 @@ class HTTPClient(baseclient.Client, base.BaseAuthPlugin):
         an authentication token if one is available.
 
         .. warning::
-            *DEPRECATED*: This function is no longer used. It was designed to
-            be used by the managers and the managers now receive an adapter so
-            this function is no longer on the standard request path.
+
+            *DEPRECATED*: This function is no longer used and is deprecated as
+            of the 1.7.0 release and may be removed in the 2.0.0 release. It
+            was designed to be used by the managers and the managers now
+            receive an adapter so this function is no longer on the standard
+            request path.
         """
         return self._cs_request(url, 'DELETE', **kwargs)
-
-    # DEPRECATIONS: The following methods are no longer directly supported
-    #               but maintained for compatibility purposes.
 
     deprecated_session_variables = {'original_ip': None,
                                     'cert': None,
@@ -766,12 +873,15 @@ class HTTPClient(baseclient.Client, base.BaseAuthPlugin):
     deprecated_adapter_variables = {'region_name': None}
 
     def __getattr__(self, name):
-        # FIXME(jamielennox): provide a proper deprecated warning
         try:
             var_name = self.deprecated_session_variables[name]
         except KeyError:
             pass
         else:
+            warnings.warn(
+                'The %s session variable is deprecated as of the 1.7.0 '
+                'release and may be removed in the 2.0.0 release' % name,
+                DeprecationWarning)
             return getattr(self.session, var_name or name)
 
         try:
@@ -779,17 +889,24 @@ class HTTPClient(baseclient.Client, base.BaseAuthPlugin):
         except KeyError:
             pass
         else:
+            warnings.warn(
+                'The %s adapter variable is deprecated as of the 1.7.0 '
+                'release and may be removed in the 2.0.0 release' % name,
+                DeprecationWarning)
             return getattr(self._adapter, var_name or name)
 
         raise AttributeError(_("Unknown Attribute: %s") % name)
 
     def __setattr__(self, name, val):
-        # FIXME(jamielennox): provide a proper deprecated warning
         try:
             var_name = self.deprecated_session_variables[name]
         except KeyError:
             pass
         else:
+            warnings.warn(
+                'The %s session variable is deprecated as of the 1.7.0 '
+                'release and may be removed in the 2.0.0 release' % name,
+                DeprecationWarning)
             return setattr(self.session, var_name or name)
 
         try:
@@ -797,6 +914,10 @@ class HTTPClient(baseclient.Client, base.BaseAuthPlugin):
         except KeyError:
             pass
         else:
+            warnings.warn(
+                'The %s adapter variable is deprecated as of the 1.7.0 '
+                'release and may be removed in the 2.0.0 release' % name,
+                DeprecationWarning)
             return setattr(self._adapter, var_name or name)
 
         super(HTTPClient, self).__setattr__(name, val)

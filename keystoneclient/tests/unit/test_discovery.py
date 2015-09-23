@@ -472,7 +472,8 @@ class ClientDiscoveryTests(utils.TestCase):
 
         cl = self.assertCreatesV2(auth_url=BASE_URL, **kwargs)
 
-        self.assertEqual(cl.original_ip, '100')
+        with self.deprecations.expect_deprecations_here():
+            self.assertEqual(cl.original_ip, '100')
         self.assertEqual(cl.stale_duration, 15)
         self.assertFalse(cl.use_keyring)
 
@@ -483,8 +484,10 @@ class ClientDiscoveryTests(utils.TestCase):
                                 text=V3_AUTH_RESPONSE,
                                 headers={'X-Subject-Token': V3_TOKEN})
 
-        disc = discover.Discover(auth_url=BASE_URL, debug=False,
-                                 username='foo')
+        # Creating Discover not using session is deprecated.
+        with self.deprecations.expect_deprecations_here():
+            disc = discover.Discover(auth_url=BASE_URL, debug=False,
+                                     username='foo')
         client = disc.create_client(debug=True, password='bar')
 
         self.assertIsInstance(client, v3_client.Client)
@@ -497,9 +500,12 @@ class ClientDiscoveryTests(utils.TestCase):
         self.requests_mock.get(BASE_URL,
                                status_code=300,
                                text=V3_VERSION_ENTRY)
-        disc = discover.Discover(auth_url=BASE_URL)
+        # Creating Discover not using session is deprecated.
+        with self.deprecations.expect_deprecations_here():
+            disc = discover.Discover(auth_url=BASE_URL)
 
-        versions = disc.available_versions()
+        with self.deprecations.expect_deprecations_here():
+            versions = disc.available_versions()
         self.assertEqual(1, len(versions))
         self.assertEqual(V3_VERSION, versions[0])
 
@@ -513,7 +519,9 @@ class ClientDiscoveryTests(utils.TestCase):
         versions.add_version(V4_VERSION)
         self.requests_mock.get(BASE_URL, status_code=300, json=versions)
 
-        disc = discover.Discover(auth_url=BASE_URL)
+        # Creating Discover not using session is deprecated.
+        with self.deprecations.expect_deprecations_here():
+            disc = discover.Discover(auth_url=BASE_URL)
         self.assertRaises(exceptions.DiscoveryFailure,
                           disc.create_client, version=4)
 
@@ -521,7 +529,9 @@ class ClientDiscoveryTests(utils.TestCase):
         versions = fixture.DiscoveryList(v2=True, v3=False)
         self.requests_mock.get(BASE_URL, status_code=300, json=versions)
 
-        disc = discover.Discover(auth_url=BASE_URL)
+        # Creating Discover not using session is deprecated.
+        with self.deprecations.expect_deprecations_here():
+            disc = discover.Discover(auth_url=BASE_URL)
         self.assertRaises(exceptions.DiscoveryFailure,
                           disc.create_client, version=(3, 0))
 
@@ -556,7 +566,9 @@ class DiscoverQueryTests(utils.TestCase):
     def test_available_keystone_data(self):
         self.requests_mock.get(BASE_URL, status_code=300, text=V3_VERSION_LIST)
 
-        disc = discover.Discover(auth_url=BASE_URL)
+        # Creating Discover not using session is deprecated.
+        with self.deprecations.expect_deprecations_here():
+            disc = discover.Discover(auth_url=BASE_URL)
         versions = disc.version_data()
 
         self.assertEqual((2, 0), versions[0]['version'])
@@ -587,7 +599,9 @@ class DiscoverQueryTests(utils.TestCase):
         v1_url = "%sv1/" % BASE_URL
         v2_url = "%sv2/" % BASE_URL
 
-        disc = discover.Discover(auth_url=BASE_URL)
+        # Creating Discover not using session is deprecated.
+        with self.deprecations.expect_deprecations_here():
+            disc = discover.Discover(auth_url=BASE_URL)
         versions = disc.version_data()
 
         self.assertEqual((1, 0), versions[0]['version'])
@@ -618,7 +632,9 @@ class DiscoverQueryTests(utils.TestCase):
         v1_url = "%sv1/" % BASE_URL
         v2_url = "%sv2/" % BASE_URL
 
-        disc = discover.Discover(auth_url=BASE_URL)
+        # Creating Discover not using session is deprecated.
+        with self.deprecations.expect_deprecations_here():
+            disc = discover.Discover(auth_url=BASE_URL)
         versions = disc.version_data()
 
         self.assertEqual((1, 0), versions[0]['version'])
@@ -664,7 +680,9 @@ class DiscoverQueryTests(utils.TestCase):
         text = jsonutils.dumps({'versions': version_list})
         self.requests_mock.get(BASE_URL, text=text)
 
-        disc = discover.Discover(auth_url=BASE_URL)
+        # Creating Discover not using session is deprecated.
+        with self.deprecations.expect_deprecations_here():
+            disc = discover.Discover(auth_url=BASE_URL)
 
         # deprecated is allowed by default
         versions = disc.version_data(allow_deprecated=False)
@@ -686,7 +704,9 @@ class DiscoverQueryTests(utils.TestCase):
         text = jsonutils.dumps({'versions': version_list})
         self.requests_mock.get(BASE_URL, text=text)
 
-        disc = discover.Discover(auth_url=BASE_URL)
+        # Creating Discover not using session is deprecated.
+        with self.deprecations.expect_deprecations_here():
+            disc = discover.Discover(auth_url=BASE_URL)
 
         versions = disc.version_data()
         self.assertEqual(0, len(versions))
@@ -702,7 +722,9 @@ class DiscoverQueryTests(utils.TestCase):
         version_list = fixture.DiscoveryList(BASE_URL, v2=False,
                                              v3_status=status)
         self.requests_mock.get(BASE_URL, json=version_list)
-        disc = discover.Discover(auth_url=BASE_URL)
+        # Creating Discover not using session is deprecated.
+        with self.deprecations.expect_deprecations_here():
+            disc = discover.Discover(auth_url=BASE_URL)
 
         versions = disc.version_data()
         self.assertEqual(0, len(versions))
@@ -732,7 +754,9 @@ class DiscoverQueryTests(utils.TestCase):
         text = jsonutils.dumps({'versions': version_list})
         self.requests_mock.get(BASE_URL, text=text)
 
-        disc = discover.Discover(auth_url=BASE_URL)
+        # Creating Discover not using session is deprecated.
+        with self.deprecations.expect_deprecations_here():
+            disc = discover.Discover(auth_url=BASE_URL)
 
         # raw_version_data will return all choices, even invalid ones
         versions = disc.raw_version_data()

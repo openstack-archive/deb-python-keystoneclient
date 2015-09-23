@@ -14,6 +14,7 @@
 #    under the License.
 
 import logging
+import warnings
 
 from oslo_serialization import jsonutils
 
@@ -21,6 +22,7 @@ from keystoneclient.auth.identity import v3 as v3_auth
 from keystoneclient import exceptions
 from keystoneclient import httpclient
 from keystoneclient.i18n import _
+from keystoneclient.v3 import auth
 from keystoneclient.v3.contrib import endpoint_filter
 from keystoneclient.v3.contrib import endpoint_policy
 from keystoneclient.v3.contrib import federation
@@ -65,11 +67,13 @@ class Client(httpclient.HTTPClient):
     :param string project_domain_name: Project's domain name for project
                                        scoping. (optional)
     :param string tenant_name: Tenant name. (optional)
-                               The tenant_name keyword argument is deprecated,
-                               use project_name instead.
+                               The tenant_name keyword argument is deprecated
+                               as of the 1.7.0 release in favor of project_name
+                               and may be removed in the 2.0.0 release.
     :param string tenant_id: Tenant id. (optional)
-                             The tenant_id keyword argument is deprecated,
-                             use project_id instead.
+                             The tenant_id keyword argument is deprecated as of
+                             the 1.7.0 release in favor of project_id and may
+                             be removed in the 2.0.0 release.
     :param string auth_url: Identity service endpoint for authorization.
     :param string region_name: Name of a region to select when choosing an
                                endpoint from the service catalog.
@@ -79,6 +83,12 @@ class Client(httpclient.HTTPClient):
                             instantiation. (optional)
     :param integer timeout: Allows customization of the timeout for client
                             http requests. (optional)
+
+    .. warning::
+
+        Constructing an instance of this class without a session is
+        deprecated as of the 1.7.0 release and will be removed in the
+        2.0.0 release.
 
     Example::
 
@@ -179,6 +189,14 @@ EndpointPolicyManager`
         """Initialize a new client for the Keystone v3 API."""
         super(Client, self).__init__(**kwargs)
 
+        if not kwargs.get('session'):
+            warnings.warn(
+                'Constructing an instance of the '
+                'keystoneclient.v3.client.Client class without a session is '
+                'deprecated as of the 1.7.0 release and may be removed in '
+                'the 2.0.0 release.', DeprecationWarning)
+
+        self.auth = auth.AuthManager(self._adapter)
         self.credentials = credentials.CredentialManager(self._adapter)
         self.ec2 = ec2.EC2Manager(self._adapter)
         self.endpoint_filter = endpoint_filter.EndpointFilterManager(

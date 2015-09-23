@@ -17,10 +17,13 @@ import logging
 import os
 import socket
 import time
+import warnings
 
+from debtcollector import removals
 from oslo_config import cfg
 from oslo_serialization import jsonutils
 from oslo_utils import importutils
+from oslo_utils import strutils
 import requests
 import six
 from six.moves import urllib
@@ -116,12 +119,14 @@ class Session(object):
     _REDIRECT_STATUSES = (301, 302, 303, 305, 307)
 
     REDIRECT_STATUSES = _REDIRECT_STATUSES
-    """This property is deprecated."""
+    """This property is deprecated as of the 1.7.0 release and may be removed
+       in the 2.0.0 release."""
 
     _DEFAULT_REDIRECT_LIMIT = 30
 
     DEFAULT_REDIRECT_LIMIT = _DEFAULT_REDIRECT_LIMIT
-    """This property is deprecated."""
+    """This property is deprecated as of the 1.7.0 release and may be removed
+       in the 2.0.0 release."""
 
     @utils.positional(2, enforcement=utils.positional.WARN)
     def __init__(self, auth=None, session=None, original_ip=None, verify=True,
@@ -130,7 +135,7 @@ class Session(object):
         if not session:
             session = requests.Session()
             # Use TCPKeepAliveAdapter to fix bug 1323862
-            for scheme in session.adapters.keys():
+            for scheme in session.adapters:
                 session.mount(scheme, TCPKeepAliveAdapter())
 
         self.auth = auth
@@ -162,7 +167,7 @@ class Session(object):
 
     @utils.positional()
     def _http_log_request(self, url, method=None, data=None,
-                          json=None, headers=None, logger=_logger):
+                          headers=None, logger=_logger):
         if not logger.isEnabledFor(logging.DEBUG):
             # NOTE(morganfainberg): This whole debug section is expensive,
             # there is no need to do the work if we're not going to emit a
@@ -187,39 +192,25 @@ class Session(object):
             for header in six.iteritems(headers):
                 string_parts.append('-H "%s: %s"'
                                     % self._process_header(header))
-        if json:
-            data = jsonutils.dumps(json)
         if data:
             string_parts.append("-d '%s'" % data)
 
         logger.debug(' '.join(string_parts))
 
-    @utils.positional()
-    def _http_log_response(self, response=None, json=None,
-                           status_code=None, headers=None, text=None,
-                           logger=_logger):
+    def _http_log_response(self, response, logger):
         if not logger.isEnabledFor(logging.DEBUG):
             return
 
-        if response is not None:
-            if not status_code:
-                status_code = response.status_code
-            if not headers:
-                headers = response.headers
-            if not text:
-                text = _remove_service_catalog(response.text)
-        if json:
-            text = jsonutils.dumps(json)
+        text = _remove_service_catalog(response.text)
 
         string_parts = ['RESP:']
 
-        if status_code:
-            string_parts.append('[%s]' % status_code)
-        if headers:
-            for header in six.iteritems(headers):
-                string_parts.append('%s: %s' % self._process_header(header))
+        string_parts.append('[%s]' % response.status_code)
+        for header in six.iteritems(response.headers):
+            string_parts.append('%s: %s' % self._process_header(header))
         if text:
-            string_parts.append('\nRESP BODY: %s\n' % text)
+            string_parts.append('\nRESP BODY: %s\n' %
+                                strutils.mask_password(text))
 
         logger.debug(' '.join(string_parts))
 
@@ -379,6 +370,19 @@ class Session(object):
         send = functools.partial(self._send_request,
                                  url, method, redirect, log, logger,
                                  connect_retries)
+
+        try:
+            connection_params = self.get_auth_connection_params(auth=auth)
+        except exceptions.MissingAuthPlugin:
+            # NOTE(jamielennox): If we've gotten this far without an auth
+            # plugin then we should be happy with allowing no additional
+            # connection params. This will be the typical case for plugins
+            # anyway.
+            pass
+        else:
+            if connection_params:
+                kwargs.update(connection_params)
+
         resp = send(**kwargs)
 
         # handle getting a 401 Unauthorized response by invalidating the plugin
@@ -439,7 +443,7 @@ class Session(object):
                 **kwargs)
 
         if log:
-            self._http_log_response(response=resp, logger=logger)
+            self._http_log_response(resp, logger)
 
         if resp.status_code in self._REDIRECT_STATUSES:
             # be careful here in python True == 1 and False == 0
@@ -455,8 +459,8 @@ class Session(object):
             try:
                 location = resp.headers['location']
             except KeyError:
-                logger.warn(_LW("Failed to redirect request to %s as new "
-                                "location was not provided."), resp.url)
+                logger.warning(_LW("Failed to redirect request to %s as new "
+                                   "location was not provided."), resp.url)
             else:
                 # NOTE(jamielennox): We don't pass through connect_retry_delay.
                 # This request actually worked so we can reset the delay count.
@@ -527,15 +531,27 @@ class Session(object):
         new request-style arguments.
 
         .. warning::
-            *DEPRECATED*: This function is purely for bridging the gap between
-            older client arguments and the session arguments that they relate
-            to. It is not intended to be used as a generic Session Factory.
+
+            *DEPRECATED as of 1.7.0*: This function is purely for bridging the
+            gap between older client arguments and the session arguments that
+            they relate to. It is not intended to be used as a generic Session
+            Factory. This function may be removed in the 2.0.0 release.
 
         This function purposefully modifies the input kwargs dictionary so that
         the remaining kwargs dict can be reused and passed on to other
         functions without session arguments.
 
         """
+
+        warnings.warn(
+            'Session.construct() is deprecated as of the 1.7.0 release  in '
+            'favor of using session constructor and may be removed in the '
+            '2.0.0 release.', DeprecationWarning)
+
+        return cls._construct(kwargs)
+
+    @classmethod
+    def _construct(cls, kwargs):
         params = {}
 
         for attr in ('verify', 'cacert', 'cert', 'key', 'insecure',
@@ -563,8 +579,11 @@ class Session(object):
                 verify = cacert or True
 
         if cert and key:
-            # passing cert and key together is deprecated in favour of the
-            # requests lib form of having the cert and key as a tuple
+            warnings.warn(
+                'Passing cert and key together is deprecated as of the 1.7.0 '
+                'release in favor of the requests library form of having the '
+                'cert and key as a tuple and may be removed in the 2.0.0 '
+                'release.', DeprecationWarning)
             cert = (cert, key)
 
         return cls(verify=verify, cert=cert, **kwargs)
@@ -597,6 +616,8 @@ class Session(object):
         auth = self._auth_required(auth, msg)
         return auth.get_headers(self, **kwargs)
 
+    @removals.remove(message='Use get_auth_headers instead.', version='1.7.0',
+                     removal_version='2.0.0')
     def get_token(self, auth=None):
         """Return a token as provided by the auth plugin.
 
@@ -609,9 +630,12 @@ class Session(object):
         :raises keystoneclient.exceptions.MissingAuthPlugin: if a plugin is not
                                                              available.
 
-        *DEPRECATED*: This assumes that the only header that is used to
-                      authenticate a message is 'X-Auth-Token'. This may not be
-                      correct. Use get_auth_headers instead.
+        .. warning::
+
+             This method is deprecated as of the 1.7.0 release in favor of
+             :meth:`get_auth_headers` and may be removed in the 2.0.0 release.
+             This method assumes that the only header that is used to
+             authenticate a message is 'X-Auth-Token' which may not be correct.
 
         :returns: A valid token.
         :rtype: string
@@ -634,6 +658,59 @@ class Session(object):
         msg = _('An auth plugin is required to determine endpoint URL')
         auth = self._auth_required(auth, msg)
         return auth.get_endpoint(self, **kwargs)
+
+    def get_auth_connection_params(self, auth=None, **kwargs):
+        """Return auth connection params as provided by the auth plugin.
+
+        An auth plugin may specify connection parameters to the request like
+        providing a client certificate for communication.
+
+        We restrict the values that may be returned from this function to
+        prevent an auth plugin overriding values unrelated to connection
+        parmeters. The values that are currently accepted are:
+
+        - `cert`: a path to a client certificate, or tuple of client
+          certificate and key pair that are used with this request.
+        - `verify`: a boolean value to indicate verifying SSL certificates
+          against the system CAs or a path to a CA file to verify with.
+
+        These values are passed to the requests library and further information
+        on accepted values may be found there.
+
+        :param auth: The auth plugin to use for tokens. Overrides the plugin
+                     on the session. (optional)
+        :type auth: keystoneclient.auth.base.BaseAuthPlugin
+
+        :raises keystoneclient.exceptions.AuthorizationFailure: if a new token
+                                                                fetch fails.
+        :raises keystoneclient.exceptions.MissingAuthPlugin: if a plugin is not
+                                                             available.
+        :raises keystoneclient.exceptions.UnsupportedParameters: if the plugin
+            returns a parameter that is not supported by this session.
+
+        :returns: Authentication headers or None for failure.
+        :rtype: dict
+        """
+        msg = _('An auth plugin is required to fetch connection params')
+        auth = self._auth_required(auth, msg)
+        params = auth.get_connection_params(self, **kwargs)
+
+        # NOTE(jamielennox): There needs to be some consensus on what
+        # parameters are allowed to be modified by the auth plugin here.
+        # Ideally I think it would be only the send() parts of the request
+        # flow. For now lets just allow certain elements.
+        params_copy = params.copy()
+
+        for arg in ('cert', 'verify'):
+            try:
+                kwargs[arg] = params_copy.pop(arg)
+            except KeyError:
+                pass
+
+        if params_copy:
+            raise exceptions.UnsupportedParameters(list(params_copy))
+
+        return params
 
     def invalidate(self, auth=None):
         """Invalidate an authentication plugin.
@@ -782,8 +859,8 @@ class Session(object):
 
         kwargs['insecure'] = c.insecure
         kwargs['cacert'] = c.cafile
-        kwargs['cert'] = c.certfile
-        kwargs['key'] = c.keyfile
+        if c.certfile and c.keyfile:
+            kwargs['cert'] = (c.certfile, c.keyfile)
         kwargs['timeout'] = c.timeout
 
         return cls._make(**kwargs)
@@ -840,19 +917,58 @@ class Session(object):
         """
         kwargs['insecure'] = args.insecure
         kwargs['cacert'] = args.os_cacert
-        kwargs['cert'] = args.os_cert
-        kwargs['key'] = args.os_key
+        if args.os_cert and args.os_key:
+            kwargs['cert'] = (args.os_cert, args.os_key)
         kwargs['timeout'] = args.timeout
 
         return cls._make(**kwargs)
 
 
 class TCPKeepAliveAdapter(requests.adapters.HTTPAdapter):
-    """The custom adapter used to set TCP Keep-Alive on all connections."""
+    """The custom adapter used to set TCP Keep-Alive on all connections.
+
+    This Adapter also preserves the default behaviour of Requests which
+    disables Nagle's Algorithm. See also:
+    http://blogs.msdn.com/b/windowsazurestorage/archive/2010/06/25/nagle-s-algorithm-is-not-friendly-towards-small-requests.aspx
+    """
     def init_poolmanager(self, *args, **kwargs):
-        if requests.__version__ >= '2.4.1':
-            kwargs.setdefault('socket_options', [
+        if 'socket_options' not in kwargs:
+            socket_options = [
+                # Keep Nagle's algorithm off
                 (socket.IPPROTO_TCP, socket.TCP_NODELAY, 1),
+                # Turn on TCP Keep-Alive
                 (socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1),
-            ])
+            ]
+
+            # Some operating systems (e.g., OSX) do not support setting
+            # keepidle
+            if hasattr(socket, 'TCP_KEEPIDLE'):
+                socket_options += [
+                    # Wait 60 seconds before sending keep-alive probes
+                    (socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 60)
+                ]
+
+            # TODO(claudiub): Windows does not contain the TCP_KEEPCNT and
+            # TCP_KEEPINTVL socket attributes. Instead, it contains
+            # SIO_KEEPALIVE_VALS, which can be set via ioctl, which should be
+            # set once it is available in requests.
+            # https://msdn.microsoft.com/en-us/library/dd877220%28VS.85%29.aspx
+            if hasattr(socket, 'TCP_KEEPCNT'):
+                socket_options += [
+                    # Set the maximum number of keep-alive probes
+                    (socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 4)
+                ]
+
+            if hasattr(socket, 'TCP_KEEPINTVL'):
+                socket_options += [
+                    # Send keep-alive probes every 15 seconds
+                    (socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 15)
+                ]
+
+            # After waiting 60 seconds, and then sending a probe once every 15
+            # seconds 4 times, these options should ensure that a connection
+            # hands for no longer than 2 minutes before a ConnectionError is
+            # raised.
+
+            kwargs['socket_options'] = socket_options
         super(TCPKeepAliveAdapter, self).init_poolmanager(*args, **kwargs)

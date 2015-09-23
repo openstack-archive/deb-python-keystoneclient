@@ -67,7 +67,7 @@ class AuthenticateAgainstKeystoneTests(utils.TestCase):
         self.stub_auth(response_list=[{'json': resp_a, 'headers': headers},
                                       {'json': resp_b, 'headers': headers}])
 
-        cs = client.Client(tenant_id=self.TEST_TENANT_ID,
+        cs = client.Client(project_id=self.TEST_TENANT_ID,
                            auth_url=self.TEST_URL,
                            username=self.TEST_USER,
                            password=self.TEST_TOKEN)
@@ -93,10 +93,11 @@ class AuthenticateAgainstKeystoneTests(utils.TestCase):
         # where with assertRaises(exceptions.Unauthorized): doesn't work
         # right
         def client_create_wrapper():
-            client.Client(username=self.TEST_USER,
-                          password="bad_key",
-                          tenant_id=self.TEST_TENANT_ID,
-                          auth_url=self.TEST_URL)
+            with self.deprecations.expect_deprecations_here():
+                client.Client(username=self.TEST_USER,
+                              password="bad_key",
+                              project_id=self.TEST_TENANT_ID,
+                              auth_url=self.TEST_URL)
 
         self.assertRaises(exceptions.Unauthorized, client_create_wrapper)
         self.assertRequestBodyIs(json=self.TEST_REQUEST_BODY)
@@ -108,10 +109,11 @@ class AuthenticateAgainstKeystoneTests(utils.TestCase):
         self.stub_auth(base_url=self.TEST_ADMIN_URL,
                        json=self.TEST_RESPONSE_DICT)
 
-        cs = client.Client(username=self.TEST_USER,
-                           password=self.TEST_TOKEN,
-                           tenant_id=self.TEST_TENANT_ID,
-                           auth_url=self.TEST_URL)
+        with self.deprecations.expect_deprecations_here():
+            cs = client.Client(username=self.TEST_USER,
+                               password=self.TEST_TOKEN,
+                               project_id=self.TEST_TENANT_ID,
+                               auth_url=self.TEST_URL)
 
         self.assertEqual(cs.management_url,
                          self.TEST_RESPONSE_DICT["access"]["serviceCatalog"][3]
@@ -123,10 +125,11 @@ class AuthenticateAgainstKeystoneTests(utils.TestCase):
     def test_authenticate_success_password_scoped(self):
         self.stub_auth(json=self.TEST_RESPONSE_DICT)
 
-        cs = client.Client(username=self.TEST_USER,
-                           password=self.TEST_TOKEN,
-                           tenant_id=self.TEST_TENANT_ID,
-                           auth_url=self.TEST_URL)
+        with self.deprecations.expect_deprecations_here():
+            cs = client.Client(username=self.TEST_USER,
+                               password=self.TEST_TOKEN,
+                               project_id=self.TEST_TENANT_ID,
+                               auth_url=self.TEST_URL)
         self.assertEqual(cs.management_url,
                          self.TEST_RESPONSE_DICT["access"]["serviceCatalog"][3]
                          ['endpoints'][0]["adminURL"])
@@ -140,9 +143,10 @@ class AuthenticateAgainstKeystoneTests(utils.TestCase):
 
         self.stub_auth(json=self.TEST_RESPONSE_DICT)
 
-        cs = client.Client(username=self.TEST_USER,
-                           password=self.TEST_TOKEN,
-                           auth_url=self.TEST_URL)
+        with self.deprecations.expect_deprecations_here():
+            cs = client.Client(username=self.TEST_USER,
+                               password=self.TEST_TOKEN,
+                               auth_url=self.TEST_URL)
         self.assertEqual(cs.auth_token,
                          self.TEST_RESPONSE_DICT["access"]["token"]["id"])
         self.assertFalse('serviceCatalog' in cs.service_catalog.catalog)
@@ -157,12 +161,14 @@ class AuthenticateAgainstKeystoneTests(utils.TestCase):
         self.stub_url('GET', [fake_url], json=fake_resp,
                       base_url=self.TEST_ADMIN_IDENTITY_ENDPOINT)
 
-        cl = client.Client(auth_url=self.TEST_URL,
-                           token=fake_token)
+        with self.deprecations.expect_deprecations_here():
+            cl = client.Client(auth_url=self.TEST_URL,
+                               token=fake_token)
         json_body = jsonutils.loads(self.requests_mock.last_request.body)
         self.assertEqual(json_body['auth']['token']['id'], fake_token)
 
-        resp, body = cl.get(fake_url)
+        with self.deprecations.expect_deprecations_here():
+            resp, body = cl.get(fake_url)
         self.assertEqual(fake_resp, body)
 
         token = self.requests_mock.last_request.headers.get('X-Auth-Token')
@@ -173,9 +179,10 @@ class AuthenticateAgainstKeystoneTests(utils.TestCase):
         self.TEST_REQUEST_BODY['auth']['token'] = {'id': self.TEST_TOKEN}
         self.stub_auth(json=self.TEST_RESPONSE_DICT)
 
-        cs = client.Client(token=self.TEST_TOKEN,
-                           tenant_id=self.TEST_TENANT_ID,
-                           auth_url=self.TEST_URL)
+        with self.deprecations.expect_deprecations_here():
+            cs = client.Client(token=self.TEST_TOKEN,
+                               project_id=self.TEST_TENANT_ID,
+                               auth_url=self.TEST_URL)
         self.assertEqual(cs.management_url,
                          self.TEST_RESPONSE_DICT["access"]["serviceCatalog"][3]
                          ['endpoints'][0]["adminURL"])
@@ -192,10 +199,11 @@ class AuthenticateAgainstKeystoneTests(utils.TestCase):
                                        "id": self.TEST_TRUST_ID}
         self.stub_auth(json=response)
 
-        cs = client.Client(token=self.TEST_TOKEN,
-                           tenant_id=self.TEST_TENANT_ID,
-                           trust_id=self.TEST_TRUST_ID,
-                           auth_url=self.TEST_URL)
+        with self.deprecations.expect_deprecations_here():
+            cs = client.Client(token=self.TEST_TOKEN,
+                               project_id=self.TEST_TENANT_ID,
+                               trust_id=self.TEST_TRUST_ID,
+                               auth_url=self.TEST_URL)
         self.assertTrue(cs.auth_ref.trust_scoped)
         self.assertEqual(cs.auth_ref.trust_id, self.TEST_TRUST_ID)
         self.assertEqual(cs.auth_ref.trustee_user_id, self.TEST_USER)
@@ -209,8 +217,9 @@ class AuthenticateAgainstKeystoneTests(utils.TestCase):
 
         self.stub_auth(json=self.TEST_RESPONSE_DICT)
 
-        cs = client.Client(token=self.TEST_TOKEN,
-                           auth_url=self.TEST_URL)
+        with self.deprecations.expect_deprecations_here():
+            cs = client.Client(token=self.TEST_TOKEN,
+                               auth_url=self.TEST_URL)
         self.assertEqual(cs.auth_token,
                          self.TEST_RESPONSE_DICT["access"]["token"]["id"])
         self.assertFalse('serviceCatalog' in cs.service_catalog.catalog)
@@ -225,15 +234,17 @@ class AuthenticateAgainstKeystoneTests(utils.TestCase):
         self.stub_url('GET', [fake_url], json=fake_resp,
                       base_url=self.TEST_ADMIN_IDENTITY_ENDPOINT)
 
-        cl = client.Client(username='exampleuser',
-                           password='password',
-                           tenant_name='exampleproject',
-                           auth_url=self.TEST_URL)
+        with self.deprecations.expect_deprecations_here():
+            cl = client.Client(username='exampleuser',
+                               password='password',
+                               project_name='exampleproject',
+                               auth_url=self.TEST_URL)
 
         self.assertEqual(cl.auth_token, self.TEST_TOKEN)
 
         # the token returned from the authentication will be used
-        resp, body = cl.get(fake_url)
+        with self.deprecations.expect_deprecations_here():
+            resp, body = cl.get(fake_url)
         self.assertEqual(fake_resp, body)
 
         token = self.requests_mock.last_request.headers.get('X-Auth-Token')
@@ -242,7 +253,8 @@ class AuthenticateAgainstKeystoneTests(utils.TestCase):
         # then override that token and the new token shall be used
         cl.auth_token = fake_token
 
-        resp, body = cl.get(fake_url)
+        with self.deprecations.expect_deprecations_here():
+            resp, body = cl.get(fake_url)
         self.assertEqual(fake_resp, body)
 
         token = self.requests_mock.last_request.headers.get('X-Auth-Token')
@@ -251,7 +263,8 @@ class AuthenticateAgainstKeystoneTests(utils.TestCase):
         # if we clear that overridden token then we fall back to the original
         del cl.auth_token
 
-        resp, body = cl.get(fake_url)
+        with self.deprecations.expect_deprecations_here():
+            resp, body = cl.get(fake_url)
         self.assertEqual(fake_resp, body)
 
         token = self.requests_mock.last_request.headers.get('X-Auth-Token')

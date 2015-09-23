@@ -12,6 +12,7 @@
 
 import abc
 import logging
+import warnings
 
 from oslo_config import cfg
 import six
@@ -54,12 +55,106 @@ class BaseIdentityPlugin(base.BaseAuthPlugin):
 
         self._endpoint_cache = {}
 
-        # NOTE(jamielennox): DEPRECATED. The following should not really be set
-        # here but handled by the individual auth plugin.
-        self.username = username
-        self.password = password
-        self.token = token
-        self.trust_id = trust_id
+        self._username = username
+        self._password = password
+        self._token = token
+        self._trust_id = trust_id
+
+    @property
+    def username(self):
+        """Deprecated as of the 1.7.0 release and may be removed in the 2.0.0
+        release.
+        """
+
+        warnings.warn(
+            'username is deprecated as of the 1.7.0 release and may be '
+            'removed in the 2.0.0 release.', DeprecationWarning)
+
+        return self._username
+
+    @username.setter
+    def username(self, value):
+        """Deprecated as of the 1.7.0 release and may be removed in the 2.0.0
+        release.
+        """
+
+        warnings.warn(
+            'username is deprecated as of the 1.7.0 release and may be '
+            'removed in the 2.0.0 release.', DeprecationWarning)
+
+        self._username = value
+
+    @property
+    def password(self):
+        """Deprecated as of the 1.7.0 release and may be removed in the 2.0.0
+        release.
+        """
+
+        warnings.warn(
+            'password is deprecated as of the 1.7.0 release and may be '
+            'removed in the 2.0.0 release.', DeprecationWarning)
+
+        return self._password
+
+    @password.setter
+    def password(self, value):
+        """Deprecated as of the 1.7.0 release and may be removed in the 2.0.0
+        release.
+        """
+
+        warnings.warn(
+            'password is deprecated as of the 1.7.0 release and may be '
+            'removed in the 2.0.0 release.', DeprecationWarning)
+
+        self._password = value
+
+    @property
+    def token(self):
+        """Deprecated as of the 1.7.0 release and may be removed in the 2.0.0
+        release.
+        """
+
+        warnings.warn(
+            'token is deprecated as of the 1.7.0 release and may be '
+            'removed in the 2.0.0 release.', DeprecationWarning)
+
+        return self._token
+
+    @token.setter
+    def token(self, value):
+        """Deprecated as of the 1.7.0 release and may be removed in the 2.0.0
+        release.
+        """
+
+        warnings.warn(
+            'token is deprecated as of the 1.7.0 release and may be '
+            'removed in the 2.0.0 release.', DeprecationWarning)
+
+        self._token = value
+
+    @property
+    def trust_id(self):
+        """Deprecated as of the 1.7.0 release and may be removed in the 2.0.0
+        release.
+        """
+
+        warnings.warn(
+            'trust_id is deprecated as of the 1.7.0 release and may be '
+            'removed in the 2.0.0 release.', DeprecationWarning)
+
+        return self._trust_id
+
+    @trust_id.setter
+    def trust_id(self, value):
+        """Deprecated as of the 1.7.0 release and may be removed in the 2.0.0
+        release.
+        """
+
+        warnings.warn(
+            'trust_id is deprecated as of the 1.7.0 release and may be '
+            'removed in the 2.0.0 release.', DeprecationWarning)
+
+        self._trust_id = value
 
     @abc.abstractmethod
     def get_auth_ref(self, session, **kwargs):
@@ -208,9 +303,10 @@ class BaseIdentityPlugin(base.BaseAuthPlugin):
 
         else:
             if not service_type:
-                LOG.warn(_LW('Plugin cannot return an endpoint without '
-                             'knowing the service type that is required. Add '
-                             'service_type to endpoint filtering data.'))
+                LOG.warning(_LW(
+                    'Plugin cannot return an endpoint without knowing the '
+                    'service type that is required. Add service_type to '
+                    'endpoint filtering data.'))
                 return None
 
             if not interface:
@@ -243,9 +339,10 @@ class BaseIdentityPlugin(base.BaseAuthPlugin):
             # NOTE(jamielennox): Again if we can't contact the server we fall
             # back to just returning the URL from the catalog. This may not be
             # the best default but we need it for now.
-            LOG.warn(_LW('Failed to contact the endpoint at %s for discovery. '
-                         'Fallback to using that endpoint as the base url.'),
-                     url)
+            LOG.warning(_LW(
+                'Failed to contact the endpoint at %s for discovery. Fallback '
+                'to using that endpoint as the base url.'),
+                url)
         else:
             url = disc.url_for(version)
 

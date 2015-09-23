@@ -43,6 +43,7 @@ from keystoneclient.middleware import auth_token
 from keystoneclient.openstack.common import memorycache
 from keystoneclient.tests.unit import client_fixtures
 from keystoneclient.tests.unit import utils
+from keystoneclient import utils as client_utils
 
 
 EXPECTED_V2_DEFAULT_ENV_RESPONSE = {
@@ -205,7 +206,9 @@ class BaseAuthTokenMiddlewareTest(testtools.TestCase):
 
     """
     def setUp(self, expected_env=None, auth_version=None, fake_app=None):
-        testtools.TestCase.setUp(self)
+        super(BaseAuthTokenMiddlewareTest, self).setUp()
+
+        self.useFixture(client_fixtures.Deprecations())
 
         self.expected_env = expected_env or dict()
         self.fake_app = fake_app or FakeApp
@@ -452,7 +455,7 @@ class GeneralAuthTokenMiddlewareTest(BaseAuthTokenMiddlewareTest,
         self.set_middleware(conf=conf)
         token = b'my_token'
         some_time_later = timeutils.utcnow() + datetime.timedelta(hours=4)
-        expires = timeutils.strtime(some_time_later)
+        expires = client_utils.strtime(some_time_later)
         data = ('this_data', expires)
         token_cache = self.middleware._token_cache
         token_cache.initialize({})
@@ -469,7 +472,7 @@ class GeneralAuthTokenMiddlewareTest(BaseAuthTokenMiddlewareTest,
         self.set_middleware(conf=conf)
         token = b'my_token'
         some_time_later = timeutils.utcnow() + datetime.timedelta(hours=4)
-        expires = timeutils.strtime(some_time_later)
+        expires = client_utils.strtime(some_time_later)
         data = ('this_data', expires)
         token_cache = self.middleware._token_cache
         token_cache.initialize({})
@@ -485,7 +488,7 @@ class GeneralAuthTokenMiddlewareTest(BaseAuthTokenMiddlewareTest,
         self.set_middleware(conf=conf)
         token = 'my_token'
         some_time_later = timeutils.utcnow() + datetime.timedelta(hours=4)
-        expires = timeutils.strtime(some_time_later)
+        expires = client_utils.strtime(some_time_later)
         data = ('this_data', expires)
         token_cache = self.middleware._token_cache
         token_cache.initialize({})
@@ -927,7 +930,7 @@ class CommonAuthTokenMiddlewareTest(object):
                 self.msg = None
                 self.debugmsg = None
 
-            def warn(self, msg=None, *args, **kwargs):
+            def warning(self, msg=None, *args, **kwargs):
                 self.msg = msg
 
             def debug(self, msg=None, *args, **kwargs):
@@ -1672,6 +1675,10 @@ class v3AuthTokenMiddlewareTest(BaseAuthTokenMiddlewareTest,
 
 
 class TokenEncodingTest(testtools.TestCase):
+    def setUp(self):
+        super(TokenEncodingTest, self).setUp()
+        self.useFixture(client_fixtures.Deprecations())
+
     def test_unquoted_token(self):
         self.assertEqual('foo%20bar', auth_token.safe_quote('foo bar'))
 
@@ -1684,10 +1691,10 @@ class TokenExpirationTest(BaseAuthTokenMiddlewareTest):
         super(TokenExpirationTest, self).setUp()
         self.now = timeutils.utcnow()
         self.delta = datetime.timedelta(hours=1)
-        self.one_hour_ago = timeutils.isotime(self.now - self.delta,
-                                              subsecond=True)
-        self.one_hour_earlier = timeutils.isotime(self.now + self.delta,
-                                                  subsecond=True)
+        self.one_hour_ago = client_utils.isotime(self.now - self.delta,
+                                                 subsecond=True)
+        self.one_hour_earlier = client_utils.isotime(self.now + self.delta,
+                                                     subsecond=True)
 
     def create_v2_token_fixture(self, expires=None):
         v2_fixture = {
@@ -1820,7 +1827,7 @@ class TokenExpirationTest(BaseAuthTokenMiddlewareTest):
         data = 'this_data'
         self.set_middleware()
         self.middleware._token_cache.initialize({})
-        some_time_later = timeutils.strtime(at=(self.now + self.delta))
+        some_time_later = client_utils.strtime(at=(self.now + self.delta))
         expires = some_time_later
         self.middleware._token_cache.store(token, data, expires)
         self.assertEqual(self.middleware._token_cache._cache_get(token), data)
@@ -1848,7 +1855,7 @@ class TokenExpirationTest(BaseAuthTokenMiddlewareTest):
         data = 'this_data'
         self.set_middleware()
         self.middleware._token_cache.initialize({})
-        some_time_earlier = timeutils.strtime(at=(self.now - self.delta))
+        some_time_earlier = client_utils.strtime(at=(self.now - self.delta))
         expires = some_time_earlier
         self.middleware._token_cache.store(token, data, expires)
         self.assertThat(lambda: self.middleware._token_cache._cache_get(token),
@@ -1861,7 +1868,7 @@ class TokenExpirationTest(BaseAuthTokenMiddlewareTest):
         self.middleware._token_cache.initialize({})
         timezone_offset = datetime.timedelta(hours=2)
         some_time_later = self.now - timezone_offset + self.delta
-        expires = timeutils.strtime(some_time_later) + '-02:00'
+        expires = client_utils.strtime(some_time_later) + '-02:00'
         self.middleware._token_cache.store(token, data, expires)
         self.assertEqual(self.middleware._token_cache._cache_get(token), data)
 
@@ -1872,7 +1879,7 @@ class TokenExpirationTest(BaseAuthTokenMiddlewareTest):
         self.middleware._token_cache.initialize({})
         timezone_offset = datetime.timedelta(hours=2)
         some_time_earlier = self.now - timezone_offset - self.delta
-        expires = timeutils.strtime(some_time_earlier) + '-02:00'
+        expires = client_utils.strtime(some_time_earlier) + '-02:00'
         self.middleware._token_cache.store(token, data, expires)
         self.assertThat(lambda: self.middleware._token_cache._cache_get(token),
                         matchers.raises(auth_token.InvalidUserToken))

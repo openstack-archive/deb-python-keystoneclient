@@ -16,6 +16,7 @@ import uuid
 from oslo_utils import timeutils
 
 from keystoneclient.fixture import exception
+from keystoneclient import utils
 
 
 class _Service(dict):
@@ -136,7 +137,7 @@ class Token(dict):
 
     @expires.setter
     def expires(self, value):
-        self.expires_str = timeutils.isotime(value, subsecond=True)
+        self.expires_str = utils.isotime(value, subsecond=True)
 
     @property
     def issued_str(self):
@@ -152,7 +153,7 @@ class Token(dict):
 
     @issued.setter
     def issued(self, value):
-        self.issued_str = timeutils.isotime(value, subsecond=True)
+        self.issued_str = utils.isotime(value, subsecond=True)
 
     @property
     def _user(self):
@@ -323,6 +324,14 @@ class Token(dict):
     @audit_chain_id.setter
     def audit_chain_id(self, value):
         self.root['audit_ids'] = [self.audit_id, value]
+
+    @property
+    def role_ids(self):
+        return [r['id'] for r in self.root.get('roles', [])]
+
+    @property
+    def role_names(self):
+        return [r['name'] for r in self.root.get('roles', [])]
 
     def validate(self):
         project = self.root.get('project')

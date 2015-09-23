@@ -16,6 +16,7 @@
 
 
 import datetime
+import warnings
 
 from oslo_utils import timeutils
 
@@ -39,9 +40,20 @@ class AccessInfo(dict):
                 **kwargs):
         """Create AccessInfo object given a successful auth response & body
            or a user-provided dict.
+
+        .. warning::
+
+            Use of the region_name argument is deprecated as of the 1.7.0
+            release and may be removed in the 2.0.0 release.
+
         """
-        # FIXME(jamielennox): Passing region_name is deprecated. Provide an
-        # appropriate warning.
+
+        if region_name:
+            warnings.warn(
+                'Use of the region_name argument is deprecated as of the '
+                '1.7.0 release and may be removed in the 2.0.0 release.',
+                DeprecationWarning)
+
         auth_ref = None
 
         if body is not None or len(kwargs):
@@ -246,7 +258,10 @@ class AccessInfo(dict):
         """Returns true if the authorization token was scoped to a tenant
            (project), and contains a populated service catalog.
 
-           This is deprecated, use project_scoped instead.
+        .. warning::
+
+            This is deprecated as of the 1.7.0 release in favor of
+            project_scoped and may be removed in the 2.0.0 release.
 
         :returns: bool
         """
@@ -349,7 +364,8 @@ class AccessInfo(dict):
         (project), this property will return None.
 
         DEPRECATED: this doesn't correctly handle region name. You should fetch
-        it from the service catalog yourself.
+        it from the service catalog yourself. This may be removed in the 2.0.0
+        release.
 
         :returns: tuple of urls
         """
@@ -362,7 +378,8 @@ class AccessInfo(dict):
         authentication request wasn't scoped to a tenant (project).
 
         DEPRECATED: this doesn't correctly handle region name. You should fetch
-        it from the service catalog yourself.
+        it from the service catalog yourself. This may be removed in the 2.0.0
+        release.
 
         :returns: tuple of urls
         """
@@ -525,6 +542,13 @@ class AccessInfoV2(AccessInfo):
 
     @property
     def scoped(self):
+        """Deprecated as of the 1.7.0 release in favor of project_scoped and
+        may be removed in the 2.0.0 release.
+        """
+        warnings.warn(
+            'scoped is deprecated as of the 1.7.0 release in favor of '
+            'project_scoped and may be removed in the 2.0.0 release.',
+            DeprecationWarning)
         if ('serviceCatalog' in self
                 and self['serviceCatalog']
                 and 'tenant' in self['token']):
@@ -589,8 +613,13 @@ class AccessInfoV2(AccessInfo):
 
     @property
     def auth_url(self):
-        # FIXME(jamielennox): this is deprecated in favour of retrieving it
-        # from the service catalog. Provide a warning.
+        """Deprecated as of the 1.7.0 release in favor of
+        service_catalog.get_urls() and may be removed in the 2.0.0 release.
+        """
+        warnings.warn(
+            'auth_url is deprecated as of the 1.7.0 release in favor of '
+            'service_catalog.get_urls() and may be removed in the 2.0.0 '
+            'release.', DeprecationWarning)
         if self.service_catalog:
             return self.service_catalog.get_urls(service_type='identity',
                                                  endpoint_type='publicURL',
@@ -600,8 +629,13 @@ class AccessInfoV2(AccessInfo):
 
     @property
     def management_url(self):
-        # FIXME(jamielennox): this is deprecated in favour of retrieving it
-        # from the service catalog. Provide a warning.
+        """Deprecated as of the 1.7.0 release in favor of
+        service_catalog.get_urls() and may be removed in the 2.0.0 release.
+        """
+        warnings.warn(
+            'management_url is deprecated as of the 1.7.0 release in favor of '
+            'service_catalog.get_urls() and may be removed in the 2.0.0 '
+            'release.', DeprecationWarning)
         if self.service_catalog:
             return self.service_catalog.get_urls(service_type='identity',
                                                  endpoint_type='adminURL',
@@ -747,6 +781,13 @@ class AccessInfoV3(AccessInfo):
 
     @property
     def scoped(self):
+        """Deprecated as of the 1.7.0 release in favor of project_scoped and
+        may be removed in the 2.0.0 release.
+        """
+        warnings.warn(
+            'scoped is deprecated as of the 1.7.0 release in favor of '
+            'project_scoped and may be removed in the 2.0.0 release.',
+            DeprecationWarning)
         return ('catalog' in self and self['catalog'] and 'project' in self)
 
     @property
@@ -775,8 +816,13 @@ class AccessInfoV3(AccessInfo):
 
     @property
     def auth_url(self):
-        # FIXME(jamielennox): this is deprecated in favour of retrieving it
-        # from the service catalog. Provide a warning.
+        """Deprecated as of the 1.7.0 release in favor of
+        service_catalog.get_urls() and may be removed in the 2.0.0 release.
+        """
+        warnings.warn(
+            'auth_url is deprecated as of the 1.7.0 release in favor of '
+            'service_catalog.get_urls() and may be removed in the 2.0.0 '
+            'release.', DeprecationWarning)
         if self.service_catalog:
             return self.service_catalog.get_urls(service_type='identity',
                                                  endpoint_type='public',
@@ -786,8 +832,13 @@ class AccessInfoV3(AccessInfo):
 
     @property
     def management_url(self):
-        # FIXME(jamielennox): this is deprecated in favour of retrieving it
-        # from the service catalog. Provide a warning.
+        """Deprecated as of the 1.7.0 release in favor of
+        service_catalog.get_urls() and may be removed in the 2.0.0 release.
+        """
+        warnings.warn(
+            'management_url is deprecated as of the 1.7.0 release in favor of '
+            'service_catalog.get_urls() and may be removed in the 2.0.0 '
+            'release.', DeprecationWarning)
         if self.service_catalog:
             return self.service_catalog.get_urls(service_type='identity',
                                                  endpoint_type='admin',

@@ -12,12 +12,9 @@
 
 import logging
 import sys
-import time
 import uuid
 
 import fixtures
-import mock
-from mox3 import mox
 from oslo_serialization import jsonutils
 import requests
 from requests_mock.contrib import fixture
@@ -25,36 +22,30 @@ import six
 from six.moves.urllib import parse as urlparse
 import testtools
 
+from keystoneclient.tests.unit import client_fixtures
+
 
 class TestCase(testtools.TestCase):
 
-    TEST_DOMAIN_ID = '1'
-    TEST_DOMAIN_NAME = 'aDomain'
+    TEST_DOMAIN_ID = uuid.uuid4().hex
+    TEST_DOMAIN_NAME = uuid.uuid4().hex
     TEST_GROUP_ID = uuid.uuid4().hex
     TEST_ROLE_ID = uuid.uuid4().hex
-    TEST_TENANT_ID = '1'
-    TEST_TENANT_NAME = 'aTenant'
-    TEST_TOKEN = 'aToken'
-    TEST_TRUST_ID = 'aTrust'
-    TEST_USER = 'test'
+    TEST_TENANT_ID = uuid.uuid4().hex
+    TEST_TENANT_NAME = uuid.uuid4().hex
+    TEST_TOKEN = uuid.uuid4().hex
+    TEST_TRUST_ID = uuid.uuid4().hex
+    TEST_USER = uuid.uuid4().hex
     TEST_USER_ID = uuid.uuid4().hex
 
     TEST_ROOT_URL = 'http://127.0.0.1:5000/'
 
     def setUp(self):
         super(TestCase, self).setUp()
-        self.mox = mox.Mox()
+        self.deprecations = self.useFixture(client_fixtures.Deprecations())
+
         self.logger = self.useFixture(fixtures.FakeLogger(level=logging.DEBUG))
-        self.time_patcher = mock.patch.object(time, 'time', lambda: 1234)
-        self.time_patcher.start()
-
         self.requests_mock = self.useFixture(fixture.Fixture())
-
-    def tearDown(self):
-        self.time_patcher.stop()
-        self.mox.UnsetStubs()
-        self.mox.VerifyAll()
-        super(TestCase, self).tearDown()
 
     def stub_url(self, method, parts=None, base_url=None, json=None, **kwargs):
         if not base_url:
@@ -179,7 +170,7 @@ class DisableModuleFixture(fixtures.Fixture):
 
     def clear_module(self):
         cleared_modules = {}
-        for fullname in sys.modules.keys():
+        for fullname in list(sys.modules):
             if (fullname == self.module or
                     fullname.startswith(self.module + '.')):
                 cleared_modules[fullname] = sys.modules.pop(fullname)
