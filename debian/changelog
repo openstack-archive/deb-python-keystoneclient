@@ -6,6 +6,7 @@ python-keystoneclient (1:1.7.1-1) UNRELEASED; urgency=medium
     upstream release.
   * d/p/fix-assertRaisesRegex-python3-tests.patch: Dropped. Fixed in upstream
     release.
+  * d/p/fix-key-iteration.patch: Dropped. Fixed in upstream release.
 
  -- Corey Bryant <corey.bryant@canonical.com>  Wed, 23 Sep 2015 17:01:56 -0400
 
