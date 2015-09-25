@@ -8,6 +8,7 @@ python-keystoneclient (1:1.7.1-1) UNRELEASED; urgency=medium
   * d/p/oauth-use-actual-request-headers.patch: Dropped. Fixed upstream.
   * d/control: Drop memcached, python(3)-memcache, python(3)-pysaml2 from BD's.
   * d/control: Add python3-crypto, python3-coverage, python3-hacking to BD's.
+  * d/p/fix-test-deprecations.patch: Fix tests to handle deprecations.
 
  -- Corey Bryant <corey.bryant@canonical.com>  Fri, 25 Sep 2015 10:06:55 -0400
 
