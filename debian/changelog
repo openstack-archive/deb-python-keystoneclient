@@ -6,7 +6,6 @@ python-keystoneclient (1:1.7.1-1) UNRELEASED; urgency=medium
   * d/p/fix-assertRaisesRegex-python3-tests.patch: Dropped. Fixed release.
   * d/p/fix-key-iteration.patch: Dropped. Fixed upstream.
   * d/p/oauth-use-actual-request-headers.patch: Dropped. Fixed upstream.
-  * d/control: Drop memcached, python(3)-memcache, python(3)-pysaml2 from BD's.
   * d/control: Add python3-crypto, python3-coverage, python3-hacking to BD's.
   * d/p/fix-test-deprecations.patch: Fix tests to handle deprecations.
 
