@@ -2,3 +2,4 @@ skip-pep8-python3-test.patch
 skip-memcache-python3-test.patch
 #fix-key-iteration.patch
 fix-1368545.patch
+ordered-dict-copy.patch
