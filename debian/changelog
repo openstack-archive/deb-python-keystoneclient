@@ -1,9 +1,13 @@
-python-keystoneclient (1:1.7.1-2) UNRELEASED; urgency=medium
+python-keystoneclient (1:1.7.1-2) experimental; urgency=medium
 
+  [ Corey Bryant ]
   * d/p/ordered-dict-copy.patch: Iterate over copy of session.adapters
     keys in Python2/3.
 
- -- Corey Bryant <corey.bryant@canonical.com>  Tue, 06 Oct 2015 15:23:26 -0400
+  [ Thomas Goirand ]
+  * Added runtime python-lxml Depends: after Monty advised for it.
+
+ -- Thomas Goirand <zigo@debian.org>  Wed, 14 Oct 2015 21:02:09 +0000
 
 python-keystoneclient (1:1.7.1-1) experimental; urgency=medium
 
