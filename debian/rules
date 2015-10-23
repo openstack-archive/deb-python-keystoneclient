@@ -22,6 +22,9 @@ override_dh_install:
 	mv $(CURDIR)/debian/python3-keystoneclient/usr/bin/keystone $(CURDIR)/debian/python3-keystoneclient/usr/bin/python3-keystone
 	rm -f $(CURDIR)/debian/python*/usr/lib/python*/dist-packages/*.pth
 
+override_dh_python3:
+	dh_python3 --shebang=/usr/bin/python3
+
 override_dh_auto_install:
 	dh_auto_install
 	install -D -m 0644 tools/keystone.bash_completion $(CURDIR)/debian/python-keystoneclient/usr/share/bash-completion/completions/keystone.bash_completion
