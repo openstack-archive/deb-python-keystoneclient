@@ -11,6 +11,7 @@
 #    under the License.
 
 from oslo_serialization import jsonutils
+from testtools import testcase
 
 from keystoneclient import exceptions
 from keystoneclient.tests.unit.v3 import utils
@@ -86,10 +87,12 @@ class AuthenticateAgainstKeystoneTests(utils.TestCase):
 
         self.stub_auth(json=self.TEST_RESPONSE_DICT, subject_token=TEST_TOKEN)
 
-        cs = client.Client(user_id=self.TEST_USER,
-                           password=self.TEST_TOKEN,
-                           project_id=self.TEST_TENANT_ID,
-                           auth_url=self.TEST_URL)
+        # Creating a HTTPClient not using session is deprecated.
+        with self.deprecations.expect_deprecations_here():
+            cs = client.Client(user_id=self.TEST_USER,
+                               password=self.TEST_TOKEN,
+                               project_id=self.TEST_TENANT_ID,
+                               auth_url=self.TEST_URL)
         self.assertEqual(cs.auth_token, TEST_TOKEN)
         self.assertRequestBodyIs(json=self.TEST_REQUEST_BODY)
 
@@ -101,17 +104,14 @@ class AuthenticateAgainstKeystoneTests(utils.TestCase):
 
         self.stub_auth(status_code=401, json=error)
 
-        # Workaround for issue with assertRaises on python2.6
-        # where with assertRaises(exceptions.Unauthorized): doesn't work
-        # right
-        def client_create_wrapper():
-            client.Client(user_domain_name=self.TEST_DOMAIN_NAME,
-                          username=self.TEST_USER,
-                          password="bad_key",
-                          project_id=self.TEST_TENANT_ID,
-                          auth_url=self.TEST_URL)
+        with testcase.ExpectedException(exceptions.Unauthorized):
+            with self.deprecations.expect_deprecations_here():
+                client.Client(user_domain_name=self.TEST_DOMAIN_NAME,
+                              username=self.TEST_USER,
+                              password="bad_key",
+                              project_id=self.TEST_TENANT_ID,
+                              auth_url=self.TEST_URL)
 
-        self.assertRaises(exceptions.Unauthorized, client_create_wrapper)
         self.assertRequestBodyIs(json=self.TEST_REQUEST_BODY)
 
     def test_auth_redirect(self):
@@ -121,11 +121,13 @@ class AuthenticateAgainstKeystoneTests(utils.TestCase):
         self.stub_auth(json=self.TEST_RESPONSE_DICT,
                        base_url=self.TEST_ADMIN_URL)
 
-        cs = client.Client(user_domain_name=self.TEST_DOMAIN_NAME,
-                           username=self.TEST_USER,
-                           password=self.TEST_TOKEN,
-                           project_id=self.TEST_TENANT_ID,
-                           auth_url=self.TEST_URL)
+        # Creating a HTTPClient not using session is deprecated.
+        with self.deprecations.expect_deprecations_here():
+            cs = client.Client(user_domain_name=self.TEST_DOMAIN_NAME,
+                               username=self.TEST_USER,
+                               password=self.TEST_TOKEN,
+                               project_id=self.TEST_TENANT_ID,
+                               auth_url=self.TEST_URL)
 
         self.assertEqual(cs.management_url,
                          self.TEST_RESPONSE_DICT["token"]["catalog"][3]
@@ -136,11 +138,13 @@ class AuthenticateAgainstKeystoneTests(utils.TestCase):
     def test_authenticate_success_domain_username_password_scoped(self):
         self.stub_auth(json=self.TEST_RESPONSE_DICT)
 
-        cs = client.Client(user_domain_name=self.TEST_DOMAIN_NAME,
-                           username=self.TEST_USER,
-                           password=self.TEST_TOKEN,
-                           project_id=self.TEST_TENANT_ID,
-                           auth_url=self.TEST_URL)
+        # Creating a HTTPClient not using session is deprecated.
+        with self.deprecations.expect_deprecations_here():
+            cs = client.Client(user_domain_name=self.TEST_DOMAIN_NAME,
+                               username=self.TEST_USER,
+                               password=self.TEST_TOKEN,
+                               project_id=self.TEST_TENANT_ID,
+                               auth_url=self.TEST_URL)
         self.assertEqual(cs.management_url,
                          self.TEST_RESPONSE_DICT["token"]["catalog"][3]
                          ['endpoints'][2]["url"])
@@ -166,10 +170,12 @@ class AuthenticateAgainstKeystoneTests(utils.TestCase):
 
         self.stub_auth(json=self.TEST_RESPONSE_DICT)
 
-        cs = client.Client(user_id=self.TEST_USER,
-                           password=self.TEST_TOKEN,
-                           domain_id=self.TEST_DOMAIN_ID,
-                           auth_url=self.TEST_URL)
+        # Creating a HTTPClient not using session is deprecated.
+        with self.deprecations.expect_deprecations_here():
+            cs = client.Client(user_id=self.TEST_USER,
+                               password=self.TEST_TOKEN,
+                               domain_id=self.TEST_DOMAIN_ID,
+                               auth_url=self.TEST_URL)
         self.assertEqual(cs.auth_domain_id,
                          self.TEST_DOMAIN_ID)
         self.assertEqual(cs.management_url,
@@ -187,10 +193,12 @@ class AuthenticateAgainstKeystoneTests(utils.TestCase):
 
         self.stub_auth(json=self.TEST_RESPONSE_DICT)
 
-        cs = client.Client(user_id=self.TEST_USER,
-                           password=self.TEST_TOKEN,
-                           project_id=self.TEST_TENANT_ID,
-                           auth_url=self.TEST_URL)
+        # Creating a HTTPClient not using session is deprecated.
+        with self.deprecations.expect_deprecations_here():
+            cs = client.Client(user_id=self.TEST_USER,
+                               password=self.TEST_TOKEN,
+                               project_id=self.TEST_TENANT_ID,
+                               auth_url=self.TEST_URL)
         self.assertEqual(cs.auth_tenant_id,
                          self.TEST_TENANT_ID)
         self.assertEqual(cs.management_url,
@@ -206,10 +214,12 @@ class AuthenticateAgainstKeystoneTests(utils.TestCase):
 
         self.stub_auth(json=self.TEST_RESPONSE_DICT)
 
-        cs = client.Client(user_domain_name=self.TEST_DOMAIN_NAME,
-                           username=self.TEST_USER,
-                           password=self.TEST_TOKEN,
-                           auth_url=self.TEST_URL)
+        # Creating a HTTPClient not using session is deprecated.
+        with self.deprecations.expect_deprecations_here():
+            cs = client.Client(user_domain_name=self.TEST_DOMAIN_NAME,
+                               username=self.TEST_USER,
+                               password=self.TEST_TOKEN,
+                               auth_url=self.TEST_URL)
         self.assertEqual(cs.auth_token,
                          self.TEST_RESPONSE_HEADERS["X-Subject-Token"])
         self.assertFalse('catalog' in cs.service_catalog.catalog)
@@ -224,8 +234,10 @@ class AuthenticateAgainstKeystoneTests(utils.TestCase):
         self.stub_url('GET', [fake_url], json=fake_resp,
                       base_url=self.TEST_ADMIN_IDENTITY_ENDPOINT)
 
-        cl = client.Client(auth_url=self.TEST_URL,
-                           token=fake_token)
+        # Creating a HTTPClient not using session is deprecated.
+        with self.deprecations.expect_deprecations_here():
+            cl = client.Client(auth_url=self.TEST_URL,
+                               token=fake_token)
         body = jsonutils.loads(self.requests_mock.last_request.body)
         self.assertEqual(body['auth']['identity']['token']['id'], fake_token)
 
@@ -258,9 +270,11 @@ class AuthenticateAgainstKeystoneTests(utils.TestCase):
 
         self.stub_auth(json=self.TEST_RESPONSE_DICT)
 
-        cs = client.Client(token=self.TEST_TOKEN,
-                           domain_id=self.TEST_DOMAIN_ID,
-                           auth_url=self.TEST_URL)
+        # Creating a HTTPClient not using session is deprecated.
+        with self.deprecations.expect_deprecations_here():
+            cs = client.Client(token=self.TEST_TOKEN,
+                               domain_id=self.TEST_DOMAIN_ID,
+                               auth_url=self.TEST_URL)
         self.assertEqual(cs.auth_domain_id,
                          self.TEST_DOMAIN_ID)
         self.assertEqual(cs.management_url,
@@ -280,9 +294,11 @@ class AuthenticateAgainstKeystoneTests(utils.TestCase):
 
         self.stub_auth(json=self.TEST_RESPONSE_DICT)
 
-        cs = client.Client(token=self.TEST_TOKEN,
-                           project_id=self.TEST_TENANT_ID,
-                           auth_url=self.TEST_URL)
+        # Creating a HTTPClient not using session is deprecated.
+        with self.deprecations.expect_deprecations_here():
+            cs = client.Client(token=self.TEST_TOKEN,
+                               project_id=self.TEST_TENANT_ID,
+                               auth_url=self.TEST_URL)
         self.assertEqual(cs.auth_tenant_id,
                          self.TEST_TENANT_ID)
         self.assertEqual(cs.management_url,
@@ -304,8 +320,10 @@ class AuthenticateAgainstKeystoneTests(utils.TestCase):
 
         self.stub_auth(json=self.TEST_RESPONSE_DICT)
 
-        cs = client.Client(token=self.TEST_TOKEN,
-                           auth_url=self.TEST_URL)
+        # Creating a HTTPClient not using session is deprecated.
+        with self.deprecations.expect_deprecations_here():
+            cs = client.Client(token=self.TEST_TOKEN,
+                               auth_url=self.TEST_URL)
         self.assertEqual(cs.auth_token,
                          self.TEST_RESPONSE_HEADERS["X-Subject-Token"])
         self.assertFalse('catalog' in cs.service_catalog.catalog)
@@ -320,10 +338,12 @@ class AuthenticateAgainstKeystoneTests(utils.TestCase):
         self.stub_url('GET', [fake_url], json=fake_resp,
                       base_url=self.TEST_ADMIN_IDENTITY_ENDPOINT)
 
-        cl = client.Client(username='exampleuser',
-                           password='password',
-                           project_name='exampleproject',
-                           auth_url=self.TEST_URL)
+        # Creating a HTTPClient not using session is deprecated.
+        with self.deprecations.expect_deprecations_here():
+            cl = client.Client(username='exampleuser',
+                               password='password',
+                               project_name='exampleproject',
+                               auth_url=self.TEST_URL)
 
         self.assertEqual(cl.auth_token, self.TEST_TOKEN)
 

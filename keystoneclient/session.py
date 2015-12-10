@@ -135,7 +135,7 @@ class Session(object):
         if not session:
             session = requests.Session()
             # Use TCPKeepAliveAdapter to fix bug 1323862
-            for scheme in session.adapters:
+            for scheme in list(session.adapters):
                 session.mount(scheme, TCPKeepAliveAdapter())
 
         self.auth = auth
@@ -203,9 +203,10 @@ class Session(object):
 
         text = _remove_service_catalog(response.text)
 
-        string_parts = ['RESP:']
-
-        string_parts.append('[%s]' % response.status_code)
+        string_parts = [
+            'RESP:',
+            '[%s]' % response.status_code
+        ]
         for header in six.iteritems(response.headers):
             string_parts.append('%s: %s' % self._process_header(header))
         if text:
@@ -325,7 +326,10 @@ class Session(object):
                 base_url = self.get_endpoint(auth, **endpoint_filter)
 
             if not base_url:
-                raise exceptions.EndpointNotFound()
+                service_type = (endpoint_filter or {}).get('service_type',
+                                                           'unknown')
+                msg = _('Endpoint for %s service') % service_type
+                raise exceptions.EndpointNotFound(msg)
 
             url = '%s/%s' % (base_url.rstrip('/'), url.lstrip('/'))
 
@@ -667,7 +671,7 @@ class Session(object):
 
         We restrict the values that may be returned from this function to
         prevent an auth plugin overriding values unrelated to connection
-        parmeters. The values that are currently accepted are:
+        parameters. The values that are currently accepted are:
 
         - `cert`: a path to a client certificate, or tuple of client
           certificate and key pair that are used with this request.

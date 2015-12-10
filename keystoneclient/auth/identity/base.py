@@ -12,6 +12,7 @@
 
 import abc
 import logging
+import threading
 import warnings
 
 from oslo_config import cfg
@@ -54,6 +55,7 @@ class BaseIdentityPlugin(base.BaseAuthPlugin):
         self.reauthenticate = reauthenticate
 
         self._endpoint_cache = {}
+        self._lock = threading.Lock()
 
         self._username = username
         self._password = password
@@ -162,13 +164,13 @@ class BaseIdentityPlugin(base.BaseAuthPlugin):
 
         This method is overridden by the various token version plugins.
 
-        This function should not be called independently and is expected to be
-        invoked via the do_authenticate function.
+        This method should not be called independently and is expected to be
+        invoked via the do_authenticate() method.
 
-        This function will be invoked if the AcessInfo object cached by the
+        This method will be invoked if the AccessInfo object cached by the
         plugin is not valid. Thus plugins should always fetch a new AccessInfo
-        when invoked. If you are looking to just retrieve the current auth
-        data then you should use get_access.
+        when invoked. If you are looking to just retrieve the current auth data
+        then you should use get_access().
 
         :param session: A session object that can be used for communication.
         :type session: keystoneclient.session.Session
@@ -182,6 +184,7 @@ class BaseIdentityPlugin(base.BaseAuthPlugin):
         :returns: Token access information.
         :rtype: :py:class:`keystoneclient.access.AccessInfo`
         """
+        pass  # pragma: no cover
 
     def get_token(self, session, **kwargs):
         """Return a valid auth token.
@@ -236,8 +239,14 @@ class BaseIdentityPlugin(base.BaseAuthPlugin):
         :returns: Valid AccessInfo
         :rtype: :py:class:`keystoneclient.access.AccessInfo`
         """
-        if self._needs_reauthenticate():
-            self.auth_ref = self.get_auth_ref(session)
+        # Hey Kids! Thread safety is important particularly in the case where
+        # a service is creating an admin style plugin that will then proceed
+        # to make calls from many threads. As a token expires all the threads
+        # will try and fetch a new token at once, so we want to ensure that
+        # only one thread tries to actually fetch from keystone at once.
+        with self._lock:
+            if self._needs_reauthenticate():
+                self.auth_ref = self.get_auth_ref(session)
 
         return self.auth_ref
 

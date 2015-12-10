@@ -54,7 +54,7 @@ this V3 defines a number of different
 - :py:class:`~keystoneclient.auth.identity.v3.PasswordMethod`: Authenticate
   against a V3 identity service using a username and password.
 - :py:class:`~keystoneclient.auth.identity.v3.TokenMethod`: Authenticate against
-  a V2 identity service using an existing token.
+  a V3 identity service using an existing token.
 
 The :py:class:`~keystoneclient.auth.identity.v3.AuthMethod` objects are then
 passed to the :py:class:`~keystoneclient.auth.identity.v3.Auth` plugin::
@@ -235,3 +235,10 @@ can be retrieved.
 
 The most simple example of a plugin is the
 :py:class:`keystoneclient.auth.token_endpoint.Token` plugin.
+
+When writing a plugin you should ensure that any fetch operation is thread
+safe. A common pattern is for a service to hold a single service authentication
+plugin globally and re-use that between all threads. This means that when a
+token expires there may be multiple threads that all try to fetch a new plugin
+at the same time. It is the responsibility of the plugin to ensure that this
+case is handled in a way that still results in correct reauthentication.

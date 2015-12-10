@@ -15,6 +15,7 @@
 import calendar
 import datetime
 import json
+import logging
 import os
 import shutil
 import stat
@@ -209,6 +210,7 @@ class BaseAuthTokenMiddlewareTest(testtools.TestCase):
         super(BaseAuthTokenMiddlewareTest, self).setUp()
 
         self.useFixture(client_fixtures.Deprecations())
+        self.logger = self.useFixture(fixtures.FakeLogger(level=logging.DEBUG))
 
         self.expected_env = expected_env or dict()
         self.fake_app = fake_app or FakeApp
@@ -925,23 +927,15 @@ class CommonAuthTokenMiddlewareTest(object):
                          "Keystone uri='https://keystone.example.com:1234'")
 
     def test_request_no_token_log_message(self):
-        class FakeLog(object):
-            def __init__(self):
-                self.msg = None
-                self.debugmsg = None
-
-            def warning(self, msg=None, *args, **kwargs):
-                self.msg = msg
-
-            def debug(self, msg=None, *args, **kwargs):
-                self.debugmsg = msg
-
-        self.middleware.LOG = FakeLog()
+        log_format = '[%(levelname)s] %(message)s'
+        fixture = self.useFixture(fixtures.FakeLogger(level=logging.DEBUG,
+                                                      format=log_format))
         self.middleware.delay_auth_decision = False
         self.assertRaises(auth_token.InvalidUserToken,
                           self.middleware._get_user_token_from_header, {})
-        self.assertIsNotNone(self.middleware.LOG.msg)
-        self.assertIsNotNone(self.middleware.LOG.debugmsg)
+        self.assertIn(('[WARNING] Unable to find authentication token in '
+                       'headers'), fixture.output)
+        self.assertIn('[DEBUG] Headers: {}', fixture.output)
 
     def test_request_no_token_http(self):
         req = webob.Request.blank('/', environ={'REQUEST_METHOD': 'HEAD'})
@@ -1671,13 +1665,14 @@ class v3AuthTokenMiddlewareTest(BaseAuthTokenMiddlewareTest,
                 # no point checking everything, just that it's in v2 format
                 self.assertIn('adminURL', endpoint)
                 self.assertIn('publicURL', endpoint)
-                self.assertIn('adminURL', endpoint)
+                self.assertIn('internalURL', endpoint)
 
 
 class TokenEncodingTest(testtools.TestCase):
     def setUp(self):
         super(TokenEncodingTest, self).setUp()
         self.useFixture(client_fixtures.Deprecations())
+        self.logger = self.useFixture(fixtures.FakeLogger(level=logging.DEBUG))
 
     def test_unquoted_token(self):
         self.assertEqual('foo%20bar', auth_token.safe_quote('foo bar'))

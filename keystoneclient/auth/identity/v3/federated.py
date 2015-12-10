@@ -18,7 +18,7 @@ import six
 from keystoneclient.auth.identity.v3 import base
 from keystoneclient.auth.identity.v3 import token
 
-__all__ = ['FederatedBaseAuth']
+__all__ = ('FederatedBaseAuth',)
 
 
 @six.add_metaclass(abc.ABCMeta)
@@ -116,3 +116,4 @@ class FederatedBaseAuth(base.BaseAuth):
     @abc.abstractmethod
     def get_unscoped_auth_ref(self, session, **kwargs):
         """Fetch unscoped federated token."""
+        pass  # pragma: no cover
