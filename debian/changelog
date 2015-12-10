@@ -1,3 +1,10 @@
+python-keystoneclient (1:2.0.0-1) experimental; urgency=medium
+
+  * New upstream release.
+  * Fixed (build-)depends for this release.
+
+ -- Thomas Goirand <zigo@debian.org>  Thu, 10 Dec 2015 16:21:26 +0100
+
 python-keystoneclient (1:1.7.1-4) unstable; urgency=medium
 
   * override_dh_python3 to fix Py3 shebang.
