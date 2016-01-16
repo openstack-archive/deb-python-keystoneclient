@@ -20,7 +20,7 @@ from keystoneclient.v2_0 import client
 from keystoneclient.v2_0 import tokens
 
 
-class TokenTests(utils.TestCase):
+class TokenTests(utils.ClientTestCase):
 
     def test_delete(self):
         id_ = uuid.uuid4().hex
@@ -139,9 +139,9 @@ class TokenTests(utils.TestCase):
         token_fixture.set_scope()
         self.stub_auth(json=token_fixture)
 
-        self.assertEqual(self.TEST_URL, self.client.management_url)
-
         token_ref = self.client.tokens.authenticate(token=uuid.uuid4().hex)
+        self.assertEqual(self.TEST_URL + '/tokens',
+                         self.requests_mock.last_request.url)
         self.assertIsInstance(token_ref, tokens.Token)
         self.assertEqual(token_fixture.token_id, token_ref.id)
         self.assertEqual(token_fixture.expires_str, token_ref.expires)
