@@ -6,11 +6,12 @@ Files: *
 Copyright: (c) 2009 Jacob Kaplan-Moss - initial codebase
            (c) 2011 Rackspace - OpenStack extensions
            (c) 2011 Nebula, Inc - Keystone refactor
+           (c) 2011-2016, OpenStack Foundation <openstack-dev@lists.openstack.org>
 License: Apache-2.0
 
 Files: debian/*
-Copyright: (c) 2011 Julien Danjou <acid@debian.org>
-           (c) 2012 Thomas Goirand <zigo@debian.org>
+Copyright: (c) 2011, Julien Danjou <acid@debian.org>
+           (c) 2012-2016, Thomas Goirand <zigo@debian.org>
 License: Apache-2.0
 
 License: Apache-2.0
