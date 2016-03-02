@@ -6,6 +6,8 @@ python-keystoneclient (1:2.3.0-1) UNRELEASED; urgency=medium
   [ Corey Bryant ]
   * New upstream release.
   * d/control: Align (Build-)Depends with upstream.
+  * d/p/debian/patches/drop-doc-conf-git.patch: Drop git from sphinx config
+    file as git repository is not avialable during package builds.
 
  -- Corey Bryant <corey.bryant@canonical.com>  Wed, 02 Mar 2016 08:50:41 -0500
 
