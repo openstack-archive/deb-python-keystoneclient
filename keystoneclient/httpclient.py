@@ -24,10 +24,11 @@ import warnings
 
 from debtcollector import removals
 from debtcollector import renames
+from keystoneauth1 import adapter
 from oslo_serialization import jsonutils
 import pkg_resources
+from positional import positional
 import requests
-from six.moves.urllib import parse as urlparse
 
 try:
     import pickle
@@ -37,8 +38,9 @@ try:
     # requirements. Update _min and _bad when that changes.
     keyring_v = pkg_resources.parse_version(
         pkg_resources.get_distribution("keyring").version)
-    keyring_min = pkg_resources.parse_version('2.1')
-    keyring_bad = (pkg_resources.parse_version('3.3'),)
+    keyring_min = pkg_resources.parse_version('5.5.1')
+    # This is a list of versions, e.g., pkg_resources.parse_version('3.3')
+    keyring_bad = []
 
     if keyring_v >= keyring_min and keyring_v not in keyring_bad:
         import keyring
@@ -48,21 +50,14 @@ except (ImportError, pkg_resources.DistributionNotFound):
     keyring = None
     pickle = None
 
-# Python 2.5 compat fix
-if not hasattr(urlparse, 'parse_qsl'):
-    import cgi
-    urlparse.parse_qsl = cgi.parse_qsl
-
 
 from keystoneclient import _discover
 from keystoneclient import access
-from keystoneclient import adapter
 from keystoneclient.auth import base
 from keystoneclient import baseclient
 from keystoneclient import exceptions
 from keystoneclient.i18n import _, _LW
 from keystoneclient import session as client_session
-from keystoneclient import utils
 
 
 _logger = logging.getLogger(__name__)
@@ -249,7 +244,7 @@ class HTTPClient(baseclient.Client, base.BaseAuthPlugin):
                            removal_version='2.0.0')
     @renames.renamed_kwarg('tenant_id', 'project_id', version='1.7.0',
                            removal_version='2.0.0')
-    @utils.positional(enforcement=utils.positional.WARN)
+    @positional(enforcement=positional.WARN)
     def __init__(self, username=None, tenant_id=None, tenant_name=None,
                  password=None, auth_url=None, region_name=None, endpoint=None,
                  token=None, debug=False, auth_ref=None, use_keyring=False,
@@ -379,7 +374,7 @@ class HTTPClient(baseclient.Client, base.BaseAuthPlugin):
             session = client_session.Session._construct(kwargs)
             session.auth = self
 
-        super(HTTPClient, self).__init__(session=session)
+        self.session = session
         self.domain = ''
         self.debug_log = debug
 
@@ -491,7 +486,7 @@ class HTTPClient(baseclient.Client, base.BaseAuthPlugin):
 
         return self.project_name
 
-    @utils.positional(enforcement=utils.positional.WARN)
+    @positional(enforcement=positional.WARN)
     def authenticate(self, username=None, password=None, tenant_name=None,
                      tenant_id=None, auth_url=None, token=None,
                      user_id=None, domain_name=None, domain_id=None,
@@ -703,7 +698,7 @@ class HTTPClient(baseclient.Client, base.BaseAuthPlugin):
         # permanently setting _endpoint would better match that behaviour.
         self._endpoint = value
 
-    @utils.positional(enforcement=utils.positional.WARN)
+    @positional(enforcement=positional.WARN)
     def get_raw_token_from_identity_service(self, auth_url, username=None,
                                             password=None, tenant_name=None,
                                             tenant_id=None, token=None,
@@ -752,8 +747,10 @@ class HTTPClient(baseclient.Client, base.BaseAuthPlugin):
         return self._adapter.request(*args, **kwargs)
 
     def _cs_request(self, url, method, management=True, **kwargs):
-        """Makes an authenticated request to keystone endpoint by
-        concatenating self.management_url and url and passing in method and
+        """Makes an authenticated request to keystone endpoint.
+
+        Request are made to keystone endpoint by concatenating
+        self.management_url and url and passing in method and
         any associated kwargs.
         """
         if not management:

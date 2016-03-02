@@ -93,7 +93,9 @@ class TokenTests(object):
         return (key, secret, expires_at, token)
 
     def _validate_oauth_headers(self, auth_header, oauth_client):
-        """Assert that the data in the headers matches the data
+        """Validate data in the headers.
+
+        Assert that the data in the headers matches the data
         that is produced from oauthlib.
         """
 
@@ -245,12 +247,12 @@ class AuthenticateWithOAuthTests(utils.TestCase, TokenTests):
                                     "access_token_id": access_key}
         self.stub_auth(json=oauth_token)
 
-        a = auth.OAuth(self.TEST_URL, consumer_key=consumer_key,
-                       consumer_secret=consumer_secret,
-                       access_key=access_key,
-                       access_secret=access_secret)
-        s = session.Session(auth=a)
         with self.deprecations.expect_deprecations_here():
+            a = auth.OAuth(self.TEST_URL, consumer_key=consumer_key,
+                           consumer_secret=consumer_secret,
+                           access_key=access_key,
+                           access_secret=access_secret)
+            s = session.Session(auth=a)
             t = s.get_token()
         self.assertEqual(self.TEST_TOKEN, t)
 

@@ -19,11 +19,11 @@
 import abc
 import warnings
 
+from positional import positional
 import six
 
 from keystoneclient import exceptions
 from keystoneclient.i18n import _
-from keystoneclient import utils
 
 
 @six.add_metaclass(abc.ABCMeta)
@@ -180,8 +180,10 @@ class ServiceCatalog(object):
 
     def _get_service_endpoints(self, attr, filter_value, service_type,
                                endpoint_type, region_name, service_name):
-        """Fetch the endpoints of a particular service_type and handle
-        the filtering.
+        """Fetch the endpoints of a particular service_type.
+
+        Endpoints returned are also filtered based on the attr and
+        filter_value provided.
         """
         sc_endpoints = self.get_endpoints(service_type=service_type,
                                           endpoint_type=endpoint_type,
@@ -207,7 +209,7 @@ class ServiceCatalog(object):
         return endpoints
 
     @abc.abstractmethod
-    @utils.positional(enforcement=utils.positional.WARN)
+    @positional(enforcement=positional.WARN)
     def get_urls(self, attr=None, filter_value=None,
                  service_type='identity', endpoint_type='publicURL',
                  region_name=None, service_name=None):
@@ -231,7 +233,7 @@ class ServiceCatalog(object):
         """
         raise NotImplementedError()  # pragma: no cover
 
-    @utils.positional(3, enforcement=utils.positional.WARN)
+    @positional(3, enforcement=positional.WARN)
     def url_for(self, attr=None, filter_value=None,
                 service_type='identity', endpoint_type='publicURL',
                 region_name=None, service_name=None):
@@ -307,8 +309,9 @@ class ServiceCatalog(object):
 
 
 class ServiceCatalogV2(ServiceCatalog):
-    """An object for encapsulating the service catalog using raw v2 auth token
-    from Keystone.
+    """An object for encapsulating the v2 service catalog.
+
+    The object is created using raw v2 auth token from Keystone.
     """
 
     def __init__(self, resource_dict, region_name=None):
@@ -345,7 +348,7 @@ class ServiceCatalogV2(ServiceCatalog):
             pass
         return token
 
-    @utils.positional(enforcement=utils.positional.WARN)
+    @positional(enforcement=positional.WARN)
     def get_urls(self, attr=None, filter_value=None,
                  service_type='identity', endpoint_type='publicURL',
                  region_name=None, service_name=None):
@@ -364,8 +367,9 @@ class ServiceCatalogV2(ServiceCatalog):
 
 
 class ServiceCatalogV3(ServiceCatalog):
-    """An object for encapsulating the service catalog using raw v3 auth token
-    from Keystone.
+    """An object for encapsulating the v3 service catalog.
+
+    The object is created using raw v3 auth token from Keystone.
     """
 
     def __init__(self, token, resource_dict, region_name=None):
@@ -411,7 +415,7 @@ class ServiceCatalogV3(ServiceCatalog):
             pass
         return token
 
-    @utils.positional(enforcement=utils.positional.WARN)
+    @positional(enforcement=positional.WARN)
     def get_urls(self, attr=None, filter_value=None,
                  service_type='identity', endpoint_type='public',
                  region_name=None, service_name=None):

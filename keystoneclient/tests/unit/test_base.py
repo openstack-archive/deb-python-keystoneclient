@@ -53,8 +53,13 @@ class BaseTest(utils.TestCase):
         self.assertRaises(AttributeError, getattr, f, 'blahblah')
 
     def test_eq(self):
-        # Two resources of the same type with the same id: equal
+        # Two resources with same ID: never equal if their info is not equal
         r1 = base.Resource(None, {'id': 1, 'name': 'hi'})
+        r2 = base.Resource(None, {'id': 1, 'name': 'hello'})
+        self.assertNotEqual(r1, r2)
+
+        # Two resources with same ID: equal if their info is equal
+        r1 = base.Resource(None, {'id': 1, 'name': 'hello'})
         r2 = base.Resource(None, {'id': 1, 'name': 'hello'})
         self.assertEqual(r1, r2)
 
@@ -175,3 +180,29 @@ class ManagerTest(utils.TestCase):
             management=True)
         put_mock.assert_called_once_with(self.url, management=True, body=None)
         self.assertEqual(rsrc.hi, 1)
+
+
+class TruncatedListTest(utils.TestCase):
+    """Test that TruncatedList will not break existing checks
+
+    A lot of code assumes that the value returned from list() is a python
+    list, not an iterable object. Because of that, they perform various
+    list-specific checks. This code should not be broken.
+    """
+
+    def test_eq(self):
+        # flag `truncated` doesn't affect the check if it's False
+        self.assertEqual([], base.TruncatedList([], truncated=False))
+        self.assertEqual([1, 2, 3], base.TruncatedList([1, 2, 3],
+                                                       truncated=False))
+
+        # flag `truncated` affects the check if it's True
+        self.assertNotEqual([], base.TruncatedList([], truncated=True))
+        self.assertNotEqual([1, 2, 3], base.TruncatedList([1, 2, 3],
+                                                          truncated=True))
+
+        # flag `truncated` affects the equality check
+        self.assertNotEqual(base.TruncatedList([], truncated=True),
+                            base.TruncatedList([], truncated=False))
+        self.assertNotEqual(base.TruncatedList([1, 2, 3], truncated=True),
+                            base.TruncatedList([1, 2, 3], truncated=False))

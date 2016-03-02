@@ -35,6 +35,10 @@ class SessionTests(utils.TestCase):
 
     TEST_URL = 'http://127.0.0.1:5000/'
 
+    def setUp(self):
+        super(SessionTests, self).setUp()
+        self.deprecations.expect_deprecations()
+
     def test_get(self):
         session = client_session.Session()
         self.stub_url('GET', text='response')
@@ -113,7 +117,7 @@ class SessionTests(utils.TestCase):
         session = client_session.Session(cert='cert.pem', timeout=5,
                                          verify='certs')
 
-        FAKE_RESP = utils.TestResponse({'status_code': 200, 'text': 'resp'})
+        FAKE_RESP = utils.test_response(text='resp')
         RESP = mock.Mock(return_value=FAKE_RESP)
 
         with mock.patch.object(session.session, 'request', RESP) as mocked:
@@ -185,6 +189,45 @@ class SessionTests(utils.TestCase):
 
         self.assertEqual(resp.status_code, 400)
         self.assertIn(body, self.logger.output)
+
+    def test_unicode_data_in_debug_output(self):
+        """Verify that ascii-encodable data is logged without modification."""
+
+        session = client_session.Session(verify=False)
+
+        body = 'RESP'
+        data = u'unicode_data'
+        self.stub_url('POST', text=body)
+        session.post(self.TEST_URL, data=data)
+
+        self.assertIn("'%s'" % data, self.logger.output)
+
+    def test_binary_data_not_in_debug_output(self):
+        """Verify that non-ascii-encodable data causes replacement."""
+
+        if six.PY2:
+            data = "my data" + chr(255)
+        else:
+            # Python 3 logging handles binary data well.
+            return
+
+        session = client_session.Session(verify=False)
+
+        body = 'RESP'
+        self.stub_url('POST', text=body)
+
+        # Forced mixed unicode and byte strings in request
+        # elements to make sure that all joins are appropriately
+        # handled (any join of unicode and byte strings should
+        # raise a UnicodeDecodeError)
+        session.post(unicode(self.TEST_URL), data=data)
+
+        self.assertIn("Replaced characters that could not be decoded"
+                      " in log output", self.logger.output)
+
+        # Our data payload should have changed to
+        # include the replacement char
+        self.assertIn(u"-d 'my data\ufffd'", self.logger.output)
 
     def test_logging_cacerts(self):
         path_to_certs = '/path/to/certs'
@@ -326,6 +369,10 @@ class RedirectTests(utils.TestCase):
 
     DEFAULT_REDIRECT_BODY = 'Redirect'
     DEFAULT_RESP_BODY = 'Found'
+
+    def setUp(self):
+        super(RedirectTests, self).setUp()
+        self.deprecations.expect_deprecations()
 
     def setup_redirects(self, method='GET', status_code=305,
                         redirect_kwargs=None, final_kwargs=None):
@@ -501,6 +548,10 @@ class SessionAuthTests(utils.TestCase):
     TEST_URL = 'http://127.0.0.1:5000/'
     TEST_JSON = {'hello': 'world'}
 
+    def setUp(self):
+        super(SessionAuthTests, self).setUp()
+        self.deprecations.expect_deprecations()
+
     def stub_service_url(self, service_type, interface, path,
                          method='GET', **kwargs):
         base_url = AuthPlugin.SERVICE_URLS[service_type][interface]
@@ -622,7 +673,7 @@ class SessionAuthTests(utils.TestCase):
 
         requests_auth = object()
 
-        FAKE_RESP = utils.TestResponse({'status_code': 200, 'text': 'resp'})
+        FAKE_RESP = utils.test_response(text='resp')
         RESP = mock.Mock(return_value=FAKE_RESP)
 
         with mock.patch.object(sess.session, 'request', RESP) as mocked:
@@ -749,6 +800,10 @@ class AdapterTest(utils.TestCase):
 
     TEST_URL = CalledAuthPlugin.ENDPOINT
 
+    def setUp(self):
+        super(AdapterTest, self).setUp()
+        self.deprecations.expect_deprecations()
+
     def _create_loaded_adapter(self):
         auth = CalledAuthPlugin()
         sess = client_session.Session()
@@ -870,8 +925,7 @@ class AdapterTest(utils.TestCase):
         sess = client_session.Session()
         adpt = adapter.Adapter(sess, auth=auth)
 
-        with self.deprecations.expect_deprecations_here():
-            self.assertEqual(self.TEST_TOKEN, adpt.get_token())
+        self.assertEqual(self.TEST_TOKEN, adpt.get_token())
         self.assertTrue(auth.get_token_called)
 
     def test_adapter_connect_retries(self):
@@ -947,10 +1001,11 @@ class ConfLoadingTests(utils.TestCase):
         self.conf_fixture.config(**kwargs)
 
     def get_session(self, **kwargs):
-        return client_session.Session.load_from_conf_options(
-            self.conf_fixture.conf,
-            self.GROUP,
-            **kwargs)
+        with self.deprecations.expect_deprecations_here():
+            return client_session.Session.load_from_conf_options(
+                self.conf_fixture.conf,
+                self.GROUP,
+                **kwargs)
 
     def test_insecure_timeout(self):
         self.config(insecure=True, timeout=5)
@@ -1000,7 +1055,8 @@ class CliLoadingTests(utils.TestCase):
 
     def get_session(self, val, **kwargs):
         args = self.parser.parse_args(val.split())
-        return client_session.Session.load_from_cli_options(args, **kwargs)
+        with self.deprecations.expect_deprecations_here():
+            return client_session.Session.load_from_cli_options(args, **kwargs)
 
     def test_insecure_timeout(self):
         s = self.get_session('--insecure --timeout 5.5')

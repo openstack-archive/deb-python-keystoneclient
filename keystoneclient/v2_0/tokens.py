@@ -10,12 +10,13 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+from positional import positional
+
 from keystoneclient import access
 from keystoneclient import auth
 from keystoneclient import base
 from keystoneclient import exceptions
 from keystoneclient.i18n import _
-from keystoneclient import utils
 
 
 class Token(base.Resource):
@@ -38,7 +39,7 @@ class Token(base.Resource):
 class TokenManager(base.Manager):
     resource_class = Token
 
-    @utils.positional(enforcement=utils.positional.WARN)
+    @positional(enforcement=positional.WARN)
     def authenticate(self, username=None, tenant_id=None, tenant_name=None,
                      password=None, token=None, return_raw=False):
         if token:
@@ -61,10 +62,10 @@ class TokenManager(base.Manager):
         # no endpoint that can satisfy the request (eg an unscoped token) then
         # issue it against the auth_url.
         try:
-            token_ref = self._create(*args, **kwargs)
+            token_ref = self._post(*args, **kwargs)
         except exceptions.EndpointNotFound:
             kwargs['endpoint_filter'] = {'interface': auth.AUTH_INTERFACE}
-            token_ref = self._create(*args, **kwargs)
+            token_ref = self._post(*args, **kwargs)
 
         return token_ref
 

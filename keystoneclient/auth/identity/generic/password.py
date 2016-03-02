@@ -13,6 +13,7 @@
 import logging
 
 from oslo_config import cfg
+from positional import positional
 
 from keystoneclient import _discover
 from keystoneclient.auth.identity.generic import base
@@ -30,7 +31,7 @@ def get_options():
                    deprecated_name='user-name'),
         cfg.StrOpt('user-domain-id', help="User's domain id"),
         cfg.StrOpt('user-domain-name', help="User's domain name"),
-        cfg.StrOpt('password', help="User's password"),
+        cfg.StrOpt('password', secret=True, help="User's password"),
     ]
 
 
@@ -45,7 +46,7 @@ class Password(base.BaseGenericPlugin):
 
     """
 
-    @utils.positional()
+    @positional()
     def __init__(self, auth_url, username=None, user_id=None, password=None,
                  user_domain_id=None, user_domain_name=None, **kwargs):
         super(Password, self).__init__(auth_url=auth_url, **kwargs)

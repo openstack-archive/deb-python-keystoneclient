@@ -16,13 +16,13 @@ import threading
 import warnings
 
 from oslo_config import cfg
+from positional import positional
 import six
 
 from keystoneclient import _discover
 from keystoneclient.auth import base
 from keystoneclient import exceptions
 from keystoneclient.i18n import _LW
-from keystoneclient import utils
 
 LOG = logging.getLogger(__name__)
 
@@ -50,6 +50,11 @@ class BaseIdentityPlugin(base.BaseAuthPlugin):
 
         super(BaseIdentityPlugin, self).__init__()
 
+        warnings.warn(
+            'keystoneclient auth plugins are deprecated as of the 2.1.0 '
+            'release in favor of keystoneauth1 plugins. They will be removed '
+            'in future releases.', DeprecationWarning)
+
         self.auth_url = auth_url
         self.auth_ref = None
         self.reauthenticate = reauthenticate
@@ -64,8 +69,9 @@ class BaseIdentityPlugin(base.BaseAuthPlugin):
 
     @property
     def username(self):
-        """Deprecated as of the 1.7.0 release and may be removed in the 2.0.0
-        release.
+        """Deprecated as of the 1.7.0 release.
+
+        It may be removed in the 2.0.0 release.
         """
 
         warnings.warn(
@@ -76,8 +82,9 @@ class BaseIdentityPlugin(base.BaseAuthPlugin):
 
     @username.setter
     def username(self, value):
-        """Deprecated as of the 1.7.0 release and may be removed in the 2.0.0
-        release.
+        """Deprecated as of the 1.7.0 release.
+
+        It may be removed in the 2.0.0 release.
         """
 
         warnings.warn(
@@ -88,8 +95,9 @@ class BaseIdentityPlugin(base.BaseAuthPlugin):
 
     @property
     def password(self):
-        """Deprecated as of the 1.7.0 release and may be removed in the 2.0.0
-        release.
+        """Deprecated as of the 1.7.0 release.
+
+        It may be removed in the 2.0.0 release.
         """
 
         warnings.warn(
@@ -100,8 +108,9 @@ class BaseIdentityPlugin(base.BaseAuthPlugin):
 
     @password.setter
     def password(self, value):
-        """Deprecated as of the 1.7.0 release and may be removed in the 2.0.0
-        release.
+        """Deprecated as of the 1.7.0 release.
+
+        It may be removed in the 2.0.0 release.
         """
 
         warnings.warn(
@@ -112,8 +121,9 @@ class BaseIdentityPlugin(base.BaseAuthPlugin):
 
     @property
     def token(self):
-        """Deprecated as of the 1.7.0 release and may be removed in the 2.0.0
-        release.
+        """Deprecated as of the 1.7.0 release.
+
+        It may be removed in the 2.0.0 release.
         """
 
         warnings.warn(
@@ -124,8 +134,9 @@ class BaseIdentityPlugin(base.BaseAuthPlugin):
 
     @token.setter
     def token(self, value):
-        """Deprecated as of the 1.7.0 release and may be removed in the 2.0.0
-        release.
+        """Deprecated as of the 1.7.0 release.
+
+        It may be removed in the 2.0.0 release.
         """
 
         warnings.warn(
@@ -136,8 +147,9 @@ class BaseIdentityPlugin(base.BaseAuthPlugin):
 
     @property
     def trust_id(self):
-        """Deprecated as of the 1.7.0 release and may be removed in the 2.0.0
-        release.
+        """Deprecated as of the 1.7.0 release.
+
+        It may be removed in the 2.0.0 release.
         """
 
         warnings.warn(
@@ -148,8 +160,9 @@ class BaseIdentityPlugin(base.BaseAuthPlugin):
 
     @trust_id.setter
     def trust_id(self, value):
-        """Deprecated as of the 1.7.0 release and may be removed in the 2.0.0
-        release.
+        """Deprecated as of the 1.7.0 release.
+
+        It may be removed in the 2.0.0 release.
         """
 
         warnings.warn(
@@ -363,7 +376,7 @@ class BaseIdentityPlugin(base.BaseAuthPlugin):
     def get_project_id(self, session, **kwargs):
         return self.get_access(session).project_id
 
-    @utils.positional()
+    @positional()
     def get_discovery(self, session, url, authenticated=None):
         """Return the discovery object for a URL.
 

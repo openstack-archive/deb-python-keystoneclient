@@ -92,10 +92,13 @@ class KscSessionV2(BaseV2):
         self.requests.register_uri('GET', self.TEST_ROOT_URL,
                                    json={'version': d})
 
-        a = ksc_identity.V2Password(username=uuid.uuid4().hex,
-                                    password=uuid.uuid4().hex,
-                                    auth_url=self.TEST_URL)
-        s = ksc_session.Session(auth=a)
+        with self.deprecations.expect_deprecations_here():
+            a = ksc_identity.V2Password(username=uuid.uuid4().hex,
+                                        password=uuid.uuid4().hex,
+                                        auth_url=self.TEST_URL)
+
+            s = ksc_session.Session(auth=a)
+
         return v2_client.Client(session=s)
 
 
@@ -162,11 +165,14 @@ class KscSessionV3(BaseV3):
                                    json=t)
         self.requests.register_uri('GET', self.TEST_URL, json={'version': d})
 
-        a = ksc_identity.V3Password(username=uuid.uuid4().hex,
-                                    password=uuid.uuid4().hex,
-                                    user_domain_id=uuid.uuid4().hex,
-                                    auth_url=self.TEST_URL)
-        s = ksc_session.Session(auth=a)
+        with self.deprecations.expect_deprecations_here():
+            a = ksc_identity.V3Password(username=uuid.uuid4().hex,
+                                        password=uuid.uuid4().hex,
+                                        user_domain_id=uuid.uuid4().hex,
+                                        auth_url=self.TEST_URL)
+
+            s = ksc_session.Session(auth=a)
+
         return v3_client.Client(session=s)
 
 
@@ -704,8 +710,9 @@ EXAMPLES_RESOURCE = testresources.FixtureResource(Examples())
 
 
 class HackingCode(fixtures.Fixture):
-    """A fixture to house the various code examples for the keystoneclient
-    hacking style checks.
+    """A fixture to house the various code examples.
+
+    Examples contains various keystoneclient hacking style checks.
     """
 
     oslo_namespace_imports = {

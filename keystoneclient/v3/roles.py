@@ -14,10 +14,11 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+from positional import positional
+
 from keystoneclient import base
 from keystoneclient import exceptions
 from keystoneclient.i18n import _
-from keystoneclient import utils
 
 
 class Role(base.Resource):
@@ -26,6 +27,18 @@ class Role(base.Resource):
     Attributes:
         * id: a uuid that identifies the role
         * name: user-facing identifier
+        * domain: optional domain for the role
+
+    """
+    pass
+
+
+class InferenceRule(base.Resource):
+    """Represents an Rule that states one ROle implies another
+
+    Attributes:
+        * prior_role: this role implies the other
+        * implied_role: this role is implied by the other
 
     """
     pass
@@ -78,17 +91,50 @@ class RoleManager(base.CrudManager):
             msg = _('Must specify either a user or group')
             raise exceptions.ValidationError(msg)
 
-    @utils.positional(1, enforcement=utils.positional.WARN)
-    def create(self, name, **kwargs):
+    @positional(1, enforcement=positional.WARN)
+    def create(self, name, domain=None, **kwargs):
+        domain_id = None
+        if domain:
+            domain_id = base.getid(domain)
+
         return super(RoleManager, self).create(
             name=name,
+            domain_id=domain_id,
             **kwargs)
+
+    def _implied_role_url_tail(self, prior_role, implied_role):
+        base_url = ('/%(prior_role_id)s/implies/%(implied_role_id)s' %
+                    {'prior_role_id': base.getid(prior_role),
+                     'implied_role_id': base.getid(implied_role)})
+        return base_url
+
+    def create_implied(self, prior_role, implied_role, **kwargs):
+        url_tail = self._implied_role_url_tail(prior_role, implied_role)
+        self.client.put("/roles" + url_tail, **kwargs)
+
+    def delete_implied(self, prior_role, implied_role, **kwargs):
+        url_tail = self._implied_role_url_tail(prior_role, implied_role)
+        return super(RoleManager, self).delete(tail=url_tail, **kwargs)
+
+    def get_implied(self, prior_role, implied_role, **kwargs):
+        url_tail = self._implied_role_url_tail(prior_role, implied_role)
+        return super(RoleManager, self).get(tail=url_tail, **kwargs)
+
+    def check_implied(self, prior_role, implied_role, **kwargs):
+        url_tail = self._implied_role_url_tail(prior_role, implied_role)
+        return super(RoleManager, self).head(tail=url_tail, **kwargs)
+
+    def list_role_inferences(self, **kwargs):
+        resp, body = self.client.get('/role_inferences/', **kwargs)
+        obj_class = InferenceRule
+        return [obj_class(self, res, loaded=True)
+                for res in body['role_inferences']]
 
     def get(self, role):
         return super(RoleManager, self).get(
             role_id=base.getid(role))
 
-    @utils.positional(enforcement=utils.positional.WARN)
+    @positional(enforcement=positional.WARN)
     def list(self, user=None, group=None, domain=None,
              project=None, os_inherit_extension_inherited=False, **kwargs):
         """Lists roles and role grants.
@@ -119,7 +165,7 @@ class RoleManager(base.CrudManager):
 
         return super(RoleManager, self).list(**kwargs)
 
-    @utils.positional(enforcement=utils.positional.WARN)
+    @positional(enforcement=positional.WARN)
     def update(self, role, name=None, **kwargs):
         return super(RoleManager, self).update(
             role_id=base.getid(role),
@@ -130,7 +176,7 @@ class RoleManager(base.CrudManager):
         return super(RoleManager, self).delete(
             role_id=base.getid(role))
 
-    @utils.positional(enforcement=utils.positional.WARN)
+    @positional(enforcement=positional.WARN)
     def grant(self, role, user=None, group=None, domain=None, project=None,
               os_inherit_extension_inherited=False, **kwargs):
         """Grants a role to a user or group on a domain or project.
@@ -151,7 +197,7 @@ class RoleManager(base.CrudManager):
                                             role_id=base.getid(role),
                                             **kwargs)
 
-    @utils.positional(enforcement=utils.positional.WARN)
+    @positional(enforcement=positional.WARN)
     def check(self, role, user=None, group=None, domain=None, project=None,
               os_inherit_extension_inherited=False, **kwargs):
         """Checks if a user or group has a role on a domain or project.
@@ -174,7 +220,7 @@ class RoleManager(base.CrudManager):
             os_inherit_extension_inherited=os_inherit_extension_inherited,
             **kwargs)
 
-    @utils.positional(enforcement=utils.positional.WARN)
+    @positional(enforcement=positional.WARN)
     def revoke(self, role, user=None, group=None, domain=None, project=None,
                os_inherit_extension_inherited=False, **kwargs):
         """Revokes a role from a user or group on a domain or project.

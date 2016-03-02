@@ -106,6 +106,8 @@ class GenericPluginTestCase(utils.TestCase):
         self.token_v2 = fixture.V2Token()
         self.token_v3 = fixture.V3Token()
         self.token_v3_id = uuid.uuid4().hex
+
+        self.deprecations.expect_deprecations()
         self.session = session.Session()
 
         self.stub_url('POST', ['v2.0', 'tokens'], json=self.token_v2)

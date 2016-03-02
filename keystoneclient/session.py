@@ -22,15 +22,16 @@ import warnings
 from debtcollector import removals
 from oslo_config import cfg
 from oslo_serialization import jsonutils
+from oslo_utils import encodeutils
 from oslo_utils import importutils
 from oslo_utils import strutils
+from positional import positional
 import requests
 import six
 from six.moves import urllib
 
 from keystoneclient import exceptions
 from keystoneclient.i18n import _, _LI, _LW
-from keystoneclient import utils
 
 osprofiler_web = importutils.try_import("osprofiler.web")
 
@@ -128,10 +129,16 @@ class Session(object):
     """This property is deprecated as of the 1.7.0 release and may be removed
        in the 2.0.0 release."""
 
-    @utils.positional(2, enforcement=utils.positional.WARN)
+    @positional(2, enforcement=positional.WARN)
     def __init__(self, auth=None, session=None, original_ip=None, verify=True,
                  cert=None, timeout=None, user_agent=None,
                  redirect=_DEFAULT_REDIRECT_LIMIT):
+        warnings.warn(
+            'keystoneclient.session.Session is deprecated as of the 2.1.0 '
+            'release in favor of keystoneauth1.session.Session. It will be '
+            'removed in future releases.',
+            DeprecationWarning)
+
         if not session:
             session = requests.Session()
             # Use TCPKeepAliveAdapter to fix bug 1323862
@@ -165,7 +172,7 @@ class Session(object):
             return (header[0], '{SHA1}%s' % token_hash)
         return header
 
-    @utils.positional()
+    @positional()
     def _http_log_request(self, url, method=None, data=None,
                           headers=None, logger=_logger):
         if not logger.isEnabledFor(logging.DEBUG):
@@ -192,10 +199,18 @@ class Session(object):
             for header in six.iteritems(headers):
                 string_parts.append('-H "%s: %s"'
                                     % self._process_header(header))
+
         if data:
             string_parts.append("-d '%s'" % data)
-
-        logger.debug(' '.join(string_parts))
+        try:
+            logger.debug(' '.join(string_parts))
+        except UnicodeDecodeError:
+            logger.debug("Replaced characters that could not be decoded"
+                         " in log output, original caused UnicodeDecodeError")
+            string_parts = [
+                encodeutils.safe_decode(
+                    part, errors='replace') for part in string_parts]
+            logger.debug(' '.join(string_parts))
 
     def _http_log_response(self, response, logger):
         if not logger.isEnabledFor(logging.DEBUG):
@@ -215,7 +230,7 @@ class Session(object):
 
         logger.debug(' '.join(string_parts))
 
-    @utils.positional(enforcement=utils.positional.WARN)
+    @positional(enforcement=positional.WARN)
     def request(self, url, method, json=None, original_ip=None,
                 user_agent=None, redirect=None, authenticated=None,
                 endpoint_filter=None, auth=None, requests_auth=None,
@@ -530,7 +545,9 @@ class Session(object):
 
     @classmethod
     def construct(cls, kwargs):
-        """Handles constructing a session from the older
+        """Handles constructing a session from both old and new arguments.
+
+        Support constructing a session from the old
         :py:class:`~keystoneclient.httpclient.HTTPClient` args as well as the
         new request-style arguments.
 
@@ -764,10 +781,9 @@ class Session(object):
         auth = self._auth_required(auth, msg)
         return auth.get_project_id(self)
 
-    @utils.positional.classmethod()
+    @positional.classmethod()
     def get_conf_options(cls, deprecated_opts=None):
-        """Get the oslo_config options that are needed for a
-        :py:class:`.Session`.
+        """Get oslo_config options that are needed for a :py:class:`.Session`.
 
         These may be useful without being registered for config file generation
         or to manipulate the options before registering them yourself.
@@ -814,7 +830,7 @@ class Session(object):
                            help='Timeout value for http requests'),
                 ]
 
-    @utils.positional.classmethod()
+    @positional.classmethod()
     def register_conf_options(cls, conf, group, deprecated_opts=None):
         """Register the oslo_config options that are needed for a session.
 
