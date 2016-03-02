@@ -5,6 +5,7 @@ python-keystoneclient (1:2.3.0-1) UNRELEASED; urgency=medium
 
   [ Corey Bryant ]
   * New upstream release.
+  * d/control: Align (Build-)Depends with upstream.
 
  -- Corey Bryant <corey.bryant@canonical.com>  Wed, 02 Mar 2016 08:50:41 -0500
 
