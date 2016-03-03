@@ -78,7 +78,7 @@ Build-Depends-Indep: bandit,
                      python3-testtools (>= 1.4.0),
                      subunit,
                      testrepository,
-Standards-Version: 3.9.6
+Standards-Version: 3.9.7
 Homepage: https://github.com/openstack/python-keystoneclient
 Vcs-Git: https://anonscm.debian.org/git/openstack/python-keystoneclient.git
 Vcs-Browser: https://anonscm.debian.org/cgit/openstack/python-keystoneclient.git/

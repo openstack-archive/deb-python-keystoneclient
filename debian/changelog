@@ -1,4 +1,4 @@
-python-keystoneclient (1:2.3.0-1) UNRELEASED; urgency=medium
+python-keystoneclient (1:2.3.0-1) experimental; urgency=medium
 
   [ Ondřej Nový ]
   * Fixed VCS URLs (https).
@@ -9,7 +9,10 @@ python-keystoneclient (1:2.3.0-1) UNRELEASED; urgency=medium
   * d/p/debian/patches/drop-doc-conf-git.patch: Drop git from sphinx config
     file as git repository is not avialable during package builds.
 
- -- Corey Bryant <corey.bryant@canonical.com>  Wed, 02 Mar 2016 08:50:41 -0500
+  [ Thomas Goirand ]
+  * Standards-Version: 3.9.7 (no change).
+
+ -- Thomas Goirand <zigo@debian.org>  Thu, 03 Mar 2016 03:46:02 +0000
 
 python-keystoneclient (1:2.1.1-1) experimental; urgency=medium
 
