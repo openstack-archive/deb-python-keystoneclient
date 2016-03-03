@@ -1,4 +1,4 @@
-python-keystoneclient (1:2.3.0-1) experimental; urgency=medium
+python-keystoneclient (1:2.3.1-1) experimental; urgency=medium
 
   [ Ondřej Nový ]
   * Fixed VCS URLs (https).
