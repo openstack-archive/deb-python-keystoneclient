@@ -1,3 +1,9 @@
+python-keystoneclient (1:2.3.1-2) unstable; urgency=medium
+
+  * Uploading to unstable.
+
+ -- Thomas Goirand <zigo@debian.org>  Mon, 04 Apr 2016 11:17:46 +0000
+
 python-keystoneclient (1:2.3.1-1) experimental; urgency=medium
 
   [ Ondřej Nový ]
