@@ -18,8 +18,6 @@ override_dh_install:
 		python$$pyvers setup.py install --install-layout=deb \
 			--root $(CURDIR)/debian/python3-keystoneclient ; \
 	done
-	mv $(CURDIR)/debian/python-keystoneclient/usr/bin/keystone $(CURDIR)/debian/python-keystoneclient/usr/bin/python2-keystone
-	mv $(CURDIR)/debian/python3-keystoneclient/usr/bin/keystone $(CURDIR)/debian/python3-keystoneclient/usr/bin/python3-keystone
 	rm -f $(CURDIR)/debian/python*/usr/lib/python*/dist-packages/*.pth
 
 override_dh_python3:
@@ -48,17 +46,11 @@ override_dh_clean:
 	dh_clean
 
 override_dh_auto_clean:
-	rm -rf doc/man .testrepository
+	rm -rf .testrepository
 
 
 override_dh_sphinxdoc:
 ifeq (,$(findstring nodocs, $(DEB_BUILD_OPTIONS)))
 	sphinx-build -b html doc/source $(CURDIR)/debian/python-keystoneclient-doc/usr/share/doc/python-keystoneclient-doc/html
 	dh_sphinxdoc -O--buildsystem=python_distutils
-endif
-
-override_dh_installman:
-ifeq (,$(findstring nodocs, $(DEB_BUILD_OPTIONS)))
-	sphinx-build -b man doc/source/ doc/man
-	dh_installman -O--buildsystem=python_distutils
 endif
