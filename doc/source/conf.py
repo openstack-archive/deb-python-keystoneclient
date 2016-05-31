@@ -109,10 +109,7 @@ modindex_common_prefix = ['keystoneclient.']
 # Grouping the document tree for man pages.
 # List of tuples 'sourcefile', 'target', 'title', 'Authors name', 'manual'
 
-man_pages = [
-    ('man/keystone', 'keystone', 'Client for OpenStack Identity API',
-     ['OpenStack Contributors'], 1),
-]
+#man_pages = []
 
 # -- Options for HTML output --------------------------------------------------
 
@@ -153,9 +150,13 @@ man_pages = [
 # If not '', a 'Last updated on:' timestamp is inserted at every page bottom,
 # using the given strftime format.
 git_cmd = ["git", "log", "--pretty=format:'%ad, commit %h'", "--date=local",
-   "-n1"]
-html_last_updated_fmt = subprocess.Popen(git_cmd,
+           "-n1"]
+try:
+    html_last_updated_fmt = subprocess.Popen(git_cmd,
                                      stdout=subprocess.PIPE).communicate()[0]
+except Exception:
+    warnings.warn('Cannot get last updated time from git repository. '
+                  'Not setting "html_last_updated_fmt".')
 
 # If true, SmartyPants will be used to convert quotes and dashes to
 # typographically correct entities.

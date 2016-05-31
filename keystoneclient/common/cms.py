@@ -60,9 +60,15 @@ def _ensure_subprocess():
             if patcher.already_patched:
                 from eventlet.green import subprocess
             else:
-                import subprocess
+                import subprocess  # nosec(cjschaef): we must be careful when
+                # using subprocess.Popen with possibly untrusted data,
+                # assumption is that the certificate/key files provided are
+                # trustworthy
         except ImportError:
-            import subprocess  # noqa
+            import subprocess  # noqa # nosec(cjschaef): we must be careful
+            # when using subprocess.Popen with possibly untrusted data,
+            # assumption is that the certificate/key files provided are
+            # trustworthy
 
 
 def set_subprocess(_subprocess=None):
@@ -95,7 +101,6 @@ def _check_files_accessible(files):
 
 def _process_communicate_handle_oserror(process, data, files):
     """Wrapper around process.communicate that checks for OSError."""
-
     try:
         output, err = process.communicate(data)
     except OSError as e:
@@ -147,7 +152,7 @@ def _encoding_for_form(inform):
 
 def cms_verify(formatted, signing_cert_file_name, ca_file_name,
                inform=PKI_ASN1_FORM):
-    """Verifies the signature of the contents IAW CMS syntax.
+    """Verify the signature of the contents IAW CMS syntax.
 
     :raises subprocess.CalledProcessError:
     :raises keystoneclient.exceptions.CertificateConfigError: if certificate
@@ -196,7 +201,7 @@ def cms_verify(formatted, signing_cert_file_name, ca_file_name,
 
 
 def is_pkiz(token_text):
-    """Determine if a token a cmsz token
+    """Determine if a token is PKIZ.
 
     Checks if the string has the prefix that indicates it is a
     Crypto Message Syntax, Z compressed token.
@@ -235,7 +240,7 @@ def pkiz_verify(signed_text, signing_cert_file_name, ca_file_name):
 
 
 def token_to_cms(signed_text):
-    """Converts a custom formatted token to a PEM-formatted token.
+    """Convert a custom formatted token to a PEM-formatted token.
 
     See documentation for cms_to_token() for details on the custom formatting.
     """
@@ -323,7 +328,7 @@ def cms_sign_text(data_to_sign, signing_cert_file_name, signing_key_file_name,
 def cms_sign_data(data_to_sign, signing_cert_file_name, signing_key_file_name,
                   outform=PKI_ASN1_FORM,
                   message_digest=DEFAULT_TOKEN_DIGEST_ALGORITHM):
-    """Uses OpenSSL to sign a document.
+    """Use OpenSSL to sign a document.
 
     Produces a Base64 encoding of a DER formatted CMS Document
     http://en.wikipedia.org/wiki/Cryptographic_Message_Syntax
@@ -380,7 +385,7 @@ def cms_sign_token(text, signing_cert_file_name, signing_key_file_name,
 
 
 def cms_to_token(cms_text):
-    """Converts a CMS-signed token in PEM format to a custom URL-safe format.
+    """Convert a CMS-signed token in PEM format to a custom URL-safe format.
 
     The conversion consists of replacing '/' char in the PEM-formatted token
     with the '-' char and doing other such textual replacements to make the

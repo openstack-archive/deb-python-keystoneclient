@@ -36,6 +36,7 @@ class Project(base.Resource):
                    project in the hierarchy
 
     """
+
     @positional(enforcement=positional.WARN)
     def update(self, name=None, description=None, enabled=None):
         kwargs = {
@@ -57,6 +58,7 @@ class Project(base.Resource):
 
 class ProjectManager(base.CrudManager):
     """Manager class for manipulating Identity projects."""
+
     resource_class = Project
     collection_key = 'projects'
     key = 'project'
@@ -74,7 +76,6 @@ class ProjectManager(base.CrudManager):
         :param parent: the project's parent in the hierarchy. (optional)
         :type parent: :py:class:`keystoneclient.v3.projects.Project` or str
         """
-
         # NOTE(rodrigods): the API must be backwards compatible, so if an
         # application was passing a 'parent_id' before as kwargs, the call
         # should not fail. If both 'parent' and 'parent_id' are provided,

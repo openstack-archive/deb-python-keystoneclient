@@ -47,7 +47,9 @@ class OidcPassword(federated.FederatedBaseAuth):
                  username, password, client_id, client_secret,
                  access_token_endpoint, scope='profile',
                  grant_type='password'):
-        """The OpenID Connect plugin expects the following:
+        """The OpenID Connect plugin.
+
+        It expects the following:
 
         :param auth_url: URL of the Identity Service
         :type auth_url: string
@@ -136,7 +138,6 @@ class OidcPassword(federated.FederatedBaseAuth):
         :returns: a token data representation
         :rtype: :py:class:`keystoneclient.access.AccessInfo`
         """
-
         # get an access token
         client_auth = (self.client_id, self.client_secret)
         payload = {'grant_type': self.grant_type, 'username': self.username,
@@ -182,7 +183,7 @@ class OidcPassword(federated.FederatedBaseAuth):
         return op_response
 
     def _get_keystone_token(self, session, headers, federated_token_url):
-        """Exchange an acess token for a keystone token.
+        r"""Exchange an acess token for a keystone token.
 
         By Sending the access token in an `Authorization: Bearer` header, to
         an OpenID Connect protected endpoint (Federated Token URL). The

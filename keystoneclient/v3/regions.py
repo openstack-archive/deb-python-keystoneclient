@@ -20,16 +20,18 @@ class Region(base.Resource):
         * id: a string that identifies the region.
         * description: a string that describes the region. Optional.
         * parent_region_id: string that is the id field for a pre-existing
-          region in the backend.  Allows for hierarchical region
-          organization
+                            region in the backend. Allows for hierarchical
+                            region organization.
         * enabled: determines whether the endpoint appears in the catalog.
-          Defaults to True
+        Defaults to True
     """
+
     pass
 
 
 class RegionManager(base.CrudManager):
     """Manager class for manipulating Identity regions."""
+
     resource_class = Region
     collection_key = 'regions'
     key = 'region'
@@ -38,14 +40,13 @@ class RegionManager(base.CrudManager):
                parent_region=None, **kwargs):
         """Create a Catalog region.
 
-            :param id: a string that identifies the region. If not specified
-                a unique identifier will be assigned to the region.
-            :param description: a string that describes the region.
-            :param parent_region: string that is the id field for a
-                pre-existing region in the backend. Allows for hierarchical
-                region organization.
-            :param enabled: determines whether the endpoint appears in the
-                catalog.
+        :param id: a string that identifies the region. If not specified a
+                   unique identifier will be assigned to the region.
+        :param description: a string that describes the region.
+        :param parent_region: string that is the id field for a pre-existing
+                              region in the backend. Allows for hierarchical
+                              region organization.
+        :param enabled: determines whether the endpoint appears in the catalog.
 
         """
         return super(RegionManager, self).create(
@@ -69,13 +70,12 @@ class RegionManager(base.CrudManager):
                parent_region=None, **kwargs):
         """Update a Catalog region.
 
-            :param region: a string that identifies the region.
-            :param description: a string that describes the region.
-            :param parent_region: string that is the id field for a
-                pre-existing region in the backend.  Allows for hierarchical
-                region organization.
-            :param enabled: determines whether the endpoint appears in the
-                catalog.
+        :param region: a string that identifies the region.
+        :param description: a string that describes the region.
+        :param parent_region: string that is the id field for a pre-existing
+                              region in the backend.  Allows for hierarchical
+                              region organization.
+        :param enabled: determines whether the endpoint appears in the catalog.
 
         """
         return super(RegionManager, self).update(

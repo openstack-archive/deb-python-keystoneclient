@@ -21,6 +21,7 @@ from keystoneclient.i18n import _
 
 class Token(base.Resource):
     def __repr__(self):
+        """Return string representation of resource information."""
         return "<Token %s>" % self._info
 
     @property
@@ -106,7 +107,6 @@ class TokenManager(base.Manager):
         :rtype: :py:class:`keystoneclient.access.AccessInfoV2`
 
         """
-
         def calc_id(token):
             if isinstance(token, access.AccessInfo):
                 return token.auth_token
@@ -117,7 +117,7 @@ class TokenManager(base.Manager):
         return access.AccessInfo.factory(auth_token=token_id, body=body)
 
     def get_revoked(self):
-        """Returns the revoked tokens response.
+        """Return the revoked tokens response.
 
         The response will be a dict containing 'signed' which is a CMS-encoded
         document.

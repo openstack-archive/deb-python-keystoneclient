@@ -32,11 +32,13 @@ class Credential(base.Resource):
         * project_id: project ID (optional)
 
     """
+
     pass
 
 
 class CredentialManager(base.CrudManager):
     """Manager class for manipulating Identity credentials."""
+
     resource_class = Credential
     collection_key = 'credentials'
     key = 'credential'
@@ -57,7 +59,7 @@ class CredentialManager(base.CrudManager):
                            removal_version='2.0.0')
     @positional(1, enforcement=positional.WARN)
     def create(self, user, type, blob=None, data=None, project=None, **kwargs):
-        """Create a credential
+        """Create a credential.
 
         :param user: User
         :type user: :class:`keystoneclient.v3.users.User` or str
@@ -80,7 +82,7 @@ class CredentialManager(base.CrudManager):
             **kwargs)
 
     def get(self, credential):
-        """Get a credential
+        """Get a credential.
 
         :param credential: Credential
         :type credential: :class:`Credential` or str
@@ -102,7 +104,7 @@ class CredentialManager(base.CrudManager):
     @positional(2, enforcement=positional.WARN)
     def update(self, credential, user, type=None, blob=None, data=None,
                project=None, **kwargs):
-        """Update a credential
+        """Update a credential.
 
         :param credential: Credential to update
         :type credential: :class:`Credential` or str
@@ -128,12 +130,11 @@ class CredentialManager(base.CrudManager):
             **kwargs)
 
     def delete(self, credential):
-        """Delete a credential
+        """Delete a credential.
 
         :param credential: Credential
         :type credential: :class:`Credential` or str
 
         """
-
         return super(CredentialManager, self).delete(
             credential_id=base.getid(credential))

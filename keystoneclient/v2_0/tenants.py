@@ -23,7 +23,7 @@ from keystoneclient import exceptions
 
 
 class Tenant(base.Resource):
-    """Represents a Keystone tenant
+    """Represents a Keystone tenant.
 
     Attributes:
         * id: a uuid that identifies the tenant
@@ -32,7 +32,9 @@ class Tenant(base.Resource):
         * enabled: boolean to indicate if tenant is enabled
 
     """
+
     def __repr__(self):
+        """Return string representation of tenant resource information."""
         return "<Tenant %s>" % self._info
 
     def delete(self):
@@ -72,6 +74,7 @@ class Tenant(base.Resource):
 
 class TenantManager(base.ManagerWithFind):
     """Manager class for manipulating Keystone tenants."""
+
     resource_class = Tenant
 
     def __init__(self, client, role_manager, user_manager):
@@ -105,7 +108,6 @@ class TenantManager(base.ManagerWithFind):
         :rtype: list of :class:`Tenant`
 
         """
-
         params = {}
         if limit:
             params['limit'] = limit

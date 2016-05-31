@@ -48,8 +48,10 @@ _logger = logging.getLogger(__name__)
 
 
 class Client(httpclient.HTTPClient):
-    """Client for the OpenStack Identity API v3.
+    r"""Client for the OpenStack Identity API v3.
 
+    :param session: Session for requests. (optional)
+    :type session: keystoneauth1.session.Session
     :param string user_id: User ID for authentication. (optional)
     :param string username: Username for authentication. (optional)
     :param string user_domain_id: User's domain ID for authentication.
@@ -92,14 +94,17 @@ class Client(httpclient.HTTPClient):
 
     Example::
 
+        >>> from keystoneauth1.identity import v3
+        >>> from keystoneauth1 import session
         >>> from keystoneclient.v3 import client
-        >>> keystone = client.Client(user_domain_name=DOMAIN_NAME,
-        ...                          username=USER,
-        ...                          password=PASS,
-        ...                          project_domain_name=PROJECT_DOMAIN_NAME,
-        ...                          project_name=PROJECT_NAME,
-        ...                          auth_url=KEYSTONE_URL)
-        ...
+        >>> auth = v3.Password(user_domain_name=DOMAIN_NAME,
+        ...                    username=USER,
+        ...                    password=PASS,
+        ...                    project_domain_name=PROJECT_DOMAIN_NAME,
+        ...                    project_name=PROJECT_NAME,
+        ...                    auth_url=KEYSTONE_URL)
+        >>> sess = session.Session(auth=auth)
+        >>> keystone = client.Client(session=sess)
         >>> keystone.projects.list()
         ...
         >>> user = keystone.users.get(USER_ID)
@@ -118,12 +123,12 @@ class Client(httpclient.HTTPClient):
     .. py:attribute:: endpoint_filter
 
         :py:class:`keystoneclient.v3.contrib.endpoint_filter.\
-EndpointFilterManager`
+        EndpointFilterManager`
 
     .. py:attribute:: endpoint_policy
 
         :py:class:`keystoneclient.v3.contrib.endpoint_policy.\
-EndpointPolicyManager`
+        EndpointPolicyManager`
 
     .. py:attribute:: endpoints
 
@@ -262,6 +267,7 @@ EndpointPolicyManager`
         be used in the request.
 
         :returns: access.AccessInfo if authentication was successful.
+        :rtype: :class:`keystoneclient.access.AccessInfoV3`
         :raises keystoneclient.exceptions.AuthorizationFailure: if unable to
             authenticate or validate the existing authorization token.
         :raises keystoneclient.exceptions.Unauthorized: if authentication fails

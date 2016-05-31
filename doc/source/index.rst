@@ -3,15 +3,13 @@ Python bindings to the OpenStack Identity API (Keystone)
 
 This is a client for OpenStack Identity API. There's a Python API for
 :doc:`Identity API v3 <using-api-v3>` and :doc:`v2 <using-api-v2>` (the
-:mod:`keystoneclient` modules), and a command-line script (installed as
-:doc:`keystone <man/keystone>`).
+:mod:`keystoneclient` modules).
 
 Contents:
 
 .. toctree::
    :maxdepth: 1
 
-   man/keystone
    using-api-v3
    using-sessions
    authentication-plugins
@@ -46,7 +44,7 @@ using `Gerrit`_.
 .. _Launchpad: https://launchpad.net/python-keystoneclient
 .. _Gerrit: http://docs.openstack.org/infra/manual/developers.html#development-workflow
 
-Run tests with ``python setup.py test``.
+Run tests with ``tox``.
 
 Indices and tables
 ==================

@@ -16,7 +16,7 @@ from keystoneclient import base
 
 
 class ServiceProvider(base.Resource):
-    """Object representing Service Provider container
+    """Object representing Service Provider container.
 
     Attributes:
         * id: user-defined unique string identifying Service Provider.
@@ -24,6 +24,7 @@ class ServiceProvider(base.Resource):
         * auth_url: the authentication url of Service Provider.
 
     """
+
     pass
 
 
@@ -55,7 +56,7 @@ class ServiceProviderManager(base.CrudManager):
                                        **kwargs)
 
     def get(self, service_provider):
-        """Fetch Service Provider object
+        """Fetch Service Provider object.
 
         Utilize Keystone URI:
         ``GET /OS-FEDERATION/service_providers/{id}``

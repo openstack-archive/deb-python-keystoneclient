@@ -19,7 +19,9 @@ from keystoneclient import base
 
 class Role(base.Resource):
     """Represents a Keystone role."""
+
     def __repr__(self):
+        """Return string representation of role resource information."""
         return "<Role %s>" % self._info
 
     def delete(self):
@@ -28,6 +30,7 @@ class Role(base.Resource):
 
 class RoleManager(base.ManagerWithFind):
     """Manager class for manipulating Keystone roles."""
+
     resource_class = Role
 
     def get(self, role):
@@ -56,7 +59,7 @@ class RoleManager(base.ManagerWithFind):
             return self._list("/users/%s/roles" % user_id, "roles")
 
     def add_user_role(self, user, role, tenant=None):
-        """Adds a role to a user.
+        """Add a role to a user.
 
         If tenant is specified, the role is added just for that tenant,
         otherwise the role is added globally.
@@ -72,7 +75,7 @@ class RoleManager(base.ManagerWithFind):
             return self._update(route % (user_id, role_id), None, "roles")
 
     def remove_user_role(self, user, role, tenant=None):
-        """Removes a role from a user.
+        """Remove a role from a user.
 
         If tenant is specified, the role is removed just for that tenant,
         otherwise the role is removed from the user's global roles.

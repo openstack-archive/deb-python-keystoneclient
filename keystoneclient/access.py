@@ -49,7 +49,6 @@ class AccessInfo(dict):
             release and may be removed in the 2.0.0 release.
 
         """
-
         if region_name:
             warnings.warn(
                 'Use of the region_name argument is deprecated as of the '
@@ -97,7 +96,7 @@ class AccessInfo(dict):
         return self.get('region_name')
 
     def will_expire_soon(self, stale_duration=None):
-        """Determines if expiration is about to occur.
+        """Determine if expiration is about to occur.
 
         :returns: true if expiration is within the given duration
         :rtype: boolean
@@ -114,7 +113,7 @@ class AccessInfo(dict):
 
     @classmethod
     def is_valid(cls, body, **kwargs):
-        """Determines if processing valid v2 or v3 token.
+        """Determine if processing valid v2 or v3 token.
 
         Validates from the auth body or a user-provided dict.
 
@@ -124,7 +123,7 @@ class AccessInfo(dict):
         raise NotImplementedError()
 
     def has_service_catalog(self):
-        """Returns true if the authorization token has a service catalog.
+        """Return true if the authorization token has a service catalog.
 
         :returns: boolean
         """
@@ -132,7 +131,7 @@ class AccessInfo(dict):
 
     @property
     def auth_token(self):
-        """Returns the token_id associated with the auth request.
+        """Return the token_id associated with the auth request.
 
         To be used in headers for authenticating OpenStack API requests.
 
@@ -148,12 +147,12 @@ class AccessInfo(dict):
     def auth_token(self):
         try:
             del self['auth_token']
-        except KeyError:
+        except KeyError:  # nosec(cjschaef): 'auth_token' is not in the dict
             pass
 
     @property
     def expires(self):
-        """Returns the token expiration (as datetime object)
+        """Return the token expiration (as datetime object).
 
         :returns: datetime
         """
@@ -161,7 +160,7 @@ class AccessInfo(dict):
 
     @property
     def issued(self):
-        """Returns the token issue time (as datetime object)
+        """Return the token issue time (as datetime object).
 
         :returns: datetime
         """
@@ -169,7 +168,7 @@ class AccessInfo(dict):
 
     @property
     def username(self):
-        """Returns the username associated with the auth request.
+        """Return the username associated with the auth request.
 
         Follows the pattern defined in the V2 API of first looking for 'name',
         returning that if available, and falling back to 'username' if name
@@ -181,7 +180,7 @@ class AccessInfo(dict):
 
     @property
     def user_id(self):
-        """Returns the user id associated with the auth request.
+        """Return the user id associated with the auth request.
 
         :returns: str
         """
@@ -189,7 +188,7 @@ class AccessInfo(dict):
 
     @property
     def user_domain_id(self):
-        """Returns the user's domain id associated with the auth request.
+        """Return the user's domain id associated with the auth request.
 
         For v2, it always returns 'default' which may be different from the
         Keystone configuration.
@@ -200,7 +199,7 @@ class AccessInfo(dict):
 
     @property
     def user_domain_name(self):
-        """Returns the user's  domain name associated with the auth request.
+        """Return the user's  domain name associated with the auth request.
 
         For v2, it always returns 'Default' which may be different from the
         Keystone configuration.
@@ -211,7 +210,7 @@ class AccessInfo(dict):
 
     @property
     def role_ids(self):
-        """Returns a list of user's role ids associated with the auth request.
+        """Return a list of user's role ids associated with the auth request.
 
         :returns: a list of strings of role ids
         """
@@ -219,7 +218,7 @@ class AccessInfo(dict):
 
     @property
     def role_names(self):
-        """Returns a list of user's role names associated with the auth request.
+        """Return a list of user's role names associated with the auth request.
 
         :returns: a list of strings of role names
         """
@@ -227,7 +226,7 @@ class AccessInfo(dict):
 
     @property
     def domain_name(self):
-        """Returns the domain name associated with the auth request.
+        """Return the domain name associated with the auth request.
 
         :returns: str or None (if no domain associated with the token)
         """
@@ -235,7 +234,7 @@ class AccessInfo(dict):
 
     @property
     def domain_id(self):
-        """Returns the domain id associated with the auth request.
+        """Return the domain id associated with the auth request.
 
         :returns: str or None (if no domain associated with the token)
         """
@@ -243,7 +242,7 @@ class AccessInfo(dict):
 
     @property
     def project_name(self):
-        """Returns the project name associated with the auth request.
+        """Return the project name associated with the auth request.
 
         :returns: str or None (if no project associated with the token)
         """
@@ -256,9 +255,9 @@ class AccessInfo(dict):
 
     @property
     def scoped(self):
-        """Returns true if the auth token was scoped.
+        """Return true if the auth token was scoped.
 
-        Returns true if scoped to a tenant(project) or domain,
+        Return true if scoped to a tenant(project) or domain,
         and contains a populated service catalog.
 
         .. warning::
@@ -272,7 +271,7 @@ class AccessInfo(dict):
 
     @property
     def project_scoped(self):
-        """Returns true if the auth token was scoped to a tenant(project).
+        """Return true if the auth token was scoped to a tenant(project).
 
         :returns: bool
         """
@@ -280,7 +279,7 @@ class AccessInfo(dict):
 
     @property
     def domain_scoped(self):
-        """Returns true if the auth token was scoped to a domain.
+        """Return true if the auth token was scoped to a domain.
 
         :returns: bool
         """
@@ -288,7 +287,7 @@ class AccessInfo(dict):
 
     @property
     def trust_id(self):
-        """Returns the trust id associated with the auth request.
+        """Return the trust id associated with the auth request.
 
         :returns: str or None (if no trust associated with the token)
         """
@@ -296,7 +295,7 @@ class AccessInfo(dict):
 
     @property
     def trust_scoped(self):
-        """Returns true if the auth token was scoped from a delegated trust.
+        """Return true if the auth token was scoped from a delegated trust.
 
         The trust delegation is via the OS-TRUST v3 extension.
 
@@ -306,7 +305,7 @@ class AccessInfo(dict):
 
     @property
     def trustee_user_id(self):
-        """Returns the trustee user id associated with a trust.
+        """Return the trustee user id associated with a trust.
 
         :returns: str or None (if no trust associated with the token)
         """
@@ -314,7 +313,7 @@ class AccessInfo(dict):
 
     @property
     def trustor_user_id(self):
-        """Returns the trustor user id associated with a trust.
+        """Return the trustor user id associated with a trust.
 
         :returns: str or None (if no trust associated with the token)
         """
@@ -322,7 +321,7 @@ class AccessInfo(dict):
 
     @property
     def project_id(self):
-        """Returns the project ID associated with the auth request.
+        """Return the project ID associated with the auth request.
 
         This returns None if the auth token wasn't scoped to a project.
 
@@ -337,7 +336,7 @@ class AccessInfo(dict):
 
     @property
     def project_domain_id(self):
-        """Returns the project's domain id associated with the auth request.
+        """Return the project's domain id associated with the auth request.
 
         For v2, it returns 'default' if a project is scoped or None which may
         be different from the keystone configuration.
@@ -348,7 +347,7 @@ class AccessInfo(dict):
 
     @property
     def project_domain_name(self):
-        """Returns the project's domain name associated with the auth request.
+        """Return the project's domain name associated with the auth request.
 
         For v2, it returns 'Default' if a project is scoped or None  which may
         be different from the keystone configuration.
@@ -359,7 +358,7 @@ class AccessInfo(dict):
 
     @property
     def auth_url(self):
-        """Returns a tuple of identity URLs.
+        """Return a tuple of identity URLs.
 
         The identity URLs are from publicURL and adminURL for the service
         'identity' from the service catalog associated with the authorization
@@ -376,7 +375,7 @@ class AccessInfo(dict):
 
     @property
     def management_url(self):
-        """Returns the first adminURL of the identity endpoint.
+        """Return the first adminURL of the identity endpoint.
 
         The identity endpoint is from the service catalog
         associated with the authorization request, or None if the
@@ -392,7 +391,7 @@ class AccessInfo(dict):
 
     @property
     def version(self):
-        """Returns the version of the auth token from identity service.
+        """Return the version of the auth token from identity service.
 
         :returns: str
         """
@@ -416,7 +415,7 @@ class AccessInfo(dict):
 
     @property
     def is_federated(self):
-        """Returns true if federation was used to get the token.
+        """Return true if federation was used to get the token.
 
         :returns: boolean
         """
@@ -526,7 +525,8 @@ class AccessInfoV2(AccessInfo):
     def project_name(self):
         try:
             tenant_dict = self['token']['tenant']
-        except KeyError:
+        except KeyError:  # nosec(cjschaef): no 'token' key or 'tenant' key in
+            # token, return the name of the tenant or None
             pass
         else:
             return tenant_dict.get('name')
@@ -534,13 +534,15 @@ class AccessInfoV2(AccessInfo):
         # pre grizzly
         try:
             return self['user']['tenantName']
-        except KeyError:
+        except KeyError:  # nosec(cjschaef): no 'user' key or 'tenantName' in
+            # 'user', attempt 'tenantId' or return None
             pass
 
         # pre diablo, keystone only provided a tenantId
         try:
             return self['token']['tenantId']
-        except KeyError:
+        except KeyError:  # nosec(cjschaef): no 'token' key or 'tenantName' or
+            # 'tenantId' could be found, return None
             pass
 
     @property
@@ -589,7 +591,8 @@ class AccessInfoV2(AccessInfo):
     def project_id(self):
         try:
             tenant_dict = self['token']['tenant']
-        except KeyError:
+        except KeyError:  # nosec(cjschaef): no 'token' key or 'tenant' dict,
+            # attempt to return 'tenantId' or return None
             pass
         else:
             return tenant_dict.get('id')
@@ -597,13 +600,15 @@ class AccessInfoV2(AccessInfo):
         # pre grizzly
         try:
             return self['user']['tenantId']
-        except KeyError:
+        except KeyError:  # nosec(cjschaef): no 'user' key or 'tenantId' in
+            # 'user', attempt to retrive from 'token' or return None
             pass
 
         # pre diablo
         try:
             return self['token']['tenantId']
-        except KeyError:
+        except KeyError:  # nosec(cjschaef): no 'token' key or 'tenantId'
+            # could be found, return None
             pass
 
     @property

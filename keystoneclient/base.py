@@ -15,9 +15,7 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-"""
-Base utilities to build API operation managers and objects on top of.
-"""
+"""Base utilities to build API operation managers and objects on top of."""
 
 import abc
 import copy
@@ -42,7 +40,8 @@ def getid(obj):
     try:
         if obj.uuid:
             return obj.uuid
-    except AttributeError:
+    except AttributeError:  # nosec(cjschaef): 'obj' doesn't contain attribute
+        # 'uuid', return attribute 'id' or the 'obj'
         pass
     try:
         return obj.id
@@ -85,6 +84,7 @@ class Manager(object):
     :param client: instance of BaseClient descendant for HTTP requests
 
     """
+
     resource_class = None
 
     def __init__(self, client):
@@ -131,7 +131,9 @@ class Manager(object):
         #           unlike other services which just return the list...
         try:
             data = data['values']
-        except (KeyError, TypeError):
+        except (KeyError, TypeError):  # nosec(cjschaef): keystone data values
+            # not as expected (see comment above), assumption is that values
+            # are already returned in a list (so simply utilize that list)
             pass
 
         return [obj_class(self, res, loaded=True) for res in data if res]
@@ -290,12 +292,13 @@ class CrudManager(Manager):
       refer to an individual member of the collection.
 
     """
+
     collection_key = None
     key = None
     base_url = None
 
     def build_url(self, dict_args_in_out=None):
-        """Builds a resource URL for the given kwargs.
+        """Build a resource URL for the given kwargs.
 
         Given an example collection where `collection_key = 'entities'` and
         `key = 'entity'`, the following URL's could be generated.
@@ -352,7 +355,7 @@ class CrudManager(Manager):
         return '?%s' % urllib.parse.urlencode(params) if params else ''
 
     def build_key_only_query(self, params_list):
-        """Builds a query that does not include values, just keys.
+        """Build a query that does not include values, just keys.
 
         The Identity API has some calls that define queries without values,
         this can not be accomplished by using urllib.parse.urlencode(). This
@@ -457,6 +460,7 @@ class Resource(object):
         self._loaded = loaded
 
     def __repr__(self):
+        """Return string representation of resource attributes."""
         reprkeys = sorted(k
                           for k in self.__dict__.keys()
                           if k[0] != '_' and k != 'manager')
@@ -477,11 +481,12 @@ class Resource(object):
             try:
                 setattr(self, k, v)
                 self._info[k] = v
-            except AttributeError:
-                # In this case we already defined the attribute on the class
+            except AttributeError:  # nosec(cjschaef): we already defined the
+                # attribute on the class
                 pass
 
     def __getattr__(self, k):
+        """Checking attrbiute existence."""
         if k not in self.__dict__:
             # NOTE(bcwaldon): disallow lazy-loading if already loaded once
             if not self.is_loaded():
@@ -510,6 +515,7 @@ class Resource(object):
                 {'x_request_id': self.manager.client.last_request_id})
 
     def __eq__(self, other):
+        """Define equality for resources."""
         if not isinstance(other, Resource):
             return NotImplemented
         # two resources of different types are not equal

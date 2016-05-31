@@ -75,7 +75,7 @@ class TestCase(testtools.TestCase):
             self.assertEqual(body, last_request_body)
 
     def assertQueryStringIs(self, qs=''):
-        """Verify the QueryString matches what is expected.
+        r"""Verify the QueryString matches what is expected.
 
         The qs parameter should be of the format \'foo=bar&abc=xyz\'
         """
@@ -102,7 +102,7 @@ class TestCase(testtools.TestCase):
             self.assertIn(v, qs[k])
 
     def assertRequestHeaderEqual(self, name, val):
-        """Verify that the last request made contains a header and its value
+        """Verify that the last request made contains a header and its value.
 
         The request must have already been made.
         """
@@ -158,7 +158,6 @@ class DisableModuleFixture(fixtures.Fixture):
 
     def setUp(self):
         """Ensure ImportError for the specified module."""
-
         super(DisableModuleFixture, self).setUp()
 
         # Clear 'module' references in sys.modules

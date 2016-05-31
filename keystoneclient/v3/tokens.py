@@ -36,20 +36,27 @@ class TokenManager(object):
                       :py:class:`keystoneclient.access.AccessInfo` or a string
                       token_id.
         """
-
         token_id = _calc_id(token)
         headers = {'X-Subject-Token': token_id}
         return self._client.delete('/auth/tokens', headers=headers)
 
-    def get_revoked(self):
+    @positional.method(0)
+    def get_revoked(self, audit_id_only=False):
         """Get revoked tokens list.
 
-        :returns: A dict containing "signed" which is a CMS formatted string.
+        :param bool audit_id_only: If true, the server is requested to not send
+            token IDs. **New in version 2.2.0.**
+        :returns: A dict containing ``signed`` which is a CMS formatted string
+            if the server signed the response. If `audit_id_only` then the
+            response may be a dict containing ``revoked`` which is the list of
+            token audit IDs and expiration times.
         :rtype: dict
 
         """
-
-        resp, body = self._client.get('/auth/tokens/OS-PKI/revoked')
+        path = '/auth/tokens/OS-PKI/revoked'
+        if audit_id_only:
+            path += '?audit_id_only'
+        resp, body = self._client.get(path)
         return body
 
     @positional.method(1)
@@ -84,7 +91,6 @@ class TokenManager(object):
         :rtype: :py:class:`keystoneclient.access.AccessInfoV3`
 
         """
-
         token_id = _calc_id(token)
         body = self.get_token_data(token_id, include_catalog=include_catalog)
         return access.AccessInfo.factory(auth_token=token_id, body=body)

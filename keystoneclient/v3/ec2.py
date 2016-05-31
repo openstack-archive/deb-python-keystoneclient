@@ -16,6 +16,7 @@ from keystoneclient import base
 class EC2(base.Resource):
 
     def __repr__(self):
+        """Return string representation of EC2 resource information."""
         return "<EC2 %s>" % self._info
 
 
@@ -28,7 +29,6 @@ class EC2Manager(base.ManagerWithFind):
 
         :rtype: object of type :class:`EC2`
         """
-
         # NOTE(jamielennox): Yes, this uses tenant_id as a key even though we
         # are in the v3 API.
         return self._post('/users/%s/credentials/OS-EC2' % user_id,

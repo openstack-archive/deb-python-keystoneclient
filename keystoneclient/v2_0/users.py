@@ -21,7 +21,9 @@ from keystoneclient import base
 
 class User(base.Resource):
     """Represents a Keystone user."""
+
     def __repr__(self):
+        """Return string representation of user resource information."""
         return "<User %s>" % self._info
 
     def delete(self):
@@ -33,6 +35,7 @@ class User(base.Resource):
 
 class UserManager(base.ManagerWithFind):
     """Manager class for manipulating Keystone users."""
+
     resource_class = User
 
     def __init__(self, client, role_manager):
@@ -111,7 +114,6 @@ class UserManager(base.ManagerWithFind):
 
         :rtype: list of :class:`User`
         """
-
         params = {}
         if limit:
             params['limit'] = int(limit)

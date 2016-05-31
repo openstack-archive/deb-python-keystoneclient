@@ -15,40 +15,70 @@ import testtools
 from keystoneclient import client
 import os_client_config
 
+IDENTITY_CLIENT = 'identity'
+OPENSTACK_CLOUDS = ('functional_admin', 'devstack-admin', 'envvars')
+
+
+def get_client(version):
+    """Create a keystoneclient instance to run functional tests.
+
+    The client is instantiated via os-client-config either based on a
+    clouds.yaml config file or from the environment variables.
+
+    First, look for a 'functional_admin' cloud, as this is a cloud that the
+    user may have defined for functional testing with admin credentials. If
+    that is not found, check for the 'devstack-admin' cloud. Finally, fall
+    back to looking for environment variables.
+
+    """
+    for cloud in OPENSTACK_CLOUDS:
+        try:
+            cloud_config = os_client_config.get_config(
+                cloud=cloud, identity_api_version=version)
+            return cloud_config.get_legacy_client(service_key=IDENTITY_CLIENT,
+                                                  constructor=client.Client)
+
+        except os_client_config.exceptions.OpenStackConfigException:
+            pass
+
+    raise Exception("Could not find any cloud definition for clouds named"
+                    " functional_admin or devstack-admin. Check your"
+                    " clouds.yaml file or your envvars and try again.")
+
 
 class ClientTestCase(testtools.TestCase):
 
     def setUp(self):
         super(ClientTestCase, self).setUp()
 
-        self.client = self.get_client()
+        if not self.auth_ref.project_scoped:
+            raise Exception("Could not run functional tests, which are "
+                            "run based on the scope provided for "
+                            "authentication. Please provide a project "
+                            "scope information.")
 
-    def get_client(self):
-        """Creates a keystoneclient instance to run functional tests
+    @property
+    def client(self):
+        if not hasattr(self, '_client'):
+            self._client = get_client(self.version)
 
-        The client is instantiated via os-client-config either based on a
-        clouds.yaml config file or from the environment variables.
+        return self._client
 
-        First, look for a 'functional_admin' cloud, as this is a cloud that the
-        user may have defined for functional testing with admin credentials. If
-        that is not found, check for the 'devstack-admin' cloud. Finally, fall
-        back to looking for environment variables.
+    @property
+    def auth_ref(self):
+        return self.client.session.auth.get_auth_ref(self.client.session)
 
-        """
-        IDENTITY_CLIENT = 'identity'
-        OPENSTACK_CLOUDS = ('functional_admin', 'devstack-admin', 'envvars')
+    @property
+    def project_domain_id(self):
+        return self.auth_ref.project_domain_id
 
-        for cloud in OPENSTACK_CLOUDS:
-            try:
-                return os_client_config.make_client(
-                    IDENTITY_CLIENT, client.Client, cloud=cloud,
-                    identity_api_version=self.version)
-            except os_client_config.exceptions.OpenStackConfigException:
-                pass
+    @property
+    def project_id(self):
+        return self.client.session.get_project_id()
 
-        raise Exception("Could not find any cloud definition for clouds named"
-                        " functional_admin or devstack-admin. Check your"
-                        " clouds.yaml file or your envvars and try again.")
+    @property
+    def user_id(self):
+        return self.client.session.get_user_id()
 
 
 class V3ClientTestCase(ClientTestCase):

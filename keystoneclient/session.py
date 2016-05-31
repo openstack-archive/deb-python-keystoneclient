@@ -72,7 +72,7 @@ def _remove_service_catalog(body):
             data['access']['serviceCatalog'] = '<removed>'
             return jsonutils.dumps(data)
 
-    except Exception:
+    except Exception:  # nosec(cjschaef): multiple exceptions can be raised
         # Don't fail trying to clean up the request body.
         pass
     return body
@@ -162,7 +162,7 @@ class Session(object):
 
     @staticmethod
     def _process_header(header):
-        """Redacts the secure headers to be logged."""
+        """Redact the secure headers to be logged."""
         secure_headers = ('authorization', 'x-auth-token',
                           'x-subject-token',)
         if header[0].lower() in secure_headers:
@@ -310,7 +310,6 @@ class Session(object):
 
         :returns: The response to the request.
         """
-
         headers = kwargs.setdefault('headers', dict())
 
         if authenticated is None:
@@ -392,7 +391,7 @@ class Session(object):
 
         try:
             connection_params = self.get_auth_connection_params(auth=auth)
-        except exceptions.MissingAuthPlugin:
+        except exceptions.MissingAuthPlugin:  # nosec(cjschaef)
             # NOTE(jamielennox): If we've gotten this far without an auth
             # plugin then we should be happy with allowing no additional
             # connection params. This will be the typical case for plugins
@@ -545,7 +544,7 @@ class Session(object):
 
     @classmethod
     def construct(cls, kwargs):
-        """Handles constructing a session from both old and new arguments.
+        """Handle constructing a session from both old and new arguments.
 
         Support constructing a session from the old
         :py:class:`~keystoneclient.httpclient.HTTPClient` args as well as the
@@ -563,12 +562,10 @@ class Session(object):
         functions without session arguments.
 
         """
-
         warnings.warn(
             'Session.construct() is deprecated as of the 1.7.0 release  in '
             'favor of using session constructor and may be removed in the '
             '2.0.0 release.', DeprecationWarning)
-
         return cls._construct(kwargs)
 
     @classmethod
@@ -579,7 +576,8 @@ class Session(object):
                      'timeout', 'session', 'original_ip', 'user_agent'):
             try:
                 params[attr] = kwargs.pop(attr)
-            except KeyError:
+            except KeyError:  # nosec(cjschaef): we are brute force
+                # identifying possible attributes for kwargs
                 pass
 
         return cls._make(**params)
@@ -725,7 +723,8 @@ class Session(object):
         for arg in ('cert', 'verify'):
             try:
                 kwargs[arg] = params_copy.pop(arg)
-            except KeyError:
+            except KeyError:  # nosec(cjschaef): we are brute force
+                # identifying and removing values in params_copy
                 pass
 
         if params_copy:
@@ -951,6 +950,7 @@ class TCPKeepAliveAdapter(requests.adapters.HTTPAdapter):
     disables Nagle's Algorithm. See also:
     http://blogs.msdn.com/b/windowsazurestorage/archive/2010/06/25/nagle-s-algorithm-is-not-friendly-towards-small-requests.aspx
     """
+
     def init_poolmanager(self, *args, **kwargs):
         if 'socket_options' not in kwargs:
             socket_options = [

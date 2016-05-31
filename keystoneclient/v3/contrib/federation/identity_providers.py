@@ -16,12 +16,13 @@ from keystoneclient import base
 
 
 class IdentityProvider(base.Resource):
-    """Object representing Identity Provider container
+    """Object representing Identity Provider container.
 
     Attributes:
         * id: user-defined unique string identifying Identity Provider.
 
     """
+
     pass
 
 
@@ -47,19 +48,25 @@ class IdentityProviderManager(base.CrudManager):
         PUT /OS-FEDERATION/identity_providers/$identity_provider
 
         :param id: unique id of the identity provider.
+        :param kwargs: optional attributes: description (str), enabled
+                       (boolean) and remote_ids (list).
+        :returns: an IdentityProvider resource object.
+        :rtype: :py:class:`keystoneclient.v3.federation.IdentityProvider`
 
         """
         return self._build_url_and_put(identity_provider_id=id,
                                        **kwargs)
 
     def get(self, identity_provider):
-        """Fetch Identity Provider object
+        """Fetch Identity Provider object.
 
         Utilize Keystone URI:
         GET /OS-FEDERATION/identity_providers/$identity_provider
 
         :param identity_provider: an object with identity_provider_id
                                   stored inside.
+        :returns: an IdentityProvider resource object.
+        :rtype: :py:class:`keystoneclient.v3.federation.IdentityProvider`
 
         """
         return super(IdentityProviderManager, self).get(
@@ -70,6 +77,9 @@ class IdentityProviderManager(base.CrudManager):
 
         Utilize Keystone URI:
         GET /OS-FEDERATION/identity_providers
+
+        :returns: a list of IdentityProvider resource objects.
+        :rtype: list
 
         """
         return super(IdentityProviderManager, self).list(**kwargs)
@@ -82,6 +92,8 @@ class IdentityProviderManager(base.CrudManager):
 
         :param identity_provider: an object with identity_provider_id
                                   stored inside.
+        :returns: an IdentityProvider resource object.
+        :rtype: :py:class:`keystoneclient.v3.federation.IdentityProvider`
 
         """
         return super(IdentityProviderManager, self).update(
@@ -93,8 +105,8 @@ class IdentityProviderManager(base.CrudManager):
         Utilize Keystone URI:
         DELETE /OS-FEDERATION/identity_providers/$identity_provider
 
-        :param identity_provider: an object with identity_provider_id
-                                  stored inside.
+        :param identity_provider: the Identity Provider ID itself or an object
+                                  with it stored inside.
 
         """
         return super(IdentityProviderManager, self).delete(

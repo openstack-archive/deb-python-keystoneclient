@@ -38,6 +38,7 @@ class RequestToken(base.Resource):
 
 class RequestTokenManager(base.CrudManager):
     """Manager class for manipulating identity OAuth request tokens."""
+
     resource_class = RequestToken
 
     def authorize(self, request_token, roles):
@@ -50,7 +51,6 @@ class RequestTokenManager(base.CrudManager):
             can be exchanged for an access token.
         :param roles: a list of roles, that will be delegated to the user.
         """
-
         request_id = urlparse.quote(base.getid(request_token))
         endpoint = utils.OAUTH_PATH + '/authorize/%s' % (request_id)
         body = {'roles': [{'id': base.getid(r_id)} for r_id in roles]}
