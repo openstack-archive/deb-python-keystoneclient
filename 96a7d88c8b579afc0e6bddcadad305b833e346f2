@@ -1,0 +1,9 @@
+Code-Review+2: Steve Martinelli <s.martinelli@gmail.com>
+Code-Review+1: Andreas Jaeger <jaegerandi@gmail.com>
+Workflow+1: Steve Martinelli <s.martinelli@gmail.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Wed, 03 Aug 2016 04:35:01 +0000
+Reviewed-on: https://review.openstack.org/341007
+Project: openstack/deb-python-keystoneclient
+Branch: refs/heads/master
