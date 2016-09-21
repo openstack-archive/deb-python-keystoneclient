@@ -33,18 +33,17 @@ override_dh_auto_install:
 
 override_dh_auto_test:
 ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
-	echo "Disabled unit tests until build-depends are available"
-#	set -e ; for i in 2.7 $(PYTHON3S) ; do \
-#		PYMAJOR=`echo $$i | cut -d'.' -f1` ; \
-#		echo "===> Testing with python$$i (python$$PYMAJOR)" ; \
-#		rm -rf .testrepository ; \
-#		testr-python$$PYMAJOR init ; \
-#		TEMP_REZ=`mktemp -t` ; \
-#		PYTHONPATH=$(CURDIR) PYTHON=python$$i testr-python$$PYMAJOR run --subunit 'keystoneclient\.tests\.(?!.*memcache_set_expired.*|.*test_encrypt_cache_data.*|.*test_sign_cache_data.*)' | tee $$TEMP_REZ | subunit2pyunit ; \
-#		cat $$TEMP_REZ | subunit-filter -s --no-passthrough | subunit-stats ; \
-#		rm -f $$TEMP_REZ ; \
-#		testr-python$$PYMAJOR slowest ; \
-#	done
+	set -e ; for i in 2.7 $(PYTHON3S) ; do \
+		PYMAJOR=`echo $$i | cut -d'.' -f1` ; \
+		echo "===> Testing with python$$i (python$$PYMAJOR)" ; \
+		rm -rf .testrepository ; \
+		testr-python$$PYMAJOR init ; \
+		TEMP_REZ=`mktemp -t` ; \
+		PYTHONPATH=$(CURDIR) PYTHON=python$$i testr-python$$PYMAJOR run --subunit 'keystoneclient\.tests\.(?!.*memcache_set_expired.*|.*test_encrypt_cache_data.*|.*test_sign_cache_data.*)' | tee $$TEMP_REZ | subunit2pyunit ; \
+		cat $$TEMP_REZ | subunit-filter -s --no-passthrough | subunit-stats ; \
+		rm -f $$TEMP_REZ ; \
+		testr-python$$PYMAJOR slowest ; \
+	done
 endif
 
 override_dh_clean:
