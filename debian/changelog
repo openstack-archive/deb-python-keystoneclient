@@ -1,3 +1,10 @@
+python-keystoneclient (1:3.2.0-2) UNRELEASED; urgency=medium
+
+  * d/s/options: extend-diff-ignore of .gitreview
+  * d/control: Using OpenStack's Gerrit as VCS URLs.
+
+ -- Ondřej Nový <onovy@debian.org>  Mon, 26 Sep 2016 19:10:59 +0200
+
 python-keystoneclient (1:3.2.0-1) experimental; urgency=medium
 
   * New upstream release.
