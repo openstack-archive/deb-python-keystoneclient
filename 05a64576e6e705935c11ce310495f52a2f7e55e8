@@ -1,0 +1,8 @@
+Code-Review+2: Jamie Lennox <jamielennox@gmail.com>
+Workflow+1: Jamie Lennox <jamielennox@gmail.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Sat, 15 Oct 2016 03:13:15 +0000
+Reviewed-on: https://review.openstack.org/386867
+Project: openstack/deb-python-keystoneclient
+Branch: refs/heads/master
