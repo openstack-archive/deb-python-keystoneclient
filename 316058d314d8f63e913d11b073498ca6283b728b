@@ -1,0 +1,12 @@
+Code-Review+2: Ron De Rose <ronald.de.rose@intel.com>
+Code-Review+1: Jeffrey Augustine <ja224e@att.com>
+Code-Review+1: Charlle Daniel <charlledaniel@lsd.ufcg.edu.br>
+Code-Review+1: Raildo Mascena <raildom@gmail.com>
+Code-Review+2: ayoung <ayoung@redhat.com>
+Workflow+1: ayoung <ayoung@redhat.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Thu, 03 Nov 2016 18:54:28 +0000
+Reviewed-on: https://review.openstack.org/389796
+Project: openstack/deb-python-keystoneclient
+Branch: refs/heads/master
