@@ -1,0 +1,10 @@
+Code-Review+2: Steve Martinelli <s.martinelli@gmail.com>
+Code-Review+1: venkatamahesh <Venkata.Kotha@infinite.com>
+Code-Review+2: Rodrigo Duarte <rodrigodsousa@gmail.com>
+Workflow+1: Rodrigo Duarte <rodrigodsousa@gmail.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Mon, 28 Nov 2016 02:59:01 +0000
+Reviewed-on: https://review.openstack.org/402867
+Project: openstack/deb-python-keystoneclient
+Branch: refs/heads/master
