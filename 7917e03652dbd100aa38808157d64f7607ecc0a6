@@ -1,0 +1,9 @@
+Code-Review+2: Steve Martinelli <s.martinelli@gmail.com>
+Code-Review+2: Boris Bobrov <bbobrov@mirantis.com>
+Workflow+1: Steve Martinelli <s.martinelli@gmail.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Sun, 04 Dec 2016 06:36:30 +0000
+Reviewed-on: https://review.openstack.org/406175
+Project: openstack/deb-python-keystoneclient
+Branch: refs/heads/master
