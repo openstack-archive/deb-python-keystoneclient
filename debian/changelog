@@ -1,3 +1,9 @@
+python-keystoneclient (1:3.2.0-4) unstable; urgency=medium
+
+  * Defines RES_OPTIONS=attempts:0 to avoid network access (Closes: #840729).
+
+ -- Thomas Goirand <zigo@debian.org>  Sun, 18 Dec 2016 11:28:01 +0100
+
 python-keystoneclient (1:3.2.0-3) unstable; urgency=medium
 
   * Team upload.
