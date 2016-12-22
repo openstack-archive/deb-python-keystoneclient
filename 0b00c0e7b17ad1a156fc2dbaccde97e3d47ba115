@@ -1,0 +1,9 @@
+Code-Review+2: Jamie Lennox <jamielennox@gmail.com>
+Code-Review+2: Samuel de Medeiros Queiroz <samueldmq@gmail.com>
+Workflow+1: Samuel de Medeiros Queiroz <samueldmq@gmail.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Wed, 21 Dec 2016 14:24:54 +0000
+Reviewed-on: https://review.openstack.org/412236
+Project: openstack/deb-python-keystoneclient
+Branch: refs/heads/master
