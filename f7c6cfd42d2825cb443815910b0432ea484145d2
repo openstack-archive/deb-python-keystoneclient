@@ -1,0 +1,8 @@
+Code-Review+2: Colleen Murphy <colleen@gazlene.net>
+Workflow+1: Colleen Murphy <colleen@gazlene.net>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Sat, 13 May 2017 22:34:55 +0000
+Reviewed-on: https://review.openstack.org/455995
+Project: openstack/deb-python-keystoneclient
+Branch: refs/heads/master
