@@ -1,0 +1,10 @@
+Code-Review+2: Lance Bragstad <lbragstad@gmail.com>
+Code-Review+1: rocky <haigang.xu@easystack.cn>
+Code-Review+2: Steve Martinelli <s.martinelli@gmail.com>
+Workflow+1: Steve Martinelli <s.martinelli@gmail.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Mon, 19 Jun 2017 22:00:02 +0000
+Reviewed-on: https://review.openstack.org/475010
+Project: openstack/deb-python-keystoneclient
+Branch: refs/heads/master
