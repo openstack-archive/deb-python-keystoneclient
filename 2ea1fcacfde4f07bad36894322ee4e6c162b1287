@@ -1,0 +1,10 @@
+Code-Review+1: Doug Hellmann <doug@doughellmann.com>
+Code-Review+2: Boris Bobrov <breton@cynicmansion.ru>
+Workflow+1: Boris Bobrov <breton@cynicmansion.ru>
+Code-Review+2: Lance Bragstad <lbragstad@gmail.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Thu, 06 Jul 2017 04:06:54 +0000
+Reviewed-on: https://review.openstack.org/479270
+Project: openstack/deb-python-keystoneclient
+Branch: refs/heads/master
